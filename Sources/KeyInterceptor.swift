@@ -18,6 +18,7 @@ private var rightDownTime: TimeInterval = 0
 public var gIsMouseChordEnabled: Bool = true
 public var gIsAltTabEnabled: Bool = true
 public var gIsAltTabVisible: Bool = false
+public var gIsClipboardEnabled: Bool = true
 public var gIsClipboardHUDVisible: Bool = false
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
@@ -237,7 +238,7 @@ private func eventTapCallback(
 
         // Command + Shift + C (or Cmd + Shift + V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
         let isCmdShift = flags.contains(.maskCommand) && flags.contains(.maskShift) && !flags.contains(.maskControl)
-        if isCmdShift && (keycode == 8 || keycode == 9) {
+        if gIsClipboardEnabled && isCmdShift && (keycode == 8 || keycode == 9) {
             DispatchQueue.main.async {
                 ClipboardManager.shared.toggleHUD()
             }
@@ -316,6 +317,7 @@ public class KeyInterceptor {
     public func updateSettings() {
         gIsMouseChordEnabled = (UserDefaults.standard.object(forKey: "mouse_chord_enabled") as? Bool) ?? true
         gIsAltTabEnabled = (UserDefaults.standard.object(forKey: "alttab_enabled") as? Bool) ?? true
+        gIsClipboardEnabled = (UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") as? Bool) ?? true
     }
 
     public func start() {
@@ -335,7 +337,7 @@ public class KeyInterceptor {
         // EXCLUSIVELY use .cgSessionEventTap for user-session safety!
         let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
+            place: .tailAppendEventTap,
             options: .defaultTap,
             eventsOfInterest: CGEventMask(mask),
             callback: eventTapCallback,

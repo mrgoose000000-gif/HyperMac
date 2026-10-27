@@ -82,7 +82,10 @@ public class ClipboardManager: ObservableObject {
     // Published State
     @Published public var items: [ClipItem] = []
     @Published public var isMonitoringEnabled: Bool = true {
-        didSet { UserDefaults.standard.set(isMonitoringEnabled, forKey: "clipboard_monitoring_enabled") }
+        didSet {
+            UserDefaults.standard.set(isMonitoringEnabled, forKey: "clipboard_monitoring_enabled")
+            gIsClipboardEnabled = isMonitoringEnabled
+        }
     }
     @Published public var maxItemsCount: Int = 100 {
         didSet {
@@ -135,6 +138,7 @@ public class ClipboardManager: ObservableObject {
 
         // Start background polling
         startMonitoring()
+        gIsClipboardEnabled = isMonitoringEnabled
     }
 
     // MARK: - Filtered Items for Quick Search
