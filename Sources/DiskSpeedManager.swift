@@ -41,6 +41,17 @@ final class DiskSpeedSampler {
     private var cachedNetworkHosts: [String] = []
     private var networkHostsCheckedAt: TimeInterval = 0
 
+    /// Xoá baseline khi người dùng tắt đo, tránh delta khổng lồ ở lần bật sau.
+    func reset() {
+        lastTime = 0
+        prevDisks = [:]
+        prevNetwork = [:]
+        prevProcess = [:]
+        routeCache = [:]
+        cachedNetworkHosts = []
+        networkHostsCheckedAt = 0
+    }
+
     func sample() -> DiskSpeedSnapshot {
         let now = ProcessInfo.processInfo.systemUptime
         let dt = lastTime == 0 ? 1.0 : max(0.25, now - lastTime)
@@ -460,17 +471,47 @@ public final class DiskSpeedManager: ObservableObject {
     @Published public private(set) var topProcessReadMBps: Double = 0
     @Published public private(set) var topProcessWriteMBps: Double = 0
 
+    /// Người dùng phải chủ động bật đo (mặc định tắt) để không tốn RAM/CPU.
+    @Published public private(set) var isEnabled: Bool = false
+
+    private static let defaultsKey = "disk_speed_enabled"
+
     private let queue = DispatchQueue(label: "com.hypermac.diskspeed", qos: .utility)
     private let sampler = DiskSpeedSampler()
     private var timer: Timer?
     private var isSampling = false
+    private var isPopoverVisible = false
     private let debugLogging = ProcessInfo.processInfo.environment["HYPERMAC_DISKSPEED_DEBUG"] == "1"
 
     private init() {
-        if ProcessInfo.processInfo.environment["HYPERMAC_DISKSPEED_FAKE"] == "1" {
+        let fakePreview = ProcessInfo.processInfo.environment["HYPERMAC_DISKSPEED_FAKE"] == "1"
+        isEnabled = fakePreview || UserDefaults.standard.bool(forKey: Self.defaultsKey)
+        if fakePreview {
             applyFakePreviewSnapshot()
         }
-        start()
+    }
+
+    /// Bật/tắt đo tốc độ. Khi tắt, timer dừng và mọi bộ đếm được xoá.
+    public func setEnabled(_ enabled: Bool) {
+        guard enabled != isEnabled else { return }
+        isEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
+        if enabled {
+            start()
+        } else {
+            stop()
+        }
+    }
+
+    /// Chỉ lấy mẫu khi popover đang mở — đóng bảng là dừng hoàn toàn (0% CPU/RAM).
+    public func setPopoverVisible(_ visible: Bool) {
+        guard visible != isPopoverVisible else { return }
+        isPopoverVisible = visible
+        if visible {
+            start()
+        } else {
+            stop()
+        }
     }
 
     /// Chỉ dùng khi kiểm thử layout: nạp số liệu giả để chụp giao diện.
@@ -490,12 +531,29 @@ public final class DiskSpeedManager: ObservableObject {
     }
 
     private func start() {
-        timer?.invalidate()
+        guard isEnabled, isPopoverVisible, timer == nil else { return }
         let pollTimer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
         RunLoop.main.add(pollTimer, forMode: .common)
         timer = pollTimer
+    }
+
+    private func stop() {
+        timer?.invalidate()
+        timer = nil
+        isSampling = false
+        sampler.reset()
+        // Xoá số liệu cũ để UI trở về trạng thái trống ngay lập tức.
+        disks = []
+        totalReadMBps = 0
+        totalWriteMBps = 0
+        networkReadMBps = 0
+        networkWriteMBps = 0
+        networkLabel = nil
+        topProcessName = nil
+        topProcessReadMBps = 0
+        topProcessWriteMBps = 0
     }
 
     private func tick() {
@@ -505,6 +563,11 @@ public final class DiskSpeedManager: ObservableObject {
             guard let self else { return }
             let snapshot = self.sampler.sample()
             DispatchQueue.main.async {
+                // Bỏ kết quả nếu người dùng vừa tắt đo / đóng popover.
+                guard self.timer != nil else {
+                    self.isSampling = false
+                    return
+                }
                 self.apply(snapshot)
                 self.isSampling = false
             }

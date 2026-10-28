@@ -119,6 +119,9 @@ struct ModernHeaderBar: View {
                 Text("HyperMac")
                     .font(.system(size: 13, weight: .heavy, design: .rounded))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
 
                 // Version Badge (Clickable to check for update)
                 Button {
@@ -127,6 +130,8 @@ struct ModernHeaderBar: View {
                     HStack(spacing: 3) {
                         Text("v\(UpdateManager.currentVersion)")
                             .font(.system(size: 8.5, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                         if updateManager.hasNewUpdate {
                             Circle()
                                 .fill(Color.green)
@@ -195,6 +200,8 @@ struct ModernHeaderBar: View {
                 Text(statusText)
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(statusColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
@@ -243,13 +250,13 @@ struct ModernHeaderBar: View {
 
     private var statusText: String {
         if batteryManager.isBypassActive {
-            return "🛡️ 80% AC Bypass"
+            return "🛡️ 80% Bypass"
         } else if batteryManager.isCharging {
             return "⚡️ Đang sạc"
         } else if batteryManager.isPluggedIn {
-            return "🔌 Đã cắm điện"
+            return "🔌 Cắm điện"
         } else {
-            return "🔋 Dùng pin (\(batteryManager.currentLevel)%)"
+            return "🔋 \(batteryManager.currentLevel)%"
         }
     }
 }
@@ -447,24 +454,39 @@ struct FileTransferSpeedCard: View {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.up.arrow.down.circle.fill")
                     .font(.system(size: 9))
-                    .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+                    .foregroundStyle(diskSpeed.isEnabled && isActive ? Color.cyan : Color.secondary)
 
-                Text("Chép file")
+                Text(diskSpeed.isEnabled ? "Chép file" : "Đo tốc độ chép file")
                     .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
                 Spacer()
 
-                speedChip(icon: "arrow.down", value: diskSpeed.totalReadMBps, color: .cyan)
-                speedChip(icon: "arrow.up", value: diskSpeed.totalWriteMBps, color: .orange)
+                if diskSpeed.isEnabled {
+                    speedChip(icon: "arrow.down", value: diskSpeed.totalReadMBps, color: .cyan)
+                    speedChip(icon: "arrow.up", value: diskSpeed.totalWriteMBps, color: .orange)
 
-                if diskSpeed.networkLabel != nil {
-                    Divider().frame(height: 9)
-                    speedChip(icon: "network", value: max(diskSpeed.networkReadMBps, diskSpeed.networkWriteMBps), color: .green)
+                    if diskSpeed.networkLabel != nil {
+                        Divider().frame(height: 9)
+                        speedChip(icon: "network", value: max(diskSpeed.networkReadMBps, diskSpeed.networkWriteMBps), color: .green)
+                    }
                 }
+
+                Toggle("", isOn: Binding(
+                    get: { diskSpeed.isEnabled },
+                    set: { diskSpeed.setEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .help(diskSpeed.isEnabled
+                      ? "Đang đo khi bảng này mở. Tắt để HyperMac ngừng quét hoàn toàn."
+                      : "Bật để đo tốc độ chép file (ổ cứng, thẻ nhớ, NAS qua LAN).")
             }
 
-            if let detail = detailText {
+            if diskSpeed.isEnabled, let detail = detailText {
                 Text(detail)
                     .font(.system(size: 7.5))
                     .foregroundStyle(.secondary)
@@ -479,10 +501,10 @@ struct FileTransferSpeedCard: View {
                 .fill(Color.primary.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 7)
-                        .stroke(isActive ? Color.cyan.opacity(0.25) : Color.clear, lineWidth: 1)
+                        .stroke(diskSpeed.isEnabled && isActive ? Color.cyan.opacity(0.25) : Color.clear, lineWidth: 1)
                 )
         )
-        .help(tooltip)
+        .help(diskSpeed.isEnabled ? tooltip : "Đo tốc độ chép file đang tắt")
         .animation(.easeOut(duration: 0.2), value: detailText)
     }
 

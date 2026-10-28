@@ -179,6 +179,7 @@ chmod +x build.sh
 ### [v1.6.0] — 2026-10-28
 - **💾 Ô "Chép file" — xem tốc độ truyền file theo thời gian thực:**
   - Nằm trong tab **Pin & Phần cứng**, ngay dưới thanh chọn Pin / Nhiệt độ.
+  - **Mặc định tắt** — bật bằng switch trên ô khi cần đo; HyperMac chỉ đo lúc bảng đang mở nên không tốn RAM/CPU khi không dùng.
   - Hiển thị tổng tốc độ đọc `↓` và ghi `↑` (MB/s) của mọi ổ vật lý đang hoạt động.
   - Tự nhận diện tên ổ: SSD nội bộ, USB, thẻ nhớ, SSD ngoài (hiện tên volume đang mount).
   - Dòng chi tiết cho biết **nguồn → đích** của phiên chép, ví dụ `U280-Pro → SSD nội bộ`.
@@ -189,6 +190,7 @@ chmod +x build.sh
   - Hiển thị tốc độ lên/xuống của interface đó kèm nhãn `LAN en0` / `LAN en1`…
   - Lưu ý: đây là tốc độ của cả card mạng, nên nếu đang tải web/xem phim cùng lúc thì số liệu sẽ cộng gộp.
 - **🔍 Biết tiến trình nào đang chép:** ô hiển thị tên tiến trình (Finder, `cp`, `rsync`…) khi nó thực sự chiếm phần lớn lưu lượng, tránh báo nhầm I/O nền.
+- **Sửa lỗi giao diện header:** chữ "HyperMac" không còn bị bẻ dòng chữ "c" cuối khi nhãn pin/nhiệt độ dài; nhãn trạng thái pin được rút gọn (`🔋 78%`, `🔌 Cắm điện`).
 - **Kèm theo các thay đổi của v1.5.2:** AltTab mở tức thì, Clipboard 500/∞ + tự dọn, gỡ bỏ hoàn toàn Fan Control.
 
 ### [v1.5.2] — 2026-10-28

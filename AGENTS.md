@@ -114,8 +114,12 @@ swift build -c release
 ### 6.1. Đo tốc độ chép file — `Sources/DiskSpeedManager.swift`
 - UI: `FileTransferSpeedCard` trong `HardwareCareTabView`, đặt ngay dưới thanh chọn
   Pin / Nhiệt độ (luôn hiển thị, không phụ thuộc segment đang chọn).
-- `DiskSpeedManager.shared` được khởi tạo sớm trong `applicationDidFinishLaunching`
-  để sampler chạy trước khi người dùng mở popover.
+- **Mặc định TẮT**: người dùng bật bằng switch trên card (lưu ở
+  `UserDefaults["disk_speed_enabled"]`). Khi tắt, không có timer, không quét ổ/tiến
+  trình, không cấp phát bộ đếm.
+- **Chỉ chạy khi popover mở**: `AppDelegate` là `NSPopoverDelegate`; `popoverDidShow`
+  → `setPopoverVisible(true)`, `popoverDidClose` → `setPopoverVisible(false)`.
+  Đóng bảng là dừng timer + `sampler.reset()` + xoá số liệu đã publish.
 - Kiến trúc: `DiskSpeedManager` (`@MainActor`, `ObservableObject`) giữ `Timer` 1s trên
   main run loop; mỗi tick đẩy `DiskSpeedSampler.sample()` sang `DispatchQueue` nền.
   Sampler tính delta byte / delta thời gian (`max(0.25s, …)`) → MB/s.
@@ -160,6 +164,9 @@ swift build -c release
   rồi thoát — hữu ích khi terminal không có quyền Screen Recording.
 - `HYPERMAC_DISKSPEED_FAKE=1` nạp số liệu giả (U280-Pro → SSD, LAN en0) để kiểm tra
   layout dòng chi tiết. **Chỉ dùng khi phát triển**, không ảnh hưởng người dùng.
+- `HYPERMAC_DISKSPEED_AUTOSTART=1` giả lập popover đang mở lúc khởi động;
+  `HYPERMAC_DISKSPEED_AUTOCLOSE=<giây>` tự đóng sau N giây — dùng để kiểm tra
+  timer bật/tắt mà không cần bấm menu bar.
 - Lưu ý: `ImageRenderer` không render nội dung bên trong `ScrollView`, nên ảnh
   preview chỉ dùng để kiểm tra phần header/tab/card, không thay thế kiểm thử thật.
 

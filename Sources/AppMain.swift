@@ -16,7 +16,7 @@ private func displayReconfigCallback(
 // MARK: - App Delegate
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var previewWindow: NSWindow?
@@ -35,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let pop = NSPopover()
         pop.contentSize = NSSize(width: 380, height: 570)
         pop.behavior = .transient
+        pop.delegate = self
         pop.contentViewController = NSHostingController(
             rootView: MainView(displayManager: DisplayManager.shared)
         )
@@ -67,11 +68,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Eagerly initialize Clipboard Manager
         _ = ClipboardManager.shared
 
-        // Eagerly initialize Disk Speed sampler (biểu đồ tốc độ chép file)
-        _ = DiskSpeedManager.shared
-
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
+
+        // Hook kiểm thử: giả lập popover mở/đóng mà không cần bấm menu bar.
+        let env = ProcessInfo.processInfo.environment
+        if env["HYPERMAC_DISKSPEED_AUTOSTART"] == "1" {
+            DiskSpeedManager.shared.setPopoverVisible(true)
+            if let seconds = Double(env["HYPERMAC_DISKSPEED_AUTOCLOSE"] ?? ""), seconds > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                    DiskSpeedManager.shared.setPopoverVisible(false)
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -126,6 +135,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    // Bật/tắt bộ đo tốc độ chép file theo vòng đời popover (chỉ chạy khi bảng mở).
+    func popoverDidShow(_ notification: Notification) {
+        DiskSpeedManager.shared.setPopoverVisible(true)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        DiskSpeedManager.shared.setPopoverVisible(false)
     }
 }
 
