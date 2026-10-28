@@ -141,6 +141,11 @@ open /Applications/HyperMac.app
 
 **Không commit** `~/.hypermac-signing/` hay file `.p12` vào repo (chứa private key).
 
+**Lưu ý:** bản phát hành trên GitHub Actions được ký **ad-hoc** (runner không có
+private key), nên sau khi người dùng auto-update từ CI, quyền Accessibility sẽ
+mất một lần và app sẽ tự prompt lại khi khởi động. Build local bằng
+`./build.sh` thì giữ nguyên quyền.
+
 ## 7. Ghi chú kiểm thử
 
 - Máy test hiện tại: `Mac14,2` (MacBook Air M2, fanless), macOS 26.6.
