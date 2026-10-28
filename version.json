@@ -1,7 +1,7 @@
 {
-  "version": "1.6.0",
-  "name": "HyperMac v1.6.0 (Tốc độ chép file + AltTab tức thì)",
-  "notes": "✨ Tính năng mới & Cải tiến trong v1.6.0:\n- 💾 Ô \"Chép file\" trong tab Pin & Phần cứng: xem tốc độ đọc/ghi (MB/s) theo từng ổ vật lý, tự nhận tên ổ (SSD nội bộ, USB, thẻ nhớ).\n- 🌐 Đo tốc độ NAS qua dây LAN: tự dò ổ mạng đang mount, tìm interface đang gánh đường tới NAS và hiển thị tốc độ lên/xuống.\n- 🔍 Hiện tiến trình đang chép nhiều nhất (chỉ khi thật sự chiếm phần lớn lưu lượng) để biết việc copy nào đang chạy.\n- ⚡ AltTab mở tức thì, Clipboard 500/∞ + tự dọn, gỡ Fan Control (từ v1.5.2).",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.6.0/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.6.0"
+  "version": "1.5.2",
+  "name": "HyperMac v1.5.2 (AltTab Instant + Clipboard Cleanup + Fan Control Removed)",
+  "notes": "✨ Tính năng mới & Cải tiến trong v1.5.2:\n- ⚡ AltTab mở tức thì: bỏ chụp thumbnail đồng bộ, HUD hiện ngay, ảnh xem trước tải nền.\n- 📋 Clipboard: thêm giới hạn 500 mục và Không giới hạn, tự động xoá theo tuổi (7/30/90 ngày), nút Dọn ngay.\n- ⌨️ Phím tắt Clipboard hoạt động đúng: 1-9 dán nhanh, ↑↓ di chuyển, ↵ dán mục đang chọn, ⌥P ghim, ⌥⌫ xoá.\n- 🔎 Tăng cỡ ký hiệu phím tắt cho dễ đọc.\n- 🧹 Gỡ bỏ hoàn toàn Fan Control: không còn ghi SMC/điều khiển quạt; chỉ giữ đo nhiệt độ HID/PMU.\n- 🛠 Sửa trạng thái kẹt AltTab khi không có cửa sổ và lỗi Enter luôn dán mục đầu.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.5.2/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.5.2"
 }
