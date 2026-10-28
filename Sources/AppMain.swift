@@ -65,7 +65,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        ThermalManager.shared.restoreFansToAuto()
         VirtualDisplayManager.shared.destroyVirtualDisplay()
     }
 

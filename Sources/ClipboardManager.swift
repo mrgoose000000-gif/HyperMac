@@ -93,14 +93,30 @@ public class ClipboardManager: ObservableObject {
             trimItems()
         }
     }
+    /// Auto-delete non-pinned clips older than this many days. 0 = never.
+    @Published public var autoCleanupDays: Int = 0 {
+        didSet {
+            UserDefaults.standard.set(autoCleanupDays, forKey: "clipboard_auto_cleanup_days")
+            applyRetentionPolicy()
+            trimItems()
+        }
+    }
+    public var hasUnlimitedHistory: Bool { maxItemsCount <= 0 }
     @Published public var ignoreConcealedTypes: Bool = true {
         didSet { UserDefaults.standard.set(ignoreConcealedTypes, forKey: "clipboard_ignore_concealed") }
     }
     @Published public var shortcutText: String = "⌘ + ⇧ + C"
     @Published public var isHUDVisible: Bool = false
     @Published public var selectedIndex: Int = 0
-    @Published public var searchText: String = ""
-    @Published public var selectedFilter: ClipType = .all
+    @Published public var searchText: String = "" {
+        didSet {
+            gIsClipboardSearchEmpty = searchText.isEmpty
+            clampSelection()
+        }
+    }
+    @Published public var selectedFilter: ClipType = .all {
+        didSet { clampSelection() }
+    }
     @Published public var hoveredItemID: UUID? = nil
 
     // Internal State
@@ -123,8 +139,14 @@ public class ClipboardManager: ObservableObject {
             self.isMonitoringEnabled = UserDefaults.standard.bool(forKey: "clipboard_monitoring_enabled")
         }
         let savedMax = UserDefaults.standard.integer(forKey: "clipboard_max_items")
-        if savedMax >= 20 && savedMax <= 500 {
+        if UserDefaults.standard.object(forKey: "clipboard_max_items") != nil,
+           savedMax == 0 || (savedMax >= 20 && savedMax <= 5000) {
             self.maxItemsCount = savedMax
+        }
+        let savedCleanup = UserDefaults.standard.integer(forKey: "clipboard_auto_cleanup_days")
+        if UserDefaults.standard.object(forKey: "clipboard_auto_cleanup_days") != nil,
+           [0, 7, 30, 90].contains(savedCleanup) {
+            self.autoCleanupDays = savedCleanup
         }
         if UserDefaults.standard.object(forKey: "clipboard_ignore_concealed") != nil {
             self.ignoreConcealedTypes = UserDefaults.standard.bool(forKey: "clipboard_ignore_concealed")
@@ -132,6 +154,8 @@ public class ClipboardManager: ObservableObject {
 
         // Load stored items
         loadItemsFromDisk()
+        applyRetentionPolicy()
+        trimItems()
 
         // Init pasteboard state
         self.lastChangeCount = NSPasteboard.general.changeCount
@@ -339,6 +363,9 @@ public class ClipboardManager: ObservableObject {
     }
 
     private func appendClip(_ item: ClipItem) {
+        // Age-based cleanup first so a brand-new clip is never immediately dropped.
+        applyRetentionPolicy()
+
         // If identical item exists, remove old copy and re-insert at top (or keep pinned state)
         if let index = items.firstIndex(where: {
             if let p1 = $0.plainText, let p2 = item.plainText {
@@ -379,9 +406,13 @@ public class ClipboardManager: ObservableObject {
     private func trimItems() {
         let pinned = items.filter { $0.isPinned }
         let nonPinned = items.filter { !$0.isPinned }
-        let allowedNonPinned = max(0, maxItemsCount - pinned.count)
+        // maxItemsCount <= 0 means "unlimited"; retention then becomes the only guard.
+        let allowedNonPinned = maxItemsCount <= 0
+            ? nonPinned.count
+            : max(0, maxItemsCount - pinned.count)
         let trimmedNonPinned = Array(nonPinned.prefix(allowedNonPinned))
         self.items = pinned + trimmedNonPinned
+        clampSelection()
     }
 
     // MARK: - Clip Actions
@@ -407,6 +438,143 @@ public class ClipboardManager: ObservableObject {
         items = items.filter { $0.isPinned }
         saveItemsToDisk()
         selectedIndex = 0
+    }
+
+    // MARK: - Selection & Keyboard Navigation
+
+    public var selectedItem: ClipItem? {
+        let list = filteredItems
+        guard !list.isEmpty else { return nil }
+        let index = min(max(0, selectedIndex), list.count - 1)
+        return list[index]
+    }
+
+    public func clampSelection() {
+        let count = filteredItems.count
+        selectedIndex = count == 0 ? 0 : min(max(0, selectedIndex), count - 1)
+    }
+
+    public func selectNext() {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        selectedIndex = (selectedIndex + 1) % count
+    }
+
+    public func selectPrevious() {
+        let count = filteredItems.count
+        guard count > 0 else { return }
+        selectedIndex = (selectedIndex - 1 + count) % count
+    }
+
+    public func pasteSelectedItem() {
+        guard let item = selectedItem else { return }
+        pasteItem(item)
+    }
+
+    public func pasteItemAt(index: Int) {
+        let list = filteredItems
+        guard index >= 0 && index < list.count else { return }
+        pasteItem(list[index])
+    }
+
+    public func togglePinSelected() {
+        guard let item = selectedItem else { return }
+        togglePin(item)
+        clampSelection()
+    }
+
+    public func deleteSelectedItem() {
+        guard let item = selectedItem else { return }
+        deleteItem(item)
+        clampSelection()
+    }
+
+    // MARK: - Storage Retention & Cleanup
+
+    /// Thông báo ngắn hiển thị sau khi người dùng bấm "Dọn ngay"/"Xoá tất cả".
+    @Published public var cleanupMessage: String? = nil
+    private var cleanupMessageToken: Int = 0
+    /// Bấm "Xoá tất cả" lần 1 = chờ xác nhận, lần 2 (trong 4s) = xoá thật.
+    @Published public var pendingClearAllConfirm: Bool = false
+    private var pendingClearAllToken: Int = 0
+
+    private func showCleanupMessage(_ text: String) {
+        cleanupMessageToken &+= 1
+        let token = cleanupMessageToken
+        cleanupMessage = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            guard let self, self.cleanupMessageToken == token else { return }
+            self.cleanupMessage = nil
+        }
+    }
+
+    /// User-triggered "clean now" action. Uses the configured retention window;
+    /// falls back to 30 days when automatic cleanup is off.
+    public func cleanupNow() {
+        let days = autoCleanupDays > 0 ? autoCleanupDays : 30
+        let removed = removeItems(olderThan: days)
+        let pinnedCount = items.filter { $0.isPinned }.count
+
+        if removed > 0 {
+            saveItemsToDisk()
+            clampSelection()
+            showCleanupMessage("Đã xoá \(removed) mục cũ hơn \(days) ngày.")
+        } else if items.isEmpty {
+            showCleanupMessage("Lịch sử đang trống, không có gì để dọn.")
+        } else if items.count == pinnedCount {
+            showCleanupMessage("Chỉ còn \(pinnedCount) mục đã ghim — luôn được giữ lại.")
+        } else {
+            // Feedback rõ ràng: nút đã chạy, chỉ là chưa có mục nào đủ cũ.
+            showCleanupMessage("Không có mục nào cũ hơn \(days) ngày. Dùng \"Xoá tất cả\" để dọn ngay.")
+        }
+    }
+
+    /// Xoá toàn bộ mục chưa ghim. Cần bấm 2 lần để tránh xoá nhầm.
+    public func requestClearAllUnpinned() {
+        guard !pendingClearAllConfirm else {
+            pendingClearAllConfirm = false
+            pendingClearAllToken &+= 1
+            let removed = items.filter { !$0.isPinned }.count
+            items = items.filter { $0.isPinned }
+            saveItemsToDisk()
+            clampSelection()
+            showCleanupMessage(removed > 0 ? "Đã xoá \(removed) mục (giữ lại mục đã ghim)." : "Không có mục nào để xoá.")
+            return
+        }
+
+        let unpinned = items.filter { !$0.isPinned }.count
+        guard unpinned > 0 else {
+            showCleanupMessage("Không có mục nào để xoá (chỉ còn mục đã ghim).")
+            return
+        }
+
+        pendingClearAllConfirm = true
+        pendingClearAllToken &+= 1
+        let token = pendingClearAllToken
+        showCleanupMessage("Bấm lần nữa để xoá \(unpinned) mục chưa ghim.")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self, self.pendingClearAllToken == token else { return }
+            self.pendingClearAllConfirm = false
+        }
+    }
+
+    /// Applies the user's automatic age-based cleanup policy.
+    public func applyRetentionPolicy() {
+        guard autoCleanupDays > 0 else { return }
+        let removed = removeItems(olderThan: autoCleanupDays)
+        if removed > 0 {
+            saveItemsToDisk()
+            clampSelection()
+        }
+    }
+
+    @discardableResult
+    private func removeItems(olderThan days: Int) -> Int {
+        guard days > 0 else { return 0 }
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let before = items.count
+        items.removeAll { !$0.isPinned && $0.timestamp < cutoff }
+        return before - items.count
     }
 
     // MARK: - Direct Paste Action
@@ -486,6 +654,7 @@ public class ClipboardManager: ObservableObject {
         self.searchText = ""
         self.selectedFilter = .all
         self.selectedIndex = 0
+        gIsClipboardSearchEmpty = true
         self.isHUDVisible = true
         gIsClipboardHUDVisible = true
 

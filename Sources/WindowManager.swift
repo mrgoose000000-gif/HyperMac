@@ -122,6 +122,7 @@ public class WindowManager: ObservableObject {
     public var isModifierHeld: Bool = false
     private var overlayPanel: NSPanel?
     private var isCommitInProgress: Bool = false
+    private var thumbnailGeneration: Int = 0
 
     private init() {
         if UserDefaults.standard.object(forKey: "alttab_enabled") != nil {
@@ -157,7 +158,7 @@ public class WindowManager: ObservableObject {
             let appIcon = app.icon ?? NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil)!
 
             let appElement = AXUIElementCreateApplication(pid)
-            _ = AXUIElementSetMessagingTimeout(appElement, 0.1)
+            _ = AXUIElementSetMessagingTimeout(appElement, 0.05)
 
             var windowsRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef) == .success,
@@ -244,8 +245,8 @@ public class WindowManager: ObservableObject {
                 if layer == 0 && w >= 150 && h >= 100 && alpha > 0.1 && !seenWIDs.contains(wid) {
                     if let info = axByWID[wid] {
                         seenWIDs.insert(wid)
-                        // Capture ISOLATED thumbnail for this exact window
-                        let thumb = captureThumbnail(wid: wid)
+                        // Thumbnails are captured asynchronously AFTER the HUD is
+                        // already on screen, so opening AltTab stays instant.
                         let id = "\(info.pid)_\(wid)_\(info.title)"
                         items.append(WindowItem(
                             id: id,
@@ -256,7 +257,7 @@ public class WindowManager: ObservableObject {
                             axElement: info.elem,
                             isMinimized: false,
                             windowID: wid,
-                            thumbnail: thumb
+                            thumbnail: nil
                         ))
                     }
                 }
@@ -292,7 +293,13 @@ public class WindowManager: ObservableObject {
 
         if !isVisible {
             refreshWindows()
-            guard !windows.isEmpty else { return }
+            guard !windows.isEmpty else {
+                // Never leave the interceptor in a "HUD visible" state when
+                // there is nothing to show, otherwise W/Q/arrow keys get eaten.
+                isModifierHeld = false
+                gIsAltTabVisible = false
+                return
+            }
 
             // Initial press selects index 1 (the immediately previous window in MRU!)
             if windows.count > 1 {
@@ -304,7 +311,9 @@ public class WindowManager: ObservableObject {
             previewSelectedWindow()
 
             if isModifierHeld {
+                // Show the HUD immediately; live previews stream in after.
                 showOverlay()
+                beginThumbnailCapture()
             } else {
                 commitSelection()
             }
@@ -325,6 +334,15 @@ public class WindowManager: ObservableObject {
     public func handleOptionReleased() {
         isModifierHeld = false
         if isVisible {
+            commitSelection()
+        }
+    }
+
+    /// Called by the event tap when the Command/Option modifier is released.
+    /// Commits even if the overlay has not finished its first frame yet.
+    public func handleModifierReleased() {
+        isModifierHeld = false
+        if isVisible || !windows.isEmpty {
             commitSelection()
         }
     }
@@ -353,6 +371,7 @@ public class WindowManager: ObservableObject {
     public func commitSelection() {
         guard !isCommitInProgress else { return }
         isCommitInProgress = true
+        isModifierHeld = false
 
         let targetIndex = selectedIndex
         let targetItem = (targetIndex >= 0 && targetIndex < windows.count) ? windows[targetIndex] : nil
@@ -448,6 +467,37 @@ public class WindowManager: ObservableObject {
         }
     }
 
+    // MARK: - Async Thumbnail Capture (keeps AltTab instant)
+
+    /// Captures live previews on a background queue after the HUD is visible.
+    /// Opening the switcher stays instant because AX enumeration no longer
+    /// waits for Retina window snapshots to render.
+    private func beginThumbnailCapture() {
+        thumbnailGeneration &+= 1
+        let generation = thumbnailGeneration
+
+        let targets: [(id: String, wid: CGWindowID)] = windows.compactMap { item in
+            guard let wid = item.windowID, wid > 0 else { return nil }
+            return (item.id, wid)
+        }
+        guard !targets.isEmpty else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard self != nil else { return }
+            for target in targets {
+                guard let image = captureThumbnail(wid: target.wid) else { continue }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.thumbnailGeneration == generation,
+                          self.isVisible else { return }
+                    if let index = self.windows.firstIndex(where: { $0.id == target.id }) {
+                        self.windows[index].thumbnail = image
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Compact AltTab Overlay HUD Presentation
 
     private func showOverlay() {
@@ -476,11 +526,9 @@ public class WindowManager: ObservableObject {
                 rootView: AltTabOverlayView(windowManager: self)
             )
             self.overlayPanel = panel
-        } else {
-            overlayPanel?.contentViewController = NSHostingController(
-                rootView: AltTabOverlayView(windowManager: self)
-            )
         }
+        // Reuse the existing hosting controller: recreating it on every press
+        // caused flicker, reset the scroll position and wasted RAM.
 
         guard let panel = overlayPanel else { return }
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -508,6 +556,8 @@ public class WindowManager: ObservableObject {
     }
 
     private func hideOverlay() {
+        // Invalidate any in-flight thumbnail captures.
+        thumbnailGeneration &+= 1
         overlayPanel?.orderOut(nil)
         self.isVisible = false
         gIsAltTabVisible = false

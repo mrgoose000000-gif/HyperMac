@@ -96,9 +96,9 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
-    <string>1.5.1</string>
+    <string>1.5.2</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.1</string>
+    <string>1.5.2</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -119,9 +119,19 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# ── Step 3: Ad-hoc code sign ──
-echo "🔏 Code signing (ad-hoc)..."
-codesign --force --deep --sign - --identifier "com.opensource.hypermac" "${APP_DIR}" 2>/dev/null || true
+# ── Step 3: Code sign ──
+# Dùng chứng chỉ self-signed cố định nếu có (scripts/setup-signing-identity.sh).
+# Ký ad-hoc tạo cdhash mới mỗi lần build → macOS thu hồi quyền Accessibility
+# sau mỗi lần rebuild. Identity cố định giữ nguyên Designated Requirement.
+SIGN_IDENTITY="${HYPERMAC_SIGN_IDENTITY:-HyperMac Self-Signed}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -qF "${SIGN_IDENTITY}"; then
+    echo "🔏 Code signing (${SIGN_IDENTITY})..."
+    codesign --force --deep --sign "${SIGN_IDENTITY}" --identifier "com.opensource.hypermac" "${APP_DIR}"
+else
+    echo "🔏 Code signing (ad-hoc — quyền Accessibility sẽ mất sau mỗi lần build)..."
+    echo "   → Chạy ./scripts/setup-signing-identity.sh một lần để hết bị."
+    codesign --force --deep --sign - --identifier "com.opensource.hypermac" "${APP_DIR}" 2>/dev/null || true
+fi
 
 # ── Step 3.1: Create release zip package ──
 echo "📦 Packaging ${BUILD_DIR}/HyperMac.zip for distribution..."

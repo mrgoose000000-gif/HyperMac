@@ -302,12 +302,12 @@ struct HintChip: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 7))
+                .font(.system(size: 8.5))
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: 8, weight: .medium))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.secondary)
         }
     }

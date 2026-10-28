@@ -67,7 +67,7 @@ struct VersionManifest: Decodable {
 public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     public static let shared = UpdateManager()
 
-    public static let currentVersion: String = "1.5.1"
+    public static let currentVersion: String = "1.5.2"
 
     @Published public var state: UpdateState = .idle
     @Published public var downloadProgress: Double = 0.0
@@ -130,6 +130,8 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
 
         Task {
             var lastStatusCode: Int = 0
+            // Kết quả "đã mới nhất" từ GitHub API, dùng dự phòng nếu manifest lỗi.
+            var apiUpToDate: (ver: String, notes: String, dl: URL?, html: URL?)? = nil
 
             // Attempt 1: Standard GitHub Releases API
             let releaseUrl = URL(string: "https://api.github.com/repos/mrgoose000000-gif/HyperMac/releases/latest")!
@@ -156,14 +158,20 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
                         })
                         let dlUrl = zipAsset.flatMap { URL(string: $0.browserDownloadUrl) }
 
-                        self.handleDiscoveredVersion(
-                            latestVer: tagVer,
-                            notes: notes,
-                            downloadUrl: dlUrl,
-                            htmlUrl: releasePage,
-                            silent: silent
-                        )
-                        return
+                        if Self.isVersion(tagVer, greaterThan: Self.currentVersion) {
+                            self.handleDiscoveredVersion(
+                                latestVer: tagVer,
+                                notes: notes,
+                                downloadUrl: dlUrl,
+                                htmlUrl: releasePage,
+                                silent: silent
+                            )
+                            return
+                        }
+
+                        // Release mới nhất chưa cao hơn bản đang chạy: vẫn thử manifest
+                        // để không bỏ lỡ trường hợp release tạo chậm hơn / thiếu asset.
+                        apiUpToDate = (tagVer, notes, dlUrl, releasePage)
                     }
                 }
             } catch {
@@ -200,6 +208,18 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
                 }
             } catch {
                 appLog("⚠️ Raw manifest check failed: \(error.localizedDescription)")
+            }
+
+            // Manifest không dùng được nhưng API nói đã mới nhất → báo đã mới nhất.
+            if let api = apiUpToDate {
+                self.handleDiscoveredVersion(
+                    latestVer: api.ver,
+                    notes: api.notes,
+                    downloadUrl: api.dl,
+                    htmlUrl: api.html,
+                    silent: silent
+                )
+                return
             }
 
             // If both failed
@@ -298,14 +318,32 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 200
+        guard status == 200 else {
+            Task { @MainActor in
+                self.state = .failed("Máy chủ GitHub trả về mã lỗi \(status). Bản cập nhật chưa được tải, app hiện tại vẫn nguyên vẹn.")
+            }
+            return
+        }
+
         let tempZip = URL(fileURLWithPath: "/tmp/HyperMac_update.zip")
         try? FileManager.default.removeItem(at: tempZip)
 
         do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: location.path)
+            let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
+            // HTML error page / empty file would be a few KB at most.
+            guard size > 100_000 else {
+                Task { @MainActor in
+                    self.state = .failed("Tệp cập nhật tải về không hợp lệ (\(size / 1024) KB). Có thể Release chưa đính kèm HyperMac.zip.")
+                }
+                return
+            }
+
             try FileManager.default.moveItem(at: location, to: tempZip)
             Task { @MainActor in
                 self.state = .extracting
-                self.performInPlaceUpdate(zipPath: tempZip.path)
+                self.stageAndInstall(zipPath: tempZip.path)
             }
         } catch {
             Task { @MainActor in
@@ -322,57 +360,116 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
         }
     }
 
+    // MARK: - Stage & Validate (KHÔNG đụng vào app đang chạy)
+
+    /// Giải nén + kiểm tra gói cập nhật TRƯỚC khi thoát app.
+    /// Nếu zip hỏng/không phải HyperMac, app đang chạy vẫn nguyên vẹn.
+    private func stageAndInstall(zipPath: String) {
+        let staging = "/tmp/HyperMac_staging"
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let fm = FileManager.default
+            try? fm.removeItem(atPath: staging)
+            try? fm.createDirectory(atPath: staging, withIntermediateDirectories: true)
+
+            let ditto = Process()
+            ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            ditto.arguments = ["-x", "-k", zipPath, staging]
+            ditto.standardOutput = FileHandle.nullDevice
+            ditto.standardError = FileHandle.nullDevice
+
+            var extractOK = false
+            do {
+                try ditto.run()
+                ditto.waitUntilExit()
+                extractOK = ditto.terminationStatus == 0
+            } catch {
+                extractOK = false
+            }
+
+            guard extractOK else {
+                DispatchQueue.main.async {
+                    self?.state = .failed("Tệp cập nhật bị hỏng hoặc không phải ZIP hợp lệ. App hiện tại không bị ảnh hưởng.")
+                }
+                return
+            }
+
+            let appPath = staging + "/HyperMac.app"
+            let binaryPath = appPath + "/Contents/MacOS/HyperMac"
+            let bundleID = Bundle(path: appPath)?.bundleIdentifier
+
+            guard fm.fileExists(atPath: binaryPath), bundleID == "com.opensource.hypermac" else {
+                DispatchQueue.main.async {
+                    self?.state = .failed("Gói cập nhật không chứa HyperMac.app hợp lệ. App hiện tại không bị ảnh hưởng.")
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                self?.performInPlaceUpdate(stagedAppPath: appPath, zipPath: zipPath)
+            }
+        }
+    }
+
     // MARK: - In-Place Atomic Replacement & Relaunch
 
-    private func performInPlaceUpdate(zipPath: String) {
+    private func performInPlaceUpdate(stagedAppPath: String, zipPath: String) {
         let currentPid = ProcessInfo.processInfo.processIdentifier
         let updaterScriptPath = "/tmp/hypermac_in_place_updater.sh"
 
+        let appPath = "/Applications/HyperMac.app"
+        let newPath = "/Applications/.HyperMac.new"
+        let backupPath = "/Applications/.HyperMac.bak"
+
         let script = """
         #!/bin/bash
-        set -e
         exec > /tmp/hypermac_updater.log 2>&1
 
         echo "🔄 HyperMac Updater started for PID \(currentPid)..."
+        PID="\(currentPid)"
+        APP="\(appPath)"
+        NEW="\(newPath)"
+        BAK="\(backupPath)"
+        STAGED="\(stagedAppPath)"
 
-        # 1. Wait for current app to fully exit
-        while kill -0 "\(currentPid)" 2>/dev/null; do
-            sleep 0.2
-        done
-
-        sleep 0.5
+        # 1. Chờ app thoát hẳn
+        while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done
+        sleep 0.4
         echo "🛑 Current instance exited."
 
-        # 2. Extract update zip to clean staging area
-        STAGING="/tmp/HyperMac_staging"
-        rm -rf "$STAGING"
-        mkdir -p "$STAGING"
-
-        echo "📦 Extracting \(zipPath)..."
-        ditto -xk "\(zipPath)" "$STAGING"
-
-        # 3. Locate HyperMac.app in staging
-        APP_PATH="$STAGING/HyperMac.app"
-        if [ ! -d "$APP_PATH" ]; then
-            APP_PATH=$(find "$STAGING" -name "HyperMac.app" -type d -maxdepth 2 | head -n 1)
+        # 2. Copy sang thư mục tạm cạnh app (cùng volume → mv là atomic)
+        rm -rf "$NEW"
+        if ! cp -R "$STAGED" "$NEW"; then
+            echo "❌ cp thất bại, giữ nguyên app cũ."
+            rm -rf "$NEW"
+            open "$APP"
+            exit 1
         fi
+        if [ ! -x "$NEW/Contents/MacOS/HyperMac" ]; then
+            echo "❌ Binary không tồn tại, giữ nguyên app cũ."
+            rm -rf "$NEW"
+            open "$APP"
+            exit 1
+        fi
+        xattr -cr "$NEW" 2>/dev/null || true
 
-        if [ -d "$APP_PATH" ]; then
-            echo "🚀 Installing to /Applications/HyperMac.app..."
-            rm -rf /Applications/HyperMac.app
-            cp -R "$APP_PATH" /Applications/HyperMac.app
-            xattr -cr /Applications/HyperMac.app 2>/dev/null || true
-            chmod +x /Applications/HyperMac.app/Contents/MacOS/HyperMac 2>/dev/null || true
-            
-            # 4. Relaunch newly updated app
-            echo "▶️ Launching /Applications/HyperMac.app..."
-            open /Applications/HyperMac.app
+        # 3. Đổi chỗ có backup để rollback nếu lỗi
+        rm -rf "$BAK"
+        if [ -d "$APP" ]; then mv "$APP" "$BAK"; fi
+        if mv "$NEW" "$APP"; then
+            echo "✅ Đã cài bản mới."
+            open "$APP"
+            sleep 4
+            rm -rf "$BAK"
         else
-            echo "❌ HyperMac.app not found in zip archive!"
+            echo "❌ mv thất bại, rollback."
+            rm -rf "$APP"
+            if [ -d "$BAK" ]; then mv "$BAK" "$APP"; fi
+            open "$APP"
         fi
 
-        # 5. Clean up
-        rm -rf "$STAGING" "\(zipPath)" "\(updaterScriptPath)"
+        # 4. Dọn dẹp
+        rm -rf "$STAGED" "\(zipPath)" "\(updaterScriptPath)"
         echo "✅ Update complete."
         """
 

@@ -20,8 +20,25 @@ public var gIsAltTabEnabled: Bool = true
 public var gIsAltTabVisible: Bool = false
 public var gIsClipboardEnabled: Bool = true
 public var gIsClipboardHUDVisible: Bool = false
+public var gIsClipboardSearchEmpty: Bool = true
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
+
+/// Maps macOS virtual keycodes for 1...9 to their 0-based clipboard row index.
+private func clipboardQuickPasteIndex(for keyCode: Int64) -> Int? {
+    switch keyCode {
+    case 18: return 0 // 1
+    case 19: return 1 // 2
+    case 20: return 2 // 3
+    case 21: return 3 // 4
+    case 23: return 4 // 5
+    case 22: return 5 // 6
+    case 26: return 6 // 7
+    case 28: return 7 // 8
+    case 25: return 8 // 9
+    default: return nil
+    }
+}
 
 private func triggerMissionControl() {
     DispatchQueue.main.async {
@@ -135,7 +152,7 @@ private func eventTapCallback(
                     if gIsAltTabVisible {
                         gIsAltTabVisible = false
                         DispatchQueue.main.async {
-                            WindowManager.shared.commitSelection()
+                            WindowManager.shared.handleModifierReleased()
                         }
                     }
                 }
@@ -247,12 +264,50 @@ private func eventTapCallback(
 
         // Clipboard HUD Active Keys
         if gIsClipboardHUDVisible {
-            if keycode == 53 { // Esc -> Close HUD
-                gIsClipboardHUDVisible = false
-                DispatchQueue.main.async {
-                    ClipboardManager.shared.hideHUD()
+            let hasCommand = flags.contains(.maskCommand)
+            let hasControl = flags.contains(.maskControl)
+            let hasOption = flags.contains(.maskAlternate)
+
+            // Let system-level shortcuts (⌘C, ⌘V, ⌘A...) pass through untouched.
+            if !hasCommand && !hasControl {
+                if keycode == 53 { // Esc -> Close HUD
+                    gIsClipboardHUDVisible = false
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.hideHUD()
+                    }
+                    return nil
+                } else if keycode == 126 { // Up Arrow -> previous clip
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.selectPrevious()
+                    }
+                    return nil
+                } else if keycode == 125 { // Down Arrow -> next clip
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.selectNext()
+                    }
+                    return nil
+                } else if keycode == 36 || keycode == 76 { // Return / Numpad Enter -> paste selection
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.pasteSelectedItem()
+                    }
+                    return nil
+                } else if hasOption && keycode == 35 { // ⌥P -> pin / unpin selection
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.togglePinSelected()
+                    }
+                    return nil
+                } else if hasOption && (keycode == 51 || keycode == 117) { // ⌥⌫ -> delete selection
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.deleteSelectedItem()
+                    }
+                    return nil
+                } else if !hasOption && !flags.contains(.maskShift) && gIsClipboardSearchEmpty,
+                          let index = clipboardQuickPasteIndex(for: keycode) { // 1...9 -> instant paste
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.pasteItemAt(index: index)
+                    }
+                    return nil
                 }
-                return nil
             }
         }
 

@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon & Intel)
 
-[![Version](https://img.shields.io/badge/version-v1.5.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.5.2-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Universal%202%20(Apple%20Silicon%20%26%20Intel)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -8,7 +8,7 @@
 
 > 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành cho máy Mac (cả chip Apple Silicon M-series lẫn chip Intel). Ứng dụng gom trọn tính năng của **6 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
-> **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ trực quan) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Macs Fan Control** (Đo nhiệt độ 30+ cảm biến & Điều khiển quạt tản nhiệt).
+> **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ trực quan) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU).
 
 ---
 
@@ -17,7 +17,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.5.1)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.5.2)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -175,6 +175,28 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.5.2] — 2026-10-28
+- **AltTab mở tức thì (hết delay ~0.5s):**
+  - Bỏ bước chụp ảnh thu nhỏ cửa sổ đồng bộ trên main thread khi vừa bấm `⌘ + Tab`.
+  - HUD hiện ngay lập tức bằng icon ứng dụng; ảnh xem trước được chụp nền và cập nhật dần sau đó.
+  - Tái sử dụng `NSHostingController` thay vì tạo mới mỗi lần mở (hết nháy, giữ vị trí cuộn).
+  - Sửa trạng thái kẹt `gIsAltTabVisible` khi danh sách cửa sổ rỗng (không còn nuốt phím `W`/`Q`).
+- **Clipboard History linh hoạt hơn:**
+  - Thêm giới hạn **500 mục** và **∞ Không giới hạn**.
+  - Thêm mục **Tự động xoá** theo tuổi: Không / 7 / 30 / 90 ngày (áp dụng cho mục chưa ghim).
+  - Thêm nút **Dọn ngay** để người dùng chủ động dọn bớt lịch sử cũ.
+  - **Dọn ngay giờ có phản hồi rõ ràng**: báo "Đã xoá N mục" hoặc "Không có mục nào cũ hơn 30 ngày" (trước đây bấm không thấy gì vì lịch sử toàn mục mới).
+  - Thêm nút **Xoá tất cả** (giữ mục đã ghim) — bấm 2 lần để xác nhận, dùng khi muốn dọn ngay lập tức.
+  - Khi chọn "Không giới hạn", giao diện nhắc bật tự động xoá để tránh phình bộ nhớ.
+- **Phím tắt Clipboard hoạt động đúng như hướng dẫn:**
+  - `1–9` dán nhanh, `↑/↓` di chuyển, `↵` dán mục đang chọn, `⌥P` ghim, `⌥⌫` xoá, `⎋` đóng.
+  - Sửa lỗi `↵` luôn dán mục đầu tiên thay vì mục đang chọn.
+- **Giao diện dễ đọc hơn:** Tăng cỡ ký hiệu phím tắt trong bảng Clipboard HUD và thẻ cài đặt.
+- **Gỡ bỏ hoàn toàn Fan Control:**
+  - Xoá bảng điều khiển quạt, 4 chế độ quạt, slider RPM và Smart Curve.
+  - Bỏ mọi lệnh ghi SMC / `displaycontrol-power` cho quạt; chỉ giữ đo nhiệt độ HID/PMU.
+  - Menu Bar chỉ còn hiển thị nhiệt độ (`44°C`).
 
 ### [v1.5.1] — 2026-10-28
 - **Tích Hợp Hoàn Hảo Động Cơ Macs Fan Control & Sửa Nhận Diện Quạt M1 Max:**

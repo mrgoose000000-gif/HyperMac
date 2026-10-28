@@ -1,7 +1,7 @@
 {
-  "version": "1.5.1",
-  "name": "HyperMac v1.5.1 (Macs Fan Control Suite + M1 Max Fix + Stability Update)",
-  "notes": "✨ Tính năng mới & Cải tiến trong v1.5.1:\n- 🌀 Tích hợp hoàn chỉnh động cơ Macs Fan Control: 4 chế độ (Tự động, Cố định RPM, Theo cảm biến tùy chỉnh Smart Curve, Tối đa 100% Boost).\n- 🎯 Nhận diện quạt chuẩn xác 100% trên chip Apple Silicon M1 Max, M1/M2/M3/M4 Pro/Max, Mac Studio, Mac mini.\n- 📊 Giám sát Menu Bar trực tiếp: Hiển thị nhiệt độ (°C) và tốc độ quạt (RPM) theo thời gian thực trên thanh trạng thái macOS.\n- 🛡️ An toàn phần cứng tuyệt đối: Tự động khôi phục quạt về mặc định của Apple khi Sleep, Wake hoặc thoát ứng dụng.\n- 🚀 Loại bỏ tính năng hạ nhiệt cưỡng bức tránh treo ứng dụng nền.\n- 🖥️ Sửa dứt điểm lỗi màn ảo phantom U280-Pro khi bật/tắt màn hình ảo qua VirtualDisplayBridge ARC.\n- 📋 Gộp PR #1: Giải quyết triệt để xung đột phím tắt Clipboard với bộ gõ tiếng Việt (GoTiengViet, EVKey).",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.5.1/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.5.1"
+  "version": "1.5.2",
+  "name": "HyperMac v1.5.2 (AltTab Instant + Clipboard Cleanup + Fan Control Removed)",
+  "notes": "✨ Tính năng mới & Cải tiến trong v1.5.2:\n- ⚡ AltTab mở tức thì: bỏ chụp thumbnail đồng bộ, HUD hiện ngay, ảnh xem trước tải nền.\n- 📋 Clipboard: thêm giới hạn 500 mục và Không giới hạn, tự động xoá theo tuổi (7/30/90 ngày), nút Dọn ngay.\n- ⌨️ Phím tắt Clipboard hoạt động đúng: 1-9 dán nhanh, ↑↓ di chuyển, ↵ dán mục đang chọn, ⌥P ghim, ⌥⌫ xoá.\n- 🔎 Tăng cỡ ký hiệu phím tắt cho dễ đọc.\n- 🧹 Gỡ bỏ hoàn toàn Fan Control: không còn ghi SMC/điều khiển quạt; chỉ giữ đo nhiệt độ HID/PMU.\n- 🛠 Sửa trạng thái kẹt AltTab khi không có cửa sổ và lỗi Enter luôn dán mục đầu.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.5.2/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.5.2"
 }

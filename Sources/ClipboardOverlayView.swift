@@ -58,9 +58,7 @@ public struct ClipboardOverlayView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .medium))
                 .onSubmit {
-                    if let first = manager.filteredItems.first {
-                        manager.pasteItem(first)
-                    }
+                    manager.pasteSelectedItem()
                 }
 
             if !manager.searchText.isEmpty {
@@ -399,14 +397,14 @@ public struct ClipboardOverlayView: View {
     }
 
     private func legendItem(key: String, label: String) -> some View {
-        HStack(spacing: 2.5) {
+        HStack(spacing: 3) {
             Text(key)
-                .font(.system(size: 7.5, weight: .heavy, design: .monospaced))
-                .padding(.horizontal, 3.5)
-                .padding(.vertical, 1)
+                .font(.system(size: 9.5, weight: .heavy, design: .monospaced))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1.5)
                 .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.08)))
             Text(label)
-                .font(.system(size: 7.5))
+                .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
     }
