@@ -19,10 +19,17 @@ private func displayReconfigCallback(
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var previewWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu bar only app (no Dock icon)
         NSApp.setActivationPolicy(.accessory)
+
+        // UI preview window (chỉ dùng khi kiểm thử giao diện, không ảnh hưởng người dùng)
+        if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW"] == "1" {
+            showPreviewWindow()
+            return
+        }
 
         // Initialize Popover
         let pop = NSPopover()
@@ -69,6 +76,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         VirtualDisplayManager.shared.destroyVirtualDisplay()
+    }
+
+    /// Cửa sổ xem trước UI khi đặt `HYPERMAC_PREVIEW=1` (dùng để chụp/kiểm tra layout).
+    /// `HYPERMAC_PREVIEW_TAB=0|1|2` chọn tab, mặc định 1 (Pin & Phần cứng).
+    /// `HYPERMAC_PREVIEW_OUT=/path.png` render thẳng ra PNG (không cần quyền chụp màn hình).
+    private func showPreviewWindow() {
+        let tab = Int(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_TAB"] ?? "") ?? 1
+        DisplayManager.shared.selectedMainTab = tab
+
+        let view = MainView(displayManager: DisplayManager.shared)
+            .frame(width: 380, height: 570)
+
+        if let out = ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_OUT"], !out.isEmpty {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            if let image = renderer.nsImage,
+               let tiff = image.tiffRepresentation,
+               let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: out))
+            }
+            NSApp.terminate(nil)
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 570),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "HyperMac UI Preview"
+        window.contentView = NSHostingView(rootView: view)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        previewWindow = window
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func togglePopover() {

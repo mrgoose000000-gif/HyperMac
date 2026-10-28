@@ -154,6 +154,9 @@ final class DiskSpeedSampler {
                   let bsd = IORegistryEntryCreateCFProperty(media, "BSD Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String
             else { continue }
 
+            // Bỏ qua ổ ảo từ file .dmg/.iso ("Apple Disk Image Media") — không phải ổ cứng thật.
+            if entryName(media)?.contains("Disk Image") == true { continue }
+
             // Chỉ lấy cha TRỰC TIẾP là IOBlockStorageDriver. Các "disk" tổng hợp
             // của APFS (disk1, disk3…) có cha là AppleAPFSContainerScheme cũng có
             // Statistics riêng → nếu không lọc sẽ cộng trùng gấp đôi tốc độ.
@@ -185,6 +188,12 @@ final class DiskSpeedSampler {
     private static func classOf(_ entry: io_registry_entry_t) -> String? {
         var buffer = [CChar](repeating: 0, count: 128)
         guard IOObjectGetClass(entry, &buffer) == KERN_SUCCESS else { return nil }
+        return String(cString: buffer)
+    }
+
+    private static func entryName(_ entry: io_registry_entry_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: 256)
+        guard IORegistryEntryGetName(entry, &buffer) == KERN_SUCCESS else { return nil }
         return String(cString: buffer)
     }
 
@@ -458,7 +467,26 @@ public final class DiskSpeedManager: ObservableObject {
     private let debugLogging = ProcessInfo.processInfo.environment["HYPERMAC_DISKSPEED_DEBUG"] == "1"
 
     private init() {
+        if ProcessInfo.processInfo.environment["HYPERMAC_DISKSPEED_FAKE"] == "1" {
+            applyFakePreviewSnapshot()
+        }
         start()
+    }
+
+    /// Chỉ dùng khi kiểm thử layout: nạp số liệu giả để chụp giao diện.
+    private func applyFakePreviewSnapshot() {
+        disks = [
+            DiskSpeedInfo(bsdName: "disk4", displayName: "U280-Pro", readMBps: 92.4, writeMBps: 0),
+            DiskSpeedInfo(bsdName: "disk0", displayName: "SSD nội bộ", readMBps: 6.2, writeMBps: 781.5)
+        ]
+        totalReadMBps = 98.6
+        totalWriteMBps = 781.5
+        networkReadMBps = 112.8
+        networkWriteMBps = 1.2
+        networkLabel = "LAN en0"
+        topProcessName = "Finder"
+        topProcessReadMBps = 92.4
+        topProcessWriteMBps = 780.1
     }
 
     private func start() {

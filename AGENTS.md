@@ -60,6 +60,7 @@ swift build -c release
 - Lưu cài đặt qua `UserDefaults` với key có tiền tố rõ ràng (`clipboard_*`, `fan_*` cũ đã bỏ, `show_menubar_thermal`…).
 - Không hardcode đường dẫn tuyệt đối của máy dev (ví dụ `/Users/khacdai24/...`).
 - Giữ `Package.swift` ở `swift-tools-version: 5.9` (Swift 5 language mode) để tránh lỗi concurrency nghiêm ngặt.
+- **Không tự tạo tag/release hay push bản phát hành** khi chưa được người dùng xác nhận rõ ràng. Cứ build local, test xong, chờ lệnh.
 
 ## 5. Thay đổi v1.5.2 (2026-10-28)
 
@@ -124,10 +125,14 @@ swift build -c release
   `IOBlockStorageDriver` (nơi có property `Statistics`).
 - `AppleAPFSContainerScheme` cũng có `Statistics` riêng → nếu không lọc theo class
   cha, tốc độ sẽ bị cộng trùng (gấp đôi) giữa `disk0` và `disk3`.
+- Bỏ qua media ảo của file `.dmg/.iso` (IORegistry name chứa `Disk Image`) để ổ
+  "Tor Browser"… không xuất hiện như ổ cứng thật.
 - Tên hiển thị: đi ngược cây IORegistry từ volume đang mount (`getmntinfo`) lên tới
   IOMedia vật lý (`mediaEntry(forBSDName:)`), chọn volume gốc `/` hoặc volume lớn
   nhất. Fallback: `Device Characteristics → Product Name` (`APPLE SSD…` →
   `SSD nội bộ`), cuối cùng là BSD name.
+- Dòng chi tiết trong card hiển thị **nguồn → đích** (ổ đọc nhiều nhất → ổ ghi nhiều
+  nhất), ví dụ `U280-Pro → SSD nội bộ`; nếu cùng một ổ thì chỉ hiện tên ổ.
 
 **NAS / ổ mạng (xấp xỉ):**
 - `networkVolumeHosts()` lấy host từ `getmntinfo` (`//user@host/share`, `host:/path`).
@@ -148,7 +153,17 @@ swift build -c release
 **Debug:** đặt `HYPERMAC_DISKSPEED_DEBUG=1` để log mỗi mẫu vào `/tmp/displaycontrol.log`
 (dòng `💾 DiskSpeed: …`). Hook `HYPERMAC_DISKSPEED_TEST_HOST` đã được gỡ.
 
-### 6.2. Phiên bản & tài liệu
+### 6.2. Kiểm thử giao diện không cần chụp màn hình
+- `HYPERMAC_PREVIEW=1` mở cửa sổ 380×570 chứa `MainView` (không tạo status item).
+- `HYPERMAC_PREVIEW_TAB=0|1|2` chọn tab (mặc định 1).
+- `HYPERMAC_PREVIEW_OUT=/tmp/ui.png` render thẳng ra PNG bằng `ImageRenderer`
+  rồi thoát — hữu ích khi terminal không có quyền Screen Recording.
+- `HYPERMAC_DISKSPEED_FAKE=1` nạp số liệu giả (U280-Pro → SSD, LAN en0) để kiểm tra
+  layout dòng chi tiết. **Chỉ dùng khi phát triển**, không ảnh hưởng người dùng.
+- Lưu ý: `ImageRenderer` không render nội dung bên trong `ScrollView`, nên ảnh
+  preview chỉ dùng để kiểm tra phần header/tab/card, không thay thế kiểm thử thật.
+
+### 6.3. Phiên bản & tài liệu
 - Bump `1.5.2` → `1.6.0` tại: `build.sh`, `Sources/UpdateManager.swift`, `version.json`,
   badge + nút tải trong `README.md`.
 - Thêm changelog v1.6.0 trong `README.md`.

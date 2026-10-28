@@ -390,14 +390,36 @@ struct FileTransferSpeedCard: View {
         diskSpeed.disks.filter(\.isActive).max { $0.totalMBps < $1.totalMBps }
     }
 
+    /// Nguồn → đích của phiên chép đang chạy (ví dụ "U280-Pro → SSD nội bộ").
+    /// Khi chỉ có một ổ vừa đọc vừa ghi thì hiện tên ổ đó.
+    private var transferPath: String? {
+        let reader = diskSpeed.disks
+            .filter { $0.readMBps >= 1 }
+            .max { $0.readMBps < $1.readMBps }
+        let writer = diskSpeed.disks
+            .filter { $0.writeMBps >= 1 }
+            .max { $0.writeMBps < $1.writeMBps }
+
+        switch (reader, writer) {
+        case let (source?, destination?) where source.bsdName != destination.bsdName:
+            return "\(source.displayName) → \(destination.displayName)"
+        case let (_, destination?):
+            return destination.displayName
+        case let (source?, nil):
+            return "Đọc từ \(source.displayName)"
+        default:
+            return busiestDisk?.displayName
+        }
+    }
+
     private var networkActive: Bool {
         diskSpeed.networkReadMBps >= 0.05 || diskSpeed.networkWriteMBps >= 0.05
     }
 
     private var detailText: String? {
         var parts: [String] = []
-        if let disk = busiestDisk {
-            parts.append(disk.displayName)
+        if let path = transferPath {
+            parts.append(path)
         }
         if networkActive, let label = diskSpeed.networkLabel {
             parts.append("\(label) (NAS)")

@@ -181,6 +181,7 @@ chmod +x build.sh
   - Nằm trong tab **Pin & Phần cứng**, ngay dưới thanh chọn Pin / Nhiệt độ.
   - Hiển thị tổng tốc độ đọc `↓` và ghi `↑` (MB/s) của mọi ổ vật lý đang hoạt động.
   - Tự nhận diện tên ổ: SSD nội bộ, USB, thẻ nhớ, SSD ngoài (hiện tên volume đang mount).
+  - Dòng chi tiết cho biết **nguồn → đích** của phiên chép, ví dụ `U280-Pro → SSD nội bộ`.
   - Rê chuột vào ô để xem chi tiết từng ổ — hữu ích khi chép thẻ nhớ → ổ rời.
   - Lấy số liệu trực tiếp từ bộ đếm IOKit của ổ vật lý nên không cộng trùng với các volume APFS.
 - **🌐 Đo tốc độ NAS qua dây LAN:**
