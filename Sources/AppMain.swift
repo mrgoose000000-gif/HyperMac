@@ -60,6 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Eagerly initialize Clipboard Manager
         _ = ClipboardManager.shared
 
+        // Eagerly initialize Disk Speed sampler (biểu đồ tốc độ chép file)
+        _ = DiskSpeedManager.shared
+
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
     }

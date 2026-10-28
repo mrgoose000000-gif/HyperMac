@@ -44,6 +44,7 @@ swift build -c release
 | `Sources/ClipboardOverlayView.swift` | UI bảng Clipboard HUD |
 | `Sources/AltTabOverlayView.swift` | UI HUD AltTab |
 | `Sources/ThermalManager.swift` | Đọc nhiệt độ HID/PMU + trạng thái thermal (KHÔNG điều khiển quạt) |
+| `Sources/DiskSpeedManager.swift` | Đo tốc độ đọc/ghi ổ vật lý (IOKit), interface LAN cho NAS, I/O theo tiến trình |
 | `Sources/BatteryManager.swift` | Khóa sạc 80%, helper SMC |
 | `Sources/DisplayManager.swift` | Độ sáng, DDC/CI, màn hình ảo |
 | `Sources/VirtualDisplayManager.swift` + `VirtualDisplayBridge/` | Cầu nối Objective-C cho màn hình ảo |
@@ -107,7 +108,53 @@ swift build -c release
 - Thêm changelog v1.5.2 trong `README.md`.
 - Cần tạo tag `v1.5.2` và push để GitHub Actions tạo release khớp `version.json`.
 
-## 6. Chứng chỉ ký cố định (bắt buộc cho TCC)
+## 6. Thay đổi v1.6.0 (2026-10-28)
+
+### 6.1. Đo tốc độ chép file — `Sources/DiskSpeedManager.swift`
+- UI: `FileTransferSpeedCard` trong `HardwareCareTabView`, đặt ngay dưới thanh chọn
+  Pin / Nhiệt độ (luôn hiển thị, không phụ thuộc segment đang chọn).
+- `DiskSpeedManager.shared` được khởi tạo sớm trong `applicationDidFinishLaunching`
+  để sampler chạy trước khi người dùng mở popover.
+- Kiến trúc: `DiskSpeedManager` (`@MainActor`, `ObservableObject`) giữ `Timer` 1s trên
+  main run loop; mỗi tick đẩy `DiskSpeedSampler.sample()` sang `DispatchQueue` nền.
+  Sampler tính delta byte / delta thời gian (`max(0.25s, …)`) → MB/s.
+
+**Ổ vật lý (chính xác):**
+- Duyệt `IOMedia` có `Whole = true`, lấy **cha trực tiếp**; chỉ nhận khi class cha là
+  `IOBlockStorageDriver` (nơi có property `Statistics`).
+- `AppleAPFSContainerScheme` cũng có `Statistics` riêng → nếu không lọc theo class
+  cha, tốc độ sẽ bị cộng trùng (gấp đôi) giữa `disk0` và `disk3`.
+- Tên hiển thị: đi ngược cây IORegistry từ volume đang mount (`getmntinfo`) lên tới
+  IOMedia vật lý (`mediaEntry(forBSDName:)`), chọn volume gốc `/` hoặc volume lớn
+  nhất. Fallback: `Device Characteristics → Product Name` (`APPLE SSD…` →
+  `SSD nội bộ`), cuối cùng là BSD name.
+
+**NAS / ổ mạng (xấp xỉ):**
+- `networkVolumeHosts()` lấy host từ `getmntinfo` (`//user@host/share`, `host:/path`).
+- `route -n get <host>` (cache 60s) → tên interface (`en0`, `en1`, …).
+- Đọc byte counter 64-bit của interface qua `sysctl` MIB
+  `[CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]` (`if_msghdr2.ifm_data`).
+- Nếu không resolve được interface: cộng các interface `en*`/`ppp*`.
+- Đây là tốc độ **của card mạng**, không phải riêng phiên SMB → có thể lẫn traffic khác.
+
+**Tiến trình đang chép:**
+- `proc_listallpids` + `proc_pid_rusage(pid, RUSAGE_INFO_V4)` lấy
+  `ri_diskio_bytesread/written`; lưu counter của frame trước để tính delta.
+- Chỉ gắn tên tiến trình khi `peak >= 3 MB/s` **và** `peak >= 50%` tổng lưu lượng,
+  nếu không sẽ hiện nhầm I/O nền (Spotlight, `BackgroundShortcutRunner`).
+- Hạn chế đã biết: ghi qua page cache có thể xong trước nhịp lấy mẫu nên tiến trình
+  có thể không hiện (ví dụ `dd` tốc độ cao); số liệu ổ cứng vẫn đúng.
+
+**Debug:** đặt `HYPERMAC_DISKSPEED_DEBUG=1` để log mỗi mẫu vào `/tmp/displaycontrol.log`
+(dòng `💾 DiskSpeed: …`). Hook `HYPERMAC_DISKSPEED_TEST_HOST` đã được gỡ.
+
+### 6.2. Phiên bản & tài liệu
+- Bump `1.5.2` → `1.6.0` tại: `build.sh`, `Sources/UpdateManager.swift`, `version.json`,
+  badge + nút tải trong `README.md`.
+- Thêm changelog v1.6.0 trong `README.md`.
+- Cần tạo tag `v1.6.0` và push để GitHub Actions tạo release khớp `version.json`.
+
+## 7. Chứng chỉ ký cố định (bắt buộc cho TCC)
 
 **Vấn đề:** ký ad-hoc (`codesign -s -`) khiến cdhash đổi sau mỗi lần build →
 macOS coi là app khác → **thu hồi quyền Accessibility** → `⌘Tab`, `⌘⇧C` không chạy
@@ -146,7 +193,7 @@ private key), nên sau khi người dùng auto-update từ CI, quyền Accessibi
 mất một lần và app sẽ tự prompt lại khi khởi động. Build local bằng
 `./build.sh` thì giữ nguyên quyền.
 
-## 7. Ghi chú kiểm thử
+## 8. Ghi chú kiểm thử
 
 - Máy test hiện tại: `Mac14,2` (MacBook Air M2, fanless), macOS 26.6.
 - `Resources/smc -f` trả `Total fans in system: 0` — bình thường với máy không quạt.
@@ -155,3 +202,8 @@ mất một lần và app sẽ tự prompt lại khi khởi động. Build local
   2. `⌘ + ⇧ + C` mở Clipboard; thử `1–9`, `↑↓`, `↵`, `⌥P`, `⌥⌫`, `⎋`.
   3. Settings → Clipboard: chọn 500/∞, đổi "Tự động xoá", bấm "Dọn ngay".
   4. Tab nhiệt độ: không còn bảng quạt; chỉ có nhiệt độ, cảm biến, pill Menu Bar.
+  5. Ô **Chép file** (tab Pin & Phần cứng): chạy `dd if=/dev/zero of=/tmp/dstest.bin bs=1m count=600`
+     → số `↑` phải nhảy lên hàng trăm MB/s và tên ổ là `Macintosh HD` / `SSD nội bộ`;
+     chép thẻ nhớ → ổ rời phải thấy tên volume của cả hai ổ trong tooltip.
+  6. NAS: mount SMB rồi chép file; chip mạng hiện `LAN enX` với tốc độ tương đương
+     lưu lượng thực (đối chiếu `netstat -ibn` trước/sau khi chép).

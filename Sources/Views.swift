@@ -320,6 +320,11 @@ struct HardwareCareTabView: View {
             .padding(.horizontal, 12)
             .padding(.top, 4)
 
+            // Tốc độ truyền file (ổ vật lý + LAN/NAS) — luôn hiển thị
+            FileTransferSpeedCard()
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     if thermalManager.selectedSection == 0 {
@@ -368,6 +373,118 @@ struct HardwareCareTabView: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - File Transfer Speed Card (ổ vật lý + LAN/NAS)
+
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+struct FileTransferSpeedCard: View {
+    @ObservedObject var diskSpeed: DiskSpeedManager = DiskSpeedManager.shared
+
+    private var isActive: Bool {
+        diskSpeed.totalReadMBps >= 0.05 || diskSpeed.totalWriteMBps >= 0.05 ||
+        diskSpeed.networkReadMBps >= 0.05 || diskSpeed.networkWriteMBps >= 0.05
+    }
+
+    private var busiestDisk: DiskSpeedInfo? {
+        diskSpeed.disks.filter(\.isActive).max { $0.totalMBps < $1.totalMBps }
+    }
+
+    private var networkActive: Bool {
+        diskSpeed.networkReadMBps >= 0.05 || diskSpeed.networkWriteMBps >= 0.05
+    }
+
+    private var detailText: String? {
+        var parts: [String] = []
+        if let disk = busiestDisk {
+            parts.append(disk.displayName)
+        }
+        if networkActive, let label = diskSpeed.networkLabel {
+            parts.append("\(label) (NAS)")
+        }
+        if let process = diskSpeed.topProcessName {
+            parts.append("\(process) \(speedText(max(diskSpeed.topProcessWriteMBps, diskSpeed.topProcessReadMBps)))")
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
+    }
+
+    private var tooltip: String {
+        var lines = ["Tổng hợp mọi ổ vật lý đang đọc/ghi"]
+        for disk in diskSpeed.disks where disk.isActive {
+            lines.append("\(disk.displayName): ↓\(speedText(disk.readMBps)) ↑\(speedText(disk.writeMBps))")
+        }
+        if let label = diskSpeed.networkLabel {
+            lines.append("\(label): ↓\(speedText(diskSpeed.networkReadMBps)) ↑\(speedText(diskSpeed.networkWriteMBps))")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.up.arrow.down.circle.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(isActive ? Color.cyan : Color.secondary)
+
+                Text("Chép file")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                speedChip(icon: "arrow.down", value: diskSpeed.totalReadMBps, color: .cyan)
+                speedChip(icon: "arrow.up", value: diskSpeed.totalWriteMBps, color: .orange)
+
+                if diskSpeed.networkLabel != nil {
+                    Divider().frame(height: 9)
+                    speedChip(icon: "network", value: max(diskSpeed.networkReadMBps, diskSpeed.networkWriteMBps), color: .green)
+                }
+            }
+
+            if let detail = detailText {
+                Text(detail)
+                    .font(.system(size: 7.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.primary.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(isActive ? Color.cyan.opacity(0.25) : Color.clear, lineWidth: 1)
+                )
+        )
+        .help(tooltip)
+        .animation(.easeOut(duration: 0.2), value: detailText)
+    }
+
+    private func speedChip(icon: String, value: Double, color: Color) -> some View {
+        let active = value >= 0.05
+        return HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 6.5, weight: .bold))
+            Text(Self.speedText(value))
+                .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                .monospacedDigit()
+        }
+        .foregroundStyle(active ? color : Color.secondary.opacity(0.7))
+    }
+
+    static func speedText(_ mbps: Double) -> String {
+        if mbps >= 1024 { return String(format: "%.1f GB/s", mbps / 1024) }
+        if mbps >= 10 { return String(format: "%.0f MB/s", mbps) }
+        if mbps >= 0.1 { return String(format: "%.1f MB/s", mbps) }
+        if mbps >= 0.01 { return String(format: "%.0f KB/s", mbps * 1024) }
+        return "0 MB/s"
+    }
+
+    private func speedText(_ mbps: Double) -> String { Self.speedText(mbps) }
 }
 
 // MARK: - TAB 1: Displays View

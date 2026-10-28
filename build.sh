@@ -96,9 +96,9 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
-    <string>1.5.2</string>
+    <string>1.6.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.2</string>
+    <string>1.6.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
