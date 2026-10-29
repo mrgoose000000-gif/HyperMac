@@ -5,3 +5,7 @@ build/
 *~
 DerivedData/
 *.xcuserstate
+
+# Chất liệu ký code — tuyệt đối không commit (chứa private key)
+*.p12
+*.p12.base64

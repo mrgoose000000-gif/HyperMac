@@ -124,9 +124,18 @@ PLIST
 # Ký ad-hoc tạo cdhash mới mỗi lần build → macOS thu hồi quyền Accessibility
 # sau mỗi lần rebuild. Identity cố định giữ nguyên Designated Requirement.
 SIGN_IDENTITY="${HYPERMAC_SIGN_IDENTITY:-HyperMac Self-Signed}"
-if security find-identity -v -p codesigning 2>/dev/null | grep -qF "${SIGN_IDENTITY}"; then
+SIGN_KEYCHAIN="${HYPERMAC_SIGN_KEYCHAIN:-}"
+FIND_ARGS=()
+if [[ -n "${SIGN_KEYCHAIN}" ]]; then
+    FIND_ARGS=("${SIGN_KEYCHAIN}")
+fi
+if security find-identity -v -p codesigning "${FIND_ARGS[@]}" 2>/dev/null | grep -qF "${SIGN_IDENTITY}"; then
     echo "🔏 Code signing (${SIGN_IDENTITY})..."
-    codesign --force --deep --sign "${SIGN_IDENTITY}" --identifier "com.opensource.hypermac" "${APP_DIR}"
+    CODESIGN_ARGS=(--force --deep --sign "${SIGN_IDENTITY}" --identifier "com.opensource.hypermac")
+    if [[ -n "${SIGN_KEYCHAIN}" ]]; then
+        CODESIGN_ARGS+=(--keychain "${SIGN_KEYCHAIN}")
+    fi
+    codesign "${CODESIGN_ARGS[@]}" "${APP_DIR}"
 else
     echo "🔏 Code signing (ad-hoc — quyền Accessibility sẽ mất sau mỗi lần build)..."
     echo "   → Chạy ./scripts/setup-signing-identity.sh một lần để hết bị."

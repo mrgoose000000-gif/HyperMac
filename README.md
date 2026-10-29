@@ -57,6 +57,8 @@ Sau đó mở HyperMac bình thường từ Spotlight (`Cmd + Space` gõ `HyperM
 2. **Ghi màn hình (Screen Recording - Tùy chọn):** Vào *Quyền riêng tư & Bảo mật ➔ Ghi màn hình & Âm thanh hệ thống* $\rightarrow$ Gạt bật **HyperMac** để hiển thị ảnh chụp nội dung thực tế trong thẻ chuyển tab AltTab.
 3. **Quyền điều khiển sạc pin SMC:** Khi bật nút *"Bật bảo vệ & Khóa sạc 80%"*, app sẽ hỏi xác nhận Touch ID/mật khẩu 1 lần duy nhất để cài đặt helper điều khiển nguồn an toàn.
 
+> 💡 **Sau khi cập nhật lên bản mới:** HyperMac tự kiểm tra và khôi phục quyền Trợ năng. Nếu macOS hiện hộp thoại xin quyền, bạn chỉ cần bật lại **HyperMac** trong *Trợ năng* — không cần xoá app khỏi danh sách rồi thêm lại. Trường hợp hiếm vẫn bị kẹt, xem [mục 5 trong FAQ](#-câu-hỏi-thường-gặp-faq).
+
 ---
 
 ## 🎮 BẢNG HƯỚNG DẪN SỬ DỤNG & PHÍM TẮT
@@ -156,6 +158,23 @@ Bảo vệ phần cứng tối đa, đặc biệt phù hợp cho các dòng MacB
 > Bạn không cần tải lại thủ công! Chỉ cần bấm vào icon HyperMac trên Menu Bar ➔ Bấm nút **"Kiểm tra cập nhật"** ở chân trang. Khi có bản mới, app sẽ hiển thị nội dung cập nhật, tự tải về và nâng cấp 1-chạm trong 2 giây.
 </details>
 
+<details>
+<summary><b>5. Cập nhật xong thì mất quyền Trợ năng / phím tắt không chạy?</b></summary>
+
+> Đây là di chứng của kiểu ký **ad-hoc**: mỗi bản build có "danh tính" (cdhash) khác nhau nên macOS coi là app mới và vô hiệu hoá quyền cũ — entry trong System Settings vẫn trông như đang bật nhưng không có tác dụng.
+>
+> Từ **v1.6.0**, HyperMac tự phát hiện và khôi phục: app reset entry TCC bị kẹt rồi hiện lại hộp thoại xin quyền. Bạn chỉ cần bật **HyperMac** trong *Trợ năng*.
+>
+> Bản phát hành v1.6.0 trở đi còn được ký bằng chứng chỉ cố định, nên các lần cập nhật sau **không mất quyền nữa**.
+>
+> Nếu vẫn kẹt (bản cũ ≤ v1.5.2), làm thủ công:
+> ```bash
+> tccutil reset Accessibility com.opensource.hypermac
+> open /Applications/HyperMac.app
+> ```
+> rồi bật lại HyperMac trong *Cài đặt hệ thống ➔ Quyền riêng tư & Bảo mật ➔ Trợ năng*.
+</details>
+
 ---
 
 ## 🛠️ Dành Cho Lập Trình Viên (Tự Biên Dịch Từ Mã Nguồn)
@@ -191,6 +210,9 @@ chmod +x build.sh
   - Lưu ý: đây là tốc độ của cả card mạng, nên nếu đang tải web/xem phim cùng lúc thì số liệu sẽ cộng gộp.
 - **🔍 Biết tiến trình nào đang chép:** ô hiển thị tên tiến trình (Finder, `cp`, `rsync`…) khi nó thực sự chiếm phần lớn lưu lượng, tránh báo nhầm I/O nền.
 - **Sửa lỗi giao diện header:** chữ "HyperMac" không còn bị bẻ dòng chữ "c" cuối khi nhãn pin/nhiệt độ dài; nhãn trạng thái pin được rút gọn (`🔋 78%`, `🔌 Cắm điện`).
+- **🔐 Hết cảnh mất quyền Trợ năng sau mỗi lần cập nhật:**
+  - Bản phát hành trên GitHub giờ được ký bằng **chứng chỉ cố định** (identifier + certificate root) thay vì ad-hoc → macOS giữ nguyên quyền qua các phiên bản.
+  - App tự phát hiện quyền bị vô hiệu sau update, reset entry TCC bị kẹt và hiện lại hộp thoại xin quyền — không phải xoá app rồi thêm lại.
 - **Kèm theo các thay đổi của v1.5.2:** AltTab mở tức thì, Clipboard 500/∞ + tự dọn, gỡ bỏ hoàn toàn Fan Control.
 
 ### [v1.5.2] — 2026-10-28

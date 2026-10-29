@@ -1,6 +1,6 @@
 # AGENTS.md — HyperMac (DisplayControl)
 
-> Tài liệu dành cho AI coding agent (Antigravity IDE, OpenCode, Cursor, Claude Code…) đọc trước khi chỉnh sửa dự án. Cập nhật lần cuối: **2026-10-28 (v1.5.2)**.
+> Tài liệu dành cho AI coding agent (Antigravity IDE, OpenCode, Cursor, Claude Code…) đọc trước khi chỉnh sửa dự án. Cập nhật lần cuối: **2026-10-29 (v1.6.0)**.
 
 ## 1. Tổng quan
 
@@ -40,6 +40,7 @@ swift build -c release
 | `Sources/WindowManager.swift` | AltTab: liệt kê cửa sổ AX/CG, HUD, MRU, chụp thumbnail nền |
 | `Sources/WindowSnapManager.swift` | Chia cửa sổ & chuyển màn hình |
 | `Sources/KeyInterceptor.swift` | CGEventTap toàn cục: phím tắt, media keys, clipboard HUD keys |
+| `Sources/AccessibilityRecovery.swift` | Tự reset + prompt lại quyền Accessibility sau update |
 | `Sources/ClipboardManager.swift` | Lịch sử clipboard, giới hạn lưu, retention, HUD panel |
 | `Sources/ClipboardOverlayView.swift` | UI bảng Clipboard HUD |
 | `Sources/AltTabOverlayView.swift` | UI HUD AltTab |
@@ -209,11 +210,59 @@ open /Applications/HyperMac.app
 ```
 
 **Không commit** `~/.hypermac-signing/` hay file `.p12` vào repo (chứa private key).
+`.gitignore` đã chặn `*.p12` và `*.p12.base64`.
 
-**Lưu ý:** bản phát hành trên GitHub Actions được ký **ad-hoc** (runner không có
-private key), nên sau khi người dùng auto-update từ CI, quyền Accessibility sẽ
-mất một lần và app sẽ tự prompt lại khi khởi động. Build local bằng
-`./build.sh` thì giữ nguyên quyền.
+### 7.1. Ký bản phát hành trên GitHub Actions
+
+Runner không có keychain của máy dev, nên phải đưa private key vào **GitHub Secrets**:
+
+1. Xuất chứng chỉ (giữ nguyên key/cert cũ để root hash không đổi):
+
+```bash
+./scripts/export-ci-signing.sh
+# → ~/.hypermac-signing/ci-signing.p12
+# → ~/.hypermac-signing/ci-signing.p12.base64
+# → in ra mật khẩu + certificate root SHA-1
+```
+
+2. Thêm 2 secret tại `Settings → Secrets and variables → Actions`:
+   - `HYPERMAC_SIGNING_P12_BASE64`: nội dung file `.base64`
+   - `HYPERMAC_SIGNING_P12_PASSWORD`: mật khẩu script in ra
+
+3. Workflow `.github/workflows/release.yml` sẽ:
+   - tạo keychain tạm, import `.p12`, mở partition list cho `codesign`,
+   - build với `HYPERMAC_SIGN_IDENTITY=HyperMac Self-Signed` và
+     `HYPERMAC_SIGN_KEYCHAIN=<keychain tạm>` (build.sh truyền `--keychain` cho
+     `codesign`, **không đụng vào search list keychain của runner**),
+   - verify `Authority=HyperMac Self-Signed` + in DR,
+   - xoá keychain tạm ở bước `always()`.
+
+Nếu thiếu secret, workflow vẫn build nhưng **fallback ad-hoc** (kèm cảnh báo) —
+khi đó quyền Accessibility sẽ mất sau update.
+
+**Lưu ý quan trọng:**
+- Chỉ cần **một lần** chuyển từ bản ad-hoc cũ (≤1.5.2) sang bản ký cert: TCC đổi
+  DR nên quyền mất một lần; từ các bản sau thì giữ nguyên.
+- Không bao giờ tạo lại cert/key (root hash đổi → mất quyền của mọi người).
+  Cert hiện có hạn 10 năm (`-days 3650`).
+- Secret chứa private key: nếu repo bị xâm nhập, key có thể bị lộ → phải tạo cert
+  mới và chấp nhận mất quyền một lần.
+
+### 7.2. Tự khôi phục quyền sau update — `Sources/AccessibilityRecovery.swift`
+
+- Gọi trong `applicationDidFinishLaunching` **trước** `KeyInterceptor.shared.start()`.
+- Mỗi lần khởi động, nếu `AXIsProcessTrusted() == false` **và**
+  `UserDefaults["ax_recovery_version"] != phiên bản hiện tại`:
+  - chạy `tccutil reset Accessibility com.opensource.hypermac` (xoá entry cũ bị kẹt),
+  - lưu `ax_recovery_version` = phiên bản hiện tại (mỗi bản chỉ reset **một lần**,
+    nên không lặp lại mỗi lần mở app và không phiền người dùng đã từ chối cấp quyền),
+  - sau 0.8s gọi `AXIsProcessTrustedWithOptions(prompt: true)` để macOS hiện hộp
+    thoại cấp lại.
+- Không cần cờ "từng được cấp quyền": entry TCC bị kẹt sau update thường vẫn hiện
+  trong System Settings nên không thể phân biệt bằng `UserDefaults`.
+- Người dùng chỉ cần bật switch trong System Settings, **không phải xoá app và thêm lại**.
+- `tccutil` chỉ reset được khi app có bundle ID hợp lệ; nếu không có, hàm bỏ qua im lặng.
+
 
 ## 8. Ghi chú kiểm thử
 

@@ -25,10 +25,60 @@ jobs:
       - name: Make Build Script Executable
         run: chmod +x build.sh
 
+      # Ký bằng cùng chứng chỉ self-signed với bản local để Designated Requirement
+      # (identifier + certificate root) không đổi giữa các phiên bản → TCC giữ quyền.
+      # Nếu chưa cấu hình secret, fallback ad-hoc (quyền Accessibility sẽ mất sau update).
+      - name: Import Code Signing Certificate
+        id: signing
+        env:
+          SIGNING_P12_BASE64: ${{ secrets.HYPERMAC_SIGNING_P12_BASE64 }}
+          SIGNING_P12_PASSWORD: ${{ secrets.HYPERMAC_SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -z "${SIGNING_P12_BASE64}" ]; then
+            echo "::warning::Chưa có secret HYPERMAC_SIGNING_P12_BASE64 — build sẽ ký ad-hoc."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/hypermac-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$SIGNING_P12_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          if security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -qF "HyperMac Self-Signed"; then
+            echo "✅ Đã import chứng chỉ HyperMac Self-Signed"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Đã có secret nhưng không tìm thấy identity HyperMac Self-Signed"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
       - name: Compile and Package HyperMac Bundle
         run: ./build.sh --no-run
         env:
           CI: true
+          HYPERMAC_SIGN_IDENTITY: HyperMac Self-Signed
+          HYPERMAC_SIGN_KEYCHAIN: ${{ runner.temp }}/hypermac-signing.keychain-db
+
+      - name: Verify Code Signature
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          codesign --verify --deep --strict build/HyperMac.app
+          codesign -dv --verbose=4 build/HyperMac.app 2>&1 | grep -F "Authority=HyperMac Self-Signed"
+          codesign -d -r- build/HyperMac.app 2>&1 | tail -1
 
       - name: Determine Release Tag
         id: vars
@@ -48,3 +98,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+      - name: Cleanup Signing Keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/hypermac-signing.keychain-db" 2>/dev/null || true

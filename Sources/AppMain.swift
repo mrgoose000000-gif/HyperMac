@@ -62,6 +62,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         ThermalManager.shared.updateMenuBarDisplay()
 
+        // Tự khôi phục quyền Accessibility nếu vừa update làm mất quyền
+        AccessibilityRecovery.handleLaunch()
+
         // Start Global Key Interceptor (F1/F2, AltTab, Snapping, Clipboard)
         KeyInterceptor.shared.start()
 
