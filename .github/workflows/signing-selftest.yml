@@ -34,8 +34,10 @@ jobs:
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "$KC_PASS" "$KC"
 
-          printf '%s' "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12" \
-            || fail "base64 --decode lỗi."
+          if ! printf '%s' "$SIGNING_P12_BASE64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>/dev/null; then
+            printf '%s' "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12" \
+              || fail "base64 -D và --decode đều lỗi."
+          fi
           echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
 
           if ! OUT="$(openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -noout -passin "pass:${SIGNING_P12_PASSWORD}" 2>&1)"; then
