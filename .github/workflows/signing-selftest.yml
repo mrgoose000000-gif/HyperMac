@@ -37,6 +37,9 @@ jobs:
           echo "base64: which=$(command -v base64 || echo none) openssl=$(command -v openssl || echo none) python3=$(command -v python3 || echo none)"
           CLEAN_B64="$(printf '%s' "$SIGNING_P12_BASE64" | tr -d '[:space:]')"
           echo "base64 sạch: ${#CLEAN_B64} ký tự"
+          if [ "${#CLEAN_B64}" -eq 0 ]; then
+            fail "Secret BASE64 chỉ toàn khoảng trắng/xuống dòng (raw ${#SIGNING_P12_BASE64} ký tự, hex: $(printf '%s' "$SIGNING_P12_BASE64" | od -An -tx1 | head -c 60 | tr '\n' ' ')). Hãy dán lại đúng nội dung file .base64."
+          fi
           DECODE_ERR="$RUNNER_TEMP/decode.err"
           if ! printf '%s' "$CLEAN_B64" | python3 -c "import base64,sys;raw=''.join(sys.stdin.read().split());sys.stdout.buffer.write(base64.b64decode(raw,validate=True))" > "$RUNNER_TEMP/cert.p12" 2>"$DECODE_ERR"; then
             echo "python decode: $(tail -2 "$DECODE_ERR" | tr '\n' ' ')"
