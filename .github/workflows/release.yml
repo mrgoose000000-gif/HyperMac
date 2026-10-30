@@ -101,6 +101,17 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/cert.p12"
 
+          # codesign chỉ tìm identity trong các keychain thuộc search list.
+          # Runner là máy dùng một lần nên không cần khôi phục lại danh sách.
+          ORIGINAL_KEYCHAINS=()
+          while IFS= read -r kc; do
+            [ -n "$kc" ] && ORIGINAL_KEYCHAINS+=("$kc")
+          done < <(security list-keychains -d user | sed 's/^[[:space:]]*//; s/"//g')
+          if ! security list-keychains -d user -s "$KEYCHAIN_PATH" "${ORIGINAL_KEYCHAINS[@]}"; then
+            fail "Không thêm được keychain tạm vào search list."
+          fi
+          echo "Keychains: $(security list-keychains -d user | tr -d '\n')"
+
           # -v chỉ liệt kê identity đã trust; cert tự ký trên runner là untrusted
           # nhưng codesign vẫn dùng được, nên phải bỏ -v.
           IDENTITIES="$(security find-identity -p codesigning "$KEYCHAIN_PATH" 2>&1)"
