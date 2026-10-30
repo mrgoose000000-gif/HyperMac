@@ -61,6 +61,7 @@ jobs:
             [ "$(head -c 1 "$f" | od -An -tx1 | tr -d ' \n')" = "30" ]
           }
 
+          echo "::notice title=DIAG-SIZES::raw=${#SIGNING_P12_BASE64} clean=${#CLEAN_B64} p12=$(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') first=$(head -c 1 "$RUNNER_TEMP/cert.p12" | od -An -tx1 | tr -d ' \n')"
           echo "sha256=$(shasum -a 256 "$RUNNER_TEMP/cert.p12" | cut -d' ' -f1) first=$(head -c 1 "$RUNNER_TEMP/cert.p12" | od -An -tx1 | tr -d ' \n')"
           ensure_der "$RUNNER_TEMP/cert.p12" || fail "không phải DER sau 2 lớp decode (size $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$RUNNER_TEMP/cert.p12" | cut -d' ' -f1))"
           if ! OUT="$(openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -noout -passin "pass:${SIGNING_P12_PASSWORD}" 2>&1)"; then
