@@ -90,7 +90,7 @@ jobs:
             fail "partition list: $(echo "$OUT" | tail -3 | tr '\n' ' ')"
           fi
 
-          IDS="$(security find-identity -v -p codesigning "$KC" 2>&1)"
+          IDS="$(security find-identity -p codesigning "$KC" 2>&1)"
           echo "$IDS"
           case "$IDS" in
             *"HyperMac Self-Signed"*) echo "::notice title=DIAG::Import + identity OK" ;;

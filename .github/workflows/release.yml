@@ -101,7 +101,9 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/cert.p12"
 
-          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" 2>&1)"
+          # -v chỉ liệt kê identity đã trust; cert tự ký trên runner là untrusted
+          # nhưng codesign vẫn dùng được, nên phải bỏ -v.
+          IDENTITIES="$(security find-identity -p codesigning "$KEYCHAIN_PATH" 2>&1)"
           echo "$IDENTITIES"
           case "$IDENTITIES" in
             *"HyperMac Self-Signed"*)

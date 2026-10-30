@@ -129,7 +129,9 @@ FIND_ARGS=()
 if [[ -n "${SIGN_KEYCHAIN}" ]]; then
     FIND_ARGS=("${SIGN_KEYCHAIN}")
 fi
-if security find-identity -v -p codesigning "${FIND_ARGS[@]}" 2>/dev/null | grep -qF "${SIGN_IDENTITY}"; then
+# Không dùng -v: trên runner CI, cert tự ký không được trust nên -v (valid only)
+# sẽ báo 0 identity dù vẫn ký được. codesign chỉ cần identity + private key.
+if security find-identity -p codesigning "${FIND_ARGS[@]}" 2>/dev/null | grep -qF "${SIGN_IDENTITY}"; then
     echo "🔏 Code signing (${SIGN_IDENTITY})..."
     CODESIGN_ARGS=(--force --deep --sign "${SIGN_IDENTITY}" --identifier "com.opensource.hypermac")
     if [[ -n "${SIGN_KEYCHAIN}" ]]; then
