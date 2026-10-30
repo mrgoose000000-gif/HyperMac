@@ -231,14 +231,46 @@ Runner không có keychain của máy dev, nên phải đưa private key vào **
 
 3. Workflow `.github/workflows/release.yml` sẽ:
    - tạo keychain tạm, import `.p12`, mở partition list cho `codesign`,
+   - **thêm keychain tạm vào search list** của user (codesign chỉ tìm identity
+     trong các keychain thuộc search list; `--keychain` một mình là không đủ),
    - build với `HYPERMAC_SIGN_IDENTITY=HyperMac Self-Signed` và
-     `HYPERMAC_SIGN_KEYCHAIN=<keychain tạm>` (build.sh truyền `--keychain` cho
-     `codesign`, **không đụng vào search list keychain của runner**),
+     `HYPERMAC_SIGN_KEYCHAIN=<keychain tạm>`,
    - verify `Authority=HyperMac Self-Signed` + in DR,
    - xoá keychain tạm ở bước `always()`.
 
 Nếu thiếu secret, workflow vẫn build nhưng **fallback ad-hoc** (kèm cảnh báo) —
 khi đó quyền Accessibility sẽ mất sau update.
+
+**Ba cái bẫy đã gặp thật (đừng sửa lại thành sai):**
+
+- **p12 phải là định dạng legacy.** OpenSSL 3 mặc định xuất MAC SHA-256 + AES/PBES2;
+  `security import` trên runner macOS 14 báo
+  `MAC verification failed during PKCS12 import (wrong password?)` dù mật khẩu đúng.
+  `scripts/export-ci-signing.sh` dùng `openssl pkcs12 -export -legacy` (SHA-1 + 3DES).
+- **Không dùng `security find-identity -v`.** Cờ `-v` chỉ liệt kê identity *đã trust*;
+  cert tự ký trên runner là untrusted nên `-v` trả 0 identity dù `codesign` ký được.
+  `build.sh` và workflow đều dùng `find-identity -p codesigning` (không `-v`).
+- **Không dùng `base64 --decode`.** `base64` của macOS 14 chỉ có `-D`; thậm chí secret
+  có thể lẫn CRLF. Workflow strip whitespace rồi decode bằng `python3`, fallback
+  `openssl base64 -d -A`, cuối cùng mới `base64 -D`, và tự nhận diện secret bị base64
+  2 lớp.
+
+**Nên set secret bằng CLI để tránh dán sai** (đã từng dán cả câu lệnh `pbcopy …`):
+
+```bash
+gh secret set HYPERMAC_SIGNING_P12_BASE64 --repo mrgoose000000-gif/HyperMac \
+  < ~/.hypermac-signing/ci-signing.p12.base64
+gh secret set HYPERMAC_SIGNING_P12_PASSWORD --repo mrgoose000000-gif/HyperMac \
+  --body "hm-test-pass-2026"
+```
+
+Khi bước import fail, đọc lỗi bằng annotation công khai thay vì log:
+
+```bash
+gh run view <run-id> --repo mrgoose000000-gif/HyperMac \
+  --json jobs -q '.jobs[0].check_run_url' \
+  | xargs -I{} gh api {}/annotations --jq '.[] | "\(.title): \(.message)"'
+```
 
 **Lưu ý quan trọng:**
 - Chỉ cần **một lần** chuyển từ bản ad-hoc cũ (≤1.5.2) sang bản ký cert: TCC đổi
@@ -246,7 +278,7 @@ khi đó quyền Accessibility sẽ mất sau update.
 - Không bao giờ tạo lại cert/key (root hash đổi → mất quyền của mọi người).
   Cert hiện có hạn 10 năm (`-days 3650`).
 - Secret chứa private key: nếu repo bị xâm nhập, key có thể bị lộ → phải tạo cert
-  mới và chấp nhận mất quyền một lần.
+  mới và chấp nhận mất quyền một lần. Xem mục 7.3.
 
 ### 7.2. Tự khôi phục quyền sau update — `Sources/AccessibilityRecovery.swift`
 
@@ -263,6 +295,39 @@ khi đó quyền Accessibility sẽ mất sau update.
 - Người dùng chỉ cần bật switch trong System Settings, **không phải xoá app và thêm lại**.
 - `tccutil` chỉ reset được khi app có bundle ID hợp lệ; nếu không có, hàm bỏ qua im lặng.
 
+
+### 7.3. Bảo mật repo & khoá ký
+
+Private key trong secret = ai phát hành được app. Kiểm tra định kỳ bằng `gh`:
+
+```bash
+R=mrgoose000000-gif/HyperMac
+gh api repos/$R --jq '.permissions'                       # quyền của token hiện tại
+gh api "repos/$R/collaborators?affiliation=direct" --jq '.[] | "\(.login) \(.role_name)"'
+gh api "repos/$R/collaborators?affiliation=outside" --jq '.[] | .login'
+gh api "repos/$R/invitations" --jq '.[] | .invitee.login'
+gh api "repos/$R/actions/secrets" --jq '.secrets[] | "\(.name) \(.updated_at)"'
+gh api "repos/$R/environments"
+gh api "repos/$R/keys"      # deploy keys
+gh api "repos/$R/hooks"     # webhooks
+```
+
+Hiện trạng (2026-10-30): chỉ owner `mrgoose000000-gif` có quyền admin; 0 outside
+collaborator/invitation/team; 2 secret đúng tên; 0 environment; 0 deploy key;
+0 webhook; `main` **chưa bảo vệ**; `allowed_actions=all`; secret scanning +
+push protection đang bật.
+
+Khuyến nghị (chưa bắt buộc, làm khi cần siết):
+
+1. **Environment `release` + Required reviewers** rồi chuyển 2 secret vào environment
+   và thêm `environment: release` cho job trong `release.yml`. Khi đó dù ai push tag,
+   workflow vẫn phải chờ duyệt mới được dùng private key.
+2. **Ruleset cho `main`**: chặn force-push và xoá nhánh (solo dev vẫn dùng được).
+3. `Settings → Actions → General`: giới hạn allowed actions + bật *Require actions to
+   be pinned to a full-length commit SHA*.
+4. Bật 2FA/passkey cho tài khoản GitHub; xoá token cũ không dùng; kiểm tra
+   `Settings → Sessions`.
+5. Giữ `~/.hypermac-signing/` ngoài iCloud/Dropbox và bật FileVault.
 
 ## 8. Ghi chú kiểm thử
 
