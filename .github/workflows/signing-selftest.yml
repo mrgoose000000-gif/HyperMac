@@ -37,6 +37,15 @@ jobs:
           echo "base64: which=$(command -v base64 || echo none) openssl=$(command -v openssl || echo none) python3=$(command -v python3 || echo none)"
           CLEAN_B64="$(printf '%s' "$SIGNING_P12_BASE64" | tr -d '[:space:]')"
           echo "base64 sạch: ${#CLEAN_B64} ký tự"
+          BAD_COUNT="$(printf '%s' "$CLEAN_B64" | tr -d 'A-Za-z0-9+/=' | wc -c | tr -d ' ')"
+          BAD_SAMPLE="$(printf '%s' "$CLEAN_B64" | tr -d 'A-Za-z0-9+/=' | head -c 1 | od -An -tx1 | tr -d ' \n')"
+          CASE_HINT="unknown"
+          case "$CLEAN_B64" in
+            *BEGIN*|*PRIVATE*|*CERTIFICATE*) CASE_HINT="PEM (dán nhầm key.pem/cert.pem)" ;;
+            *secret*) CASE_HINT="chuỗi cú pháp GitHub (dán nhầm \${{ secrets... }})" ;;
+            /*|~*) CASE_HINT="đường dẫn file (cần dán NỘI DUNG file)" ;;
+          esac
+          echo "::notice title=DIAG-SHAPE::clean=${#CLEAN_B64} invalid=$BAD_COUNT first_invalid_hex=${BAD_SAMPLE:-none} hint=$CASE_HINT"
           if [ "${#CLEAN_B64}" -eq 0 ]; then
             fail "Secret BASE64 chỉ toàn khoảng trắng/xuống dòng (raw ${#SIGNING_P12_BASE64} ký tự, hex: $(printf '%s' "$SIGNING_P12_BASE64" | od -An -tx1 | head -c 60 | tr '\n' ' ')). Hãy dán lại đúng nội dung file .base64."
           fi
