@@ -42,7 +42,7 @@ jobs:
           CASE_HINT="unknown"
           case "$CLEAN_B64" in
             *BEGIN*|*PRIVATE*|*CERTIFICATE*) CASE_HINT="PEM (dán nhầm key.pem/cert.pem)" ;;
-            *secret*) CASE_HINT="chuỗi cú pháp GitHub (dán nhầm \${{ secrets... }})" ;;
+            *secret*) CASE_HINT="chuỗi cú pháp GitHub (dán nhầm biểu thức secrets)" ;;
             /*|~*) CASE_HINT="đường dẫn file (cần dán NỘI DUNG file)" ;;
           esac
           echo "::notice title=DIAG-SHAPE::clean=${#CLEAN_B64} invalid=$BAD_COUNT first_invalid_hex=${BAD_SAMPLE:-none} hint=$CASE_HINT"
