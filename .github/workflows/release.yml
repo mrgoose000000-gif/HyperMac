@@ -34,37 +34,67 @@ jobs:
           SIGNING_P12_BASE64: ${{ secrets.HYPERMAC_SIGNING_P12_BASE64 }}
           SIGNING_P12_PASSWORD: ${{ secrets.HYPERMAC_SIGNING_P12_PASSWORD }}
         run: |
+          set -uo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/hypermac-signing.keychain-db"
+
+          fail() {
+            echo "::error title=Signing certificate import failed::$1"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+
           if [ -z "${SIGNING_P12_BASE64}" ]; then
             echo "::warning::Chưa có secret HYPERMAC_SIGNING_P12_BASE64 — build sẽ ký ad-hoc."
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [ -z "${SIGNING_P12_PASSWORD}" ]; then
+            fail "Thiếu secret HYPERMAC_SIGNING_P12_PASSWORD."
+          fi
 
-          KEYCHAIN_PATH="$RUNNER_TEMP/hypermac-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          if ! security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"; then
+            fail "Không tạo được keychain tạm."
+          fi
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" \
+            || fail "Không unlock được keychain tạm."
 
-          echo "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" \
-            -P "$SIGNING_P12_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-          security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          if ! printf '%s' "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"; then
+            fail "Secret base64 không giải mã được (kiểm tra đã dán đủ nội dung file .base64)."
+          fi
+          echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
+
+          if ! P12_INFO="$(openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -noout -passin "pass:${SIGNING_P12_PASSWORD}" 2>&1)"; then
+            fail "Không đọc được p12 bằng mật khẩu đã lưu (sai mật khẩu hoặc file hỏng): $(echo "$P12_INFO" | tail -2 | tr '\n' ' ')"
+          fi
+
+          if ! IMPORT_OUT="$(security import "$RUNNER_TEMP/cert.p12" \
+                -P "$SIGNING_P12_PASSWORD" \
+                -A -t cert -f pkcs12 \
+                -k "$KEYCHAIN_PATH" 2>&1)"; then
+            fail "security import thất bại: $(echo "$IMPORT_OUT" | tail -3 | tr '\n' ' ')"
+          fi
+          echo "$IMPORT_OUT"
+
+          if ! PART_OUT="$(security set-key-partition-list \
+                -S apple-tool:,apple:,codesign: \
+                -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" 2>&1)"; then
+            fail "set-key-partition-list thất bại: $(echo "$PART_OUT" | tail -3 | tr '\n' ' ')"
+          fi
           rm -f "$RUNNER_TEMP/cert.p12"
 
-          if security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -qF "HyperMac Self-Signed"; then
-            echo "✅ Đã import chứng chỉ HyperMac Self-Signed"
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Đã có secret nhưng không tìm thấy identity HyperMac Self-Signed"
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
+          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" 2>&1)"
+          echo "$IDENTITIES"
+          case "$IDENTITIES" in
+            *"HyperMac Self-Signed"*)
+              echo "✅ Đã import chứng chỉ HyperMac Self-Signed"
+              echo "signed=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              fail "Đã import nhưng không thấy identity 'HyperMac Self-Signed'. Output: $(echo "$IDENTITIES" | tr '\n' ' ')"
+              ;;
+          esac
 
       - name: Compile and Package HyperMac Bundle
         run: ./build.sh --no-run

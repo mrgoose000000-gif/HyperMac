@@ -1,0 +1,67 @@
+name: Signing Self-Test (tạm thời)
+
+# Workflow chẩn đoán: chỉ chạy với tag "diag-*" nên KHÔNG bao giờ tạo release.
+# Dùng để kiểm tra secret + chứng chỉ ký có import được trên runner hay không.
+on:
+  push:
+    tags:
+      - 'diag-*'
+  workflow_dispatch:
+
+jobs:
+  import-only:
+    name: Import certificate
+    runs-on: macos-14
+    steps:
+      - name: Import Code Signing Certificate
+        env:
+          SIGNING_P12_BASE64: ${{ secrets.HYPERMAC_SIGNING_P12_BASE64 }}
+          SIGNING_P12_PASSWORD: ${{ secrets.HYPERMAC_SIGNING_P12_PASSWORD }}
+        run: |
+          set -uo pipefail
+          KC="$RUNNER_TEMP/diag.keychain-db"
+          fail() {
+            echo "::error title=DIAG::$1"
+            exit 1
+          }
+
+          [ -n "${SIGNING_P12_BASE64}" ] || fail "Secret BASE64 rỗng/không tồn tại."
+          [ -n "${SIGNING_P12_PASSWORD}" ] || fail "Secret PASSWORD rỗng/không tồn tại."
+          echo "secrets: base64=${#SIGNING_P12_BASE64} ký tự, password=${#SIGNING_P12_PASSWORD} ký tự"
+
+          KC_PASS="$(openssl rand -hex 16)"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+
+          printf '%s' "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12" \
+            || fail "base64 --decode lỗi."
+          echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
+
+          if ! OUT="$(openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -noout -passin "pass:${SIGNING_P12_PASSWORD}" 2>&1)"; then
+            echo "$OUT"
+            fail "openssl không mở được p12: $(echo "$OUT" | tail -2 | tr '\n' ' ')"
+          fi
+          echo "openssl: p12 OK"
+
+          if ! OUT="$(security import "$RUNNER_TEMP/cert.p12" -P "$SIGNING_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC" 2>&1)"; then
+            echo "$OUT"
+            fail "security import: $(echo "$OUT" | tail -3 | tr '\n' ' ')"
+          fi
+          echo "$OUT"
+
+          if ! OUT="$(security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC" 2>&1)"; then
+            echo "$OUT"
+            fail "partition list: $(echo "$OUT" | tail -3 | tr '\n' ' ')"
+          fi
+
+          IDS="$(security find-identity -v -p codesigning "$KC" 2>&1)"
+          echo "$IDS"
+          case "$IDS" in
+            *"HyperMac Self-Signed"*) echo "::notice title=DIAG::Import + identity OK" ;;
+            *) fail "Không thấy identity: $(echo "$IDS" | tr '\n' ' ')" ;;
+          esac
+
+      - name: Cleanup
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/diag.keychain-db" 2>/dev/null || true
