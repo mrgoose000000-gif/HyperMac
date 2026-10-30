@@ -1,7 +1,7 @@
 {
-  "version": "1.5.2",
-  "name": "HyperMac v1.5.2 (AltTab Instant + Clipboard Cleanup + Fan Control Removed)",
-  "notes": "✨ Tính năng mới & Cải tiến trong v1.5.2:\n- ⚡ AltTab mở tức thì: bỏ chụp thumbnail đồng bộ, HUD hiện ngay, ảnh xem trước tải nền.\n- 📋 Clipboard: thêm giới hạn 500 mục và Không giới hạn, tự động xoá theo tuổi (7/30/90 ngày), nút Dọn ngay.\n- ⌨️ Phím tắt Clipboard hoạt động đúng: 1-9 dán nhanh, ↑↓ di chuyển, ↵ dán mục đang chọn, ⌥P ghim, ⌥⌫ xoá.\n- 🔎 Tăng cỡ ký hiệu phím tắt cho dễ đọc.\n- 🧹 Gỡ bỏ hoàn toàn Fan Control: không còn ghi SMC/điều khiển quạt; chỉ giữ đo nhiệt độ HID/PMU.\n- 🛠 Sửa trạng thái kẹt AltTab khi không có cửa sổ và lỗi Enter luôn dán mục đầu.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.5.2/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.5.2"
+  "version": "1.6.0",
+  "name": "HyperMac v1.6.0 (Đo tốc độ chép file + Giữ quyền Trợ năng)",
+  "notes": "✨ Tính năng mới & Cải tiến trong v1.6.0:\n- 💾 Đo tốc độ chép file (tùy chọn): xem tốc độ đọc/ghi ổ vật lý, nguồn → đích, lưu lượng LAN/NAS và tiến trình đang chép. Mặc định TẮT, chỉ đo khi bạn bật và đang mở bảng.\n- 🔐 Hết mất quyền Trợ năng sau mỗi lần cập nhật: bản phát hành được ký bằng chứng chỉ cố định, macOS giữ nguyên quyền qua các phiên bản.\n- 🩹 App tự phát hiện quyền bị vô hiệu, reset entry TCC bị kẹt và hiện lại hộp thoại xin quyền — không cần xoá app rồi thêm lại.\n- 🖥 Sửa tiêu đề \"HyperMac\" bị xuống dòng trên một số cấu hình màn hình.\n- 🧭 Giao diện gọn hơn: nhãn pin/menu bar ngắn lại (🔋 78%, 🔌 Cắm điện, 🛡️ 80% Bypass).\n- 📊 Số liệu đo tốc độ chỉ lấy mẫu khi mở bảng, đóng bảng là dừng ngay (CPU ~0%, không tốn pin).\n- 🧹 Gỡ bỏ hoàn toàn Fan Control: không còn ghi SMC/điều khiển quạt; chỉ giữ đo nhiệt độ HID/PMU.\n- ⚡ Kèm theo các cải tiến của v1.5.2: AltTab mở tức thì, Clipboard 500/∞ + tự dọn, phím tắt Clipboard đầy đủ.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.6.0/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.6.0"
 }
