@@ -63,8 +63,12 @@ jobs:
           # BSD base64 trên runner macOS chỉ có -D; secret có thể lẫn xuống dòng/CRLF.
           CLEAN_B64="$(printf '%s' "$SIGNING_P12_BASE64" | tr -d '[:space:]')"
           echo "base64 sạch: ${#CLEAN_B64} ký tự"
-          if ! printf '%s' "$CLEAN_B64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>"$RUNNER_TEMP/decode.err"; then
-            fail "Secret base64 không giải mã được: $(tail -2 "$RUNNER_TEMP/decode.err" | tr '\n' ' ')"
+          DECODE_ERR="$RUNNER_TEMP/decode.err"
+          if ! printf '%s' "$CLEAN_B64" | python3 -c "import base64,sys;raw=''.join(sys.stdin.read().split());sys.stdout.buffer.write(base64.b64decode(raw,validate=True))" > "$RUNNER_TEMP/cert.p12" 2>"$DECODE_ERR"; then
+            echo "python decode: $(tail -2 "$DECODE_ERR" | tr '\n' ' ')"
+            if ! printf '%s' "$CLEAN_B64" | openssl base64 -d -A > "$RUNNER_TEMP/cert.p12" 2>>"$DECODE_ERR"; then
+              fail "Secret base64 không giải mã được: $(tail -3 "$DECODE_ERR" | tr '\n' ' ')"
+            fi
           fi
           echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
 

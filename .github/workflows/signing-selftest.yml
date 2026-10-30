@@ -34,11 +34,18 @@ jobs:
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "$KC_PASS" "$KC"
 
+          echo "base64: which=$(command -v base64 || echo none) openssl=$(command -v openssl || echo none) python3=$(command -v python3 || echo none)"
           CLEAN_B64="$(printf '%s' "$SIGNING_P12_BASE64" | tr -d '[:space:]')"
           echo "base64 sạch: ${#CLEAN_B64} ký tự"
-          if ! OUT="$(printf '%s' "$CLEAN_B64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>&1)"; then
-            echo "$OUT"
-            fail "decode lỗi: $(echo "$OUT" | tail -2 | tr '\n' ' ')"
+          DECODE_ERR="$RUNNER_TEMP/decode.err"
+          if ! printf '%s' "$CLEAN_B64" | python3 -c "import base64,sys;raw=''.join(sys.stdin.read().split());sys.stdout.buffer.write(base64.b64decode(raw,validate=True))" > "$RUNNER_TEMP/cert.p12" 2>"$DECODE_ERR"; then
+            echo "python decode: $(tail -2 "$DECODE_ERR" | tr '\n' ' ')"
+            if ! printf '%s' "$CLEAN_B64" | openssl base64 -d -A > "$RUNNER_TEMP/cert.p12" 2>>"$DECODE_ERR"; then
+              echo "openssl decode: $(tail -2 "$DECODE_ERR" | tr '\n' ' ')"
+              if ! OUT="$(printf '%s' "$CLEAN_B64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>&1)"; then
+                fail "decode lỗi (python/openssl/base64): $(echo "$OUT" | tail -2 | tr '\n' ' ')"
+              fi
+            fi
           fi
           echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
 
