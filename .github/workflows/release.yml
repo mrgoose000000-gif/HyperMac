@@ -71,9 +71,19 @@ jobs:
             fi
           fi
           echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
+          # Nếu nội dung không phải DER (0x30) thì có thể secret bị base64 2 lớp.
+          ensure_der() {
+            local f="$1" i
+            for i in 1 2; do
+              [ "$(head -c 1 "$f" | od -An -tx1 | tr -d ' \n')" = "30" ] && return 0
+              python3 -c "import base64,sys;p=sys.argv[1];raw=''.join(open(p,'r',errors='ignore').read().split());open(p,'wb').write(base64.b64decode(raw,validate=True))" "$f" 2>/dev/null || return 1
+            done
+            [ "$(head -c 1 "$f" | od -An -tx1 | tr -d ' \n')" = "30" ]
+          }
 
+          ensure_der "$RUNNER_TEMP/cert.p12" || fail "Secret không phải p12 DER và cũng không decode thêm được (size $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes)."
           if ! P12_INFO="$(openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -noout -passin "pass:${SIGNING_P12_PASSWORD}" 2>&1)"; then
-            fail "Không đọc được p12 bằng mật khẩu đã lưu (sai mật khẩu hoặc file hỏng): $(echo "$P12_INFO" | tail -2 | tr '\n' ' ')"
+            fail "Không đọc được p12 (size $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$RUNNER_TEMP/cert.p12" | cut -d' ' -f1)): $(echo "$P12_INFO" | tail -2 | tr '\n' ' ')"
           fi
 
           if ! IMPORT_OUT="$(security import "$RUNNER_TEMP/cert.p12" \
