@@ -38,8 +38,18 @@ echo ""
 chmod 700 "${WORK_DIR}" 2>/dev/null || true
 umask 077
 
-# --export: đóng gói cả private key + cert, đặt friendly name = CN để codesign nhận diện
-openssl pkcs12 -export \
+# --export: đóng gói cả private key + cert, đặt friendly name = CN để codesign nhận diện.
+# QUAN TRỌNG: `security import` trên runner macOS 14 KHÔNG đọc được p12 mặc định của
+# OpenSSL 3 (MAC SHA-256 + AES/PBES2) → "MAC verification failed during PKCS12 import".
+# Phải dùng định dạng legacy (MAC SHA-1 + 3DES) thì macOS 14 mới import được.
+LEGACY_ARGS=()
+if openssl pkcs12 -help 2>&1 | grep -q -- "-legacy"; then
+    LEGACY_ARGS=(-legacy)
+else
+    LEGACY_ARGS=(-certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1)
+fi
+
+openssl pkcs12 -export "${LEGACY_ARGS[@]}" \
     -inkey "${KEY}" \
     -in "${CERT}" \
     -name "${IDENTITY}" \
