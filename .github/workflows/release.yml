@@ -60,11 +60,11 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" \
             || fail "Không unlock được keychain tạm."
 
-          # BSD base64 trên runner macOS chỉ có -D; GNU base64 dùng --decode.
-          if ! printf '%s' "$SIGNING_P12_BASE64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>/dev/null; then
-            if ! printf '%s' "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"; then
-              fail "Secret base64 không giải mã được (kiểm tra đã dán đủ nội dung file .base64)."
-            fi
+          # BSD base64 trên runner macOS chỉ có -D; secret có thể lẫn xuống dòng/CRLF.
+          CLEAN_B64="$(printf '%s' "$SIGNING_P12_BASE64" | tr -d '[:space:]')"
+          echo "base64 sạch: ${#CLEAN_B64} ký tự"
+          if ! printf '%s' "$CLEAN_B64" | base64 -D > "$RUNNER_TEMP/cert.p12" 2>"$RUNNER_TEMP/decode.err"; then
+            fail "Secret base64 không giải mã được: $(tail -2 "$RUNNER_TEMP/decode.err" | tr '\n' ' ')"
           fi
           echo "p12 size: $(wc -c < "$RUNNER_TEMP/cert.p12" | tr -d ' ') bytes"
 
