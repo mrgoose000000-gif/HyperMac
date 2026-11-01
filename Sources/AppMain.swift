@@ -72,6 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         _ = ClipboardManager.shared
         _ = FinderCutPasteManager.shared
         _ = SystemCleanerManager.shared
+        _ = PermissionsManager.shared
 
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
@@ -116,6 +117,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         } else {
             SystemCleanerManager.shared.scanJunk()
+        }
+
+        if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_EXPAND_PERMS"] == "1" {
+            PermissionsManager.shared.isExpanded = true
         }
 
         let waitSec = Double(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_WAIT"] ?? "") ?? 0.25

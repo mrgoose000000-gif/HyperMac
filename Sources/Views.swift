@@ -16,6 +16,7 @@ public struct MainView: View {
     @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
     @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
     @ObservedObject var cleanerManager: SystemCleanerManager = SystemCleanerManager.shared
+    @ObservedObject var permissionsManager: PermissionsManager = PermissionsManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -50,7 +51,7 @@ public struct MainView: View {
                     case 0:
                         DisplaysTabView(
                             displayManager: displayManager,
-                            caffeinateManager: caffeinateManager,
+                            permissionsManager: permissionsManager,
                             virtualDisplayManager: virtualDisplayManager
                         )
                     case 1:
@@ -64,6 +65,7 @@ public struct MainView: View {
                             snapManager: snapManager,
                             windowManager: windowManager,
                             clipboardManager: clipboardManager,
+                            caffeinateManager: caffeinateManager,
                             launchAtLoginManager: launchAtLoginManager,
                             finderCutPasteManager: finderCutPasteManager
                         )
@@ -72,7 +74,7 @@ public struct MainView: View {
                     default:
                         DisplaysTabView(
                             displayManager: displayManager,
-                            caffeinateManager: caffeinateManager,
+                            permissionsManager: permissionsManager,
                             virtualDisplayManager: virtualDisplayManager
                         )
                     }
@@ -544,7 +546,7 @@ struct FileTransferSpeedCard: View {
 
 struct DisplaysTabView: View {
     @ObservedObject var displayManager: DisplayManager
-    @ObservedObject var caffeinateManager: CaffeinateManager
+    @ObservedObject var permissionsManager: PermissionsManager = PermissionsManager.shared
     @ObservedObject var virtualDisplayManager: VirtualDisplayManager = VirtualDisplayManager.shared
     @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
 
@@ -552,8 +554,8 @@ struct DisplaysTabView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
-                    // Caffeinate (Anti-Sleep) Control Card
-                    CaffeinateCardView(caffeinateManager: caffeinateManager)
+                    // Centralized Permissions Card Hub
+                    PermissionsCardView(permissionsManager: permissionsManager)
 
                     // Virtual Display (Dummy Screen for Remote Desktop / Headless)
                     VirtualDisplayCardView(virtualDisplayManager: virtualDisplayManager)
@@ -902,6 +904,7 @@ struct ShortcutsTabView: View {
     @ObservedObject var snapManager: WindowSnapManager
     @ObservedObject var windowManager: WindowManager
     @ObservedObject var clipboardManager: ClipboardManager
+    @ObservedObject var caffeinateManager: CaffeinateManager = CaffeinateManager.shared
     @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
     @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
 
@@ -961,6 +964,9 @@ struct ShortcutsTabView: View {
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+
+                // Caffeinate (Anti-Sleep) Control Card
+                CaffeinateCardView(caffeinateManager: caffeinateManager)
 
                 // Finder Cut & Paste (Windows-style ⌘X ➔ ⌘V) Card
                 VStack(alignment: .leading, spacing: 8) {

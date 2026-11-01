@@ -51,11 +51,11 @@ Sau đó mở HyperMac bình thường từ Spotlight (`Cmd + Space` gõ `HyperM
 
 ---
 
-### 🔐 Bước 4: Cấp quyền hoạt động
-Để các tính năng chia cửa sổ và phím tắt hoạt động mượt mà, hãy bật các quyền sau:
-1. **Trợ năng (Accessibility):** Vào *Cài đặt hệ thống ➔ Quyền riêng tư & Bảo mật ➔ Trợ năng* $\rightarrow$ Gạt bật **HyperMac**. (Dùng để nhận phím tắt chia cửa sổ, F1/F2, AltTab và Cắt tệp Finder).
-2. **Ghi màn hình (Screen Recording - Tùy chọn):** Vào *Quyền riêng tư & Bảo mật ➔ Ghi màn hình & Âm thanh hệ thống* $\rightarrow$ Gạt bật **HyperMac** để hiển thị ảnh chụp nội dung thực tế trong thẻ chuyển tab AltTab.
-3. **Quyền điều khiển sạc pin SMC:** Khi bật nút *"Bật bảo vệ & Khóa sạc 80%"*, app sẽ hỏi xác nhận Touch ID/mật khẩu 1 lần duy nhất để cài đặt helper điều khiển nguồn an toàn.
+### 🔐 Bước 4: Cấp quyền hoạt động (Trực quan với 1-chạm)
+Từ bản **v1.8.0**, HyperMac tích hợp sẵn thẻ **"Cấp quyền phần mềm"** trực quan ngay tại đầu tab Màn hình:
+* Nếu máy chưa đủ quyền, thẻ sẽ báo đỏ nhẹ kèm số lượng quyền còn thiếu.
+* Bấm vào thẻ để xổ xuống chi tiết: app giải thích rõ **tại sao cần cấp từng quyền** (Trợ năng, Ghi màn hình, SMC, Bluetooth) và cung cấp sẵn nút **`Cấp quyền ngay` / `Mở Cài đặt`** để mở thẳng trang cài đặt của macOS mà bạn không cần phải tự tìm đường dẫn.
+* Khi đã cấp đủ, ô sẽ tự động đổi sang màu xanh/xám dịu và báo **`✓ Đầy đủ quyền`**.
 
 > 💡 **Sau khi cập nhật lên bản mới:** HyperMac tự kiểm tra và khôi phục quyền Trợ năng. Bản phát hành v1.6.0 trở đi được ký bằng chứng chỉ cố định, nên các lần cập nhật sau không còn bị mất quyền nữa.
 
@@ -222,6 +222,12 @@ chmod +x build.sh
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
 ### [v1.8.0] — 2026-11-02
+- **🛡️ Trung tâm Cấp quyền phần mềm (Permissions Hub):**
+  - Tích hợp thẻ quản lý quyền trực quan ngay đầu tab Màn hình.
+  - Tự động báo đỏ nhẹ khi hệ thống chưa đủ quyền; bấm mũi tên xổ xuống hiển thị chi tiết trạng thái, lý do cần cấp cho từng quyền (Trợ năng, Ghi màn hình, SMC Helper, Bluetooth Sleep Guard).
+  - Tích hợp các nút 1-chạm mở thẳng đúng trang Cài đặt tương ứng trong macOS System Settings, tự động chuyển màu xanh khi cấp đủ.
+- **☕ Chuyển Chống sleep màn hình sang tab Phím tắt:**
+  - Di dời thẻ Caffeinate sang tab Phím tắt, nằm cạnh mục Khởi động cùng macOS để gom gọn các tiện ích hệ thống vào cùng một nơi.
 - **🧹 Tích hợp mô-đun Dọn dẹp & Gỡ ứng dụng (CleanMyMac & AppCleaner Replacement):**
   - Bổ sung tab thứ 4 **Dọn dẹp** trên thanh Menu Bar của HyperMac, chia làm 3 phân vùng chuyên sâu.
   - **✨ Dọn rác hệ thống (System Junk Cleaner):** Quét song song đa luồng toàn bộ Caches, Logs, Trash và Xcode DerivedData. Dọn dẹp sạch sẽ hàng chục GB dung lượng an toàn với thuật toán C-level `du`. Tích hợp làm sạch Thùng rác qua cầu nối Finder AppleScript không cần quyền Full Disk Access.
