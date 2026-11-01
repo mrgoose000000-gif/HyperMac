@@ -23,6 +23,8 @@ public var gIsClipboardHUDVisible: Bool = false
 public var gIsClipboardSearchEmpty: Bool = true
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
+private var gLastSnapArrowKey: Int64 = 0
+private var gLastSnapArrowTime: TimeInterval = 0
 
 /// Maps macOS virtual keycodes for 1...9 to their 0-based clipboard row index.
 private func clipboardQuickPasteIndex(for keyCode: Int64) -> Int? {
@@ -70,6 +72,11 @@ private func eventTapCallback(
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
+    // 0. Synthetic event bypass: allow HyperMac-synthesized events (e.g. Cmd+C, Opt+Cmd+V) to pass through without interception
+    if gIsSynthesizingEvent {
+        return Unmanaged.passRetained(event)
+    }
+
     // 1. Safety handler for system tap disable
     if type == .tapDisabledByUserInput {
         // User revoked permission in System Settings -> STOP cleanly! Do NOT fight WindowServer!
@@ -88,6 +95,14 @@ private func eventTapCallback(
             CGEvent.tapEnable(tap: tap, enable: true)
         }
         return Unmanaged.passRetained(event)
+    }
+
+    if type == .flagsChanged {
+        let flags = event.flags
+        if !flags.contains(.maskControl) || !flags.contains(.maskAlternate) {
+            gLastSnapArrowKey = 0
+            gLastSnapArrowTime = 0
+        }
     }
 
     // 2. Mouse Chording: Simultaneous Left + Right Click -> F3 (Mission Control)
@@ -201,6 +216,16 @@ private func eventTapCallback(
                         WindowManager.shared.selectNext()
                     }
                     return nil
+                } else if keyCode == 126 { // Up Arrow -> Move to row above
+                    DispatchQueue.main.async {
+                        WindowManager.shared.selectUp()
+                    }
+                    return nil
+                } else if keyCode == 125 { // Down Arrow -> Move to row below
+                    DispatchQueue.main.async {
+                        WindowManager.shared.selectDown()
+                    }
+                    return nil
                 } else if keyCode == 13 { // W key (Close window)
                     DispatchQueue.main.async {
                         WindowManager.shared.closeSelectedWindow()
@@ -251,6 +276,58 @@ private func eventTapCallback(
                 _ = DisplayManager.shared.handleBrightnessKey(isUp: isUp)
             }
             return nil
+        }
+
+        // Finder Cut & Paste (Windows-style ⌘X ➔ ⌘V)
+        if gIsFinderCutPasteEnabled {
+            let hasCmd = flags.contains(.maskCommand)
+            let hasCtrl = flags.contains(.maskControl)
+            let hasAlt = flags.contains(.maskAlternate)
+            let hasShift = flags.contains(.maskShift)
+
+            // Esc (keycode 53) -> Cancel pending cut in Finder
+            if keycode == 53 && gIsFinderCutActive && !hasCmd && !hasCtrl && !hasAlt {
+                if FinderCutPasteManager.isFinderFrontmost() {
+                    DispatchQueue.main.async {
+                        FinderCutPasteManager.shared.cancelCut(quiet: false)
+                    }
+                    return nil
+                }
+            }
+
+            // Command-only shortcuts (no Option, no Control, no Shift)
+            if hasCmd && !hasCtrl && !hasAlt && !hasShift {
+                // ⌘X (keycode 7) -> Cut file(s) in Finder
+                if keycode == 7 {
+                    if FinderCutPasteManager.isFinderFrontmost() {
+                        if !FinderCutPasteManager.isFinderEditingText() {
+                            DispatchQueue.main.async {
+                                FinderCutPasteManager.shared.triggerCut()
+                            }
+                            return nil // Swallow ⌘X so macOS doesn't beep
+                        }
+                    }
+                }
+
+                // ⌘V (keycode 9) -> Paste/Move cut file(s) in Finder
+                if keycode == 9 && gIsFinderCutActive {
+                    if FinderCutPasteManager.isFinderFrontmost() {
+                        if !FinderCutPasteManager.isFinderEditingText() {
+                            DispatchQueue.main.async {
+                                FinderCutPasteManager.shared.triggerPaste()
+                            }
+                            return nil // Swallow ⌘V
+                        }
+                    }
+                }
+
+                // ⌘C (keycode 8) -> Manual copy cancels any cut state
+                if keycode == 8 && gIsFinderCutActive {
+                    DispatchQueue.main.async {
+                        FinderCutPasteManager.shared.cancelCut(quiet: true)
+                    }
+                }
+            }
         }
 
         // Command + Shift + C (or Cmd + Shift + V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
@@ -311,24 +388,99 @@ private func eventTapCallback(
             }
         }
 
-        // Option + Control + Arrow keys -> Window Snapping (Rectangle-style)
+        // Option + Control shortcuts -> Window Snapping (Rectangle-style)
         let isOptCtrl = flags.contains(.maskAlternate) && flags.contains(.maskControl) && !flags.contains(.maskCommand)
         if isOptCtrl {
-            switch keycode {
-            case 123: // Left Arrow -> Left Half
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.leftHalf) }
-                return nil
-            case 124: // Right Arrow -> Right Half
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.rightHalf) }
-                return nil
-            case 126: // Up Arrow -> Maximize
+            let now = Date().timeIntervalSince1970
+            let chordWindow: TimeInterval = 0.65
+
+            // 1. Return / Numpad Enter -> Maximize
+            if keycode == 36 || keycode == 76 {
+                gLastSnapArrowKey = 0
                 DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.maximize) }
                 return nil
-            case 125: // Down Arrow -> Center
+            }
+
+            // 2. Delete / Forward Delete -> Center
+            if keycode == 51 || keycode == 117 {
+                gLastSnapArrowKey = 0
                 DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.center) }
                 return nil
-            default:
-                break
+            }
+
+            // 3. Direct 4-corner keys: U / I / J / K and Numpad 7 / 9 / 1 / 3
+            if keycode == 32 || keycode == 89 { // U or Num7 -> Top Left (Trái Trên)
+                gLastSnapArrowKey = 0
+                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topLeft) }
+                return nil
+            }
+            if keycode == 34 || keycode == 92 { // I or Num9 -> Top Right (Phải Trên)
+                gLastSnapArrowKey = 0
+                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topRight) }
+                return nil
+            }
+            if keycode == 38 || keycode == 83 { // J or Num1 -> Bottom Left (Trái Dưới)
+                gLastSnapArrowKey = 0
+                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomLeft) }
+                return nil
+            }
+            if keycode == 40 || keycode == 85 { // K or Num3 -> Bottom Right (Phải Dưới)
+                gLastSnapArrowKey = 0
+                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomRight) }
+                return nil
+            }
+
+            // 4. Arrow keys (123: Left, 124: Right, 125: Down, 126: Up)
+            if keycode >= 123 && keycode <= 126 {
+                // Check if this forms a 4-corner combo with the previous arrow key
+                if (now - gLastSnapArrowTime) <= chordWindow && gLastSnapArrowKey != 0 && gLastSnapArrowKey != keycode {
+                    let prev = gLastSnapArrowKey
+                    // Left (123) + Up (126) -> Top Left (Trái Trên)
+                    if (prev == 123 && keycode == 126) || (prev == 126 && keycode == 123) {
+                        gLastSnapArrowKey = 0
+                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topLeft) }
+                        return nil
+                    }
+                    // Left (123) + Down (125) -> Bottom Left (Trái Dưới)
+                    if (prev == 123 && keycode == 125) || (prev == 125 && keycode == 123) {
+                        gLastSnapArrowKey = 0
+                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomLeft) }
+                        return nil
+                    }
+                    // Right (124) + Up (126) -> Top Right (Phải Trên)
+                    if (prev == 124 && keycode == 126) || (prev == 126 && keycode == 124) {
+                        gLastSnapArrowKey = 0
+                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topRight) }
+                        return nil
+                    }
+                    // Right (124) + Down (125) -> Bottom Right (Phải Dưới)
+                    if (prev == 124 && keycode == 125) || (prev == 125 && keycode == 124) {
+                        gLastSnapArrowKey = 0
+                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomRight) }
+                        return nil
+                    }
+                }
+
+                // Single arrow press (or first arrow of a combination)
+                gLastSnapArrowKey = keycode
+                gLastSnapArrowTime = now
+
+                switch keycode {
+                case 123: // Left Arrow -> Left Half
+                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.leftHalf) }
+                    return nil
+                case 124: // Right Arrow -> Right Half
+                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.rightHalf) }
+                    return nil
+                case 126: // Up Arrow -> Top Half
+                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topHalf) }
+                    return nil
+                case 125: // Down Arrow -> Bottom Half
+                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomHalf) }
+                    return nil
+                default:
+                    break
+                }
             }
         }
 
@@ -373,6 +525,7 @@ public class KeyInterceptor {
         gIsMouseChordEnabled = (UserDefaults.standard.object(forKey: "mouse_chord_enabled") as? Bool) ?? true
         gIsAltTabEnabled = (UserDefaults.standard.object(forKey: "alttab_enabled") as? Bool) ?? true
         gIsClipboardEnabled = (UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") as? Bool) ?? true
+        gIsFinderCutPasteEnabled = (UserDefaults.standard.object(forKey: "finder_cut_paste_enabled") as? Bool) ?? true
     }
 
     public func start() {

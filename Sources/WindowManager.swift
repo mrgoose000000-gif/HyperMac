@@ -76,7 +76,7 @@ private func captureThumbnail(wid: CGWindowID) -> NSImage? {
     // CGRect.null tells CoreGraphics to use the window's exact native frame!
     if let imgRef = createFn(CGRect.null, 8, wid, 1) {
         let cgImg = imgRef.takeRetainedValue()
-        return downsample(cgImg: cgImg, maxDimension: 320)
+        return downsample(cgImg: cgImg, maxDimension: 640)
     }
     return nil
 }
@@ -115,6 +115,16 @@ public class WindowManager: ObservableObject {
             gIsAltTabEnabled = isAltTabEnabled
         }
     }
+    @Published public var isDetailsExpanded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDetailsExpanded, forKey: "alttab_details_expanded")
+        }
+    }
+    @Published public var showOnlyCurrentScreenWindows: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showOnlyCurrentScreenWindows, forKey: "alttab_only_current_screen")
+        }
+    }
 
     // Persistent MRU stack in memory to guarantee true back-and-forth AltTab behavior
     private var mruWindowIDs: [CGWindowID] = []
@@ -132,6 +142,8 @@ public class WindowManager: ObservableObject {
         }
         gIsAltTabEnabled = self.isAltTabEnabled
         self.hasScreenRecording = CGPreflightScreenCaptureAccess()
+        self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "alttab_details_expanded")
+        self.showOnlyCurrentScreenWindows = UserDefaults.standard.bool(forKey: "alttab_only_current_screen")
     }
 
     public func requestScreenRecordingPermission() {
@@ -233,16 +245,41 @@ public class WindowManager: ObservableObject {
         var items: [WindowItem] = []
         var seenWIDs = Set<CGWindowID>()
 
+        let mouseLoc = NSEvent.mouseLocation
+        let activeScreen = NSScreen.screens.first(where: { NSPointInRect(mouseLoc, $0.frame) }) ?? NSScreen.main ?? NSScreen.screens[0]
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 956.0
+        let activeAXFrame = CGRect(
+            x: activeScreen.frame.origin.x,
+            y: primaryHeight - (activeScreen.frame.origin.y + activeScreen.frame.height),
+            width: activeScreen.frame.width,
+            height: activeScreen.frame.height
+        )
+
         if let cgList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for item in cgList {
                 let layer = item[kCGWindowLayer as String] as? Int ?? -1
                 let wid = item[kCGWindowNumber as String] as? CGWindowID ?? 0
                 let bounds = item[kCGWindowBounds as String] as? [String: Any] ?? [:]
+                let x = bounds["X"] as? Double ?? 0
+                let y = bounds["Y"] as? Double ?? 0
                 let w = bounds["Width"] as? Double ?? 0
                 let h = bounds["Height"] as? Double ?? 0
                 let alpha = item[kCGWindowAlpha as String] as? Double ?? 1.0
 
                 if layer == 0 && w >= 150 && h >= 100 && alpha > 0.1 && !seenWIDs.contains(wid) {
+                    // Screen isolation filter: only keep windows located on activeScreen
+                    if showOnlyCurrentScreenWindows {
+                        let winRect = CGRect(x: x, y: y, width: w, height: h)
+                        let winCenter = CGPoint(x: winRect.midX, y: winRect.midY)
+                        if !activeAXFrame.contains(winCenter) {
+                            let intersection = activeAXFrame.intersection(winRect)
+                            let overlap = (!intersection.isNull && !intersection.isEmpty) ? (intersection.width * intersection.height) : 0
+                            if overlap < (winRect.width * winRect.height * 0.4) {
+                                continue
+                            }
+                        }
+                    }
+
                     if let info = axByWID[wid] {
                         seenWIDs.insert(wid)
                         // Thumbnails are captured asynchronously AFTER the HUD is
@@ -359,6 +396,31 @@ public class WindowManager: ObservableObject {
         previewSelectedWindow()
     }
 
+    public func selectUp() {
+        guard !windows.isEmpty else { return }
+        let (columns, _) = Self.computeGrid(windowCount: windows.count)
+        if selectedIndex - columns >= 0 {
+            selectedIndex -= columns
+        } else {
+            // Wrap to bottom row in same column
+            let target = selectedIndex + ((windows.count - 1 - selectedIndex) / columns) * columns
+            selectedIndex = min(target, windows.count - 1)
+        }
+        previewSelectedWindow()
+    }
+
+    public func selectDown() {
+        guard !windows.isEmpty else { return }
+        let (columns, _) = Self.computeGrid(windowCount: windows.count)
+        if selectedIndex + columns < windows.count {
+            selectedIndex += columns
+        } else {
+            // Wrap to top row in same column
+            selectedIndex = selectedIndex % columns
+        }
+        previewSelectedWindow()
+    }
+
     public func previewSelectedWindow() {
         // Intentionally no-op:
         // We do NOT raise windows to the top while the user is simply cycling through the HUD.
@@ -443,6 +505,7 @@ public class WindowManager: ObservableObject {
         } else {
             selectedIndex = min(selectedIndex, windows.count - 1)
             previewSelectedWindow()
+            showOverlay()
         }
     }
 
@@ -464,6 +527,7 @@ public class WindowManager: ObservableObject {
         } else {
             selectedIndex = min(selectedIndex, windows.count - 1)
             previewSelectedWindow()
+            showOverlay()
         }
     }
 
@@ -498,17 +562,49 @@ public class WindowManager: ObservableObject {
         }
     }
 
-    // MARK: - Compact AltTab Overlay HUD Presentation
+    // MARK: - Multi-row Grid Geometry Calculation
+
+    public static func computeGrid(windowCount: Int) -> (columns: Int, rows: Int) {
+        if windowCount <= 4 {
+            return (max(1, windowCount), 1)
+        } else if windowCount <= 6 {
+            return (3, 2)
+        } else if windowCount <= 8 {
+            return (4, 2)
+        } else if windowCount <= 12 {
+            return (4, 3)
+        } else if windowCount <= 15 {
+            return (5, 3)
+        } else {
+            let cols = 5
+            let rows = Int(ceil(Double(windowCount) / Double(cols)))
+            return (cols, rows)
+        }
+    }
+
+    // MARK: - Multi-row AltTab Overlay HUD Presentation
 
     private func showOverlay() {
-        let cardWidth: CGFloat = 195
-        let horizontalPadding: CGFloat = 36
-        let calculatedWidth = CGFloat(windows.count) * cardWidth + horizontalPadding
-        let panelHeight: CGFloat = 225
+        let (columns, totalRows) = Self.computeGrid(windowCount: windows.count)
+        let cardWidth: CGFloat = 260
+        let cardHeight: CGFloat = 188
+        let colSpacing: CGFloat = 12
+        let rowSpacing: CGFloat = 12
+        let horizontalPadding: CGFloat = 40
+        let headerFooterPadding: CGFloat = 86
+
+        // Max visible rows without scrolling = 3 (fits comfortably on all Mac screens)
+        let visibleRows = min(totalRows, 3)
+
+        let gridWidth = CGFloat(columns) * cardWidth + CGFloat(max(0, columns - 1)) * colSpacing
+        let gridHeight = CGFloat(visibleRows) * cardHeight + CGFloat(max(0, visibleRows - 1)) * rowSpacing
+
+        let calculatedWidth = gridWidth + horizontalPadding
+        let calculatedHeight = gridHeight + headerFooterPadding
 
         if overlayPanel == nil {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: calculatedWidth, height: panelHeight),
+                contentRect: NSRect(x: 0, y: 0, width: calculatedWidth, height: calculatedHeight),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
@@ -539,10 +635,11 @@ public class WindowManager: ObservableObject {
         let screenRect = screen.frame
 
         let totalWidth = min(calculatedWidth, screenRect.width - 60)
+        let totalHeight = min(calculatedHeight, screenRect.height - 80)
         let posX = screenRect.origin.x + (screenRect.width - totalWidth) / 2
-        let posY = screenRect.origin.y + (screenRect.height - panelHeight) / 2
+        let posY = screenRect.origin.y + (screenRect.height - totalHeight) / 2
 
-        panel.setFrame(NSRect(x: posX, y: posY, width: totalWidth, height: panelHeight), display: true)
+        panel.setFrame(NSRect(x: posX, y: posY, width: totalWidth, height: totalHeight), display: true)
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
         if #available(macOS 14.0, *) {

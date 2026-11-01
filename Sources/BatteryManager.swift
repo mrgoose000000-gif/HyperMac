@@ -42,6 +42,9 @@ public class BatteryManager: ObservableObject {
     @Published public var isProtectionEnabled: Bool = true {
         didSet {
             UserDefaults.standard.set(isProtectionEnabled, forKey: "battery_protection_enabled")
+            if isProtectionEnabled && !isHelperInstalled && !isInstallingHelper {
+                installHelper()
+            }
             evaluatePowerManagement()
         }
     }
@@ -260,9 +263,9 @@ public class BatteryManager: ObservableObject {
             BluetoothManager.shared.isPowerOn = false
         }
 
-        // Hard lock SMC CHTE to 1 if at or above limit to prevent waking or sleep-charging overrides
+        // Hard lock SMC to charge-off if at or above limit to prevent waking or sleep-charging overrides
         if isProtectionEnabled && currentLevel >= chargeLimit && isHelperInstalled {
-            _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-off")
+            _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)")
         }
     }
 
@@ -484,8 +487,11 @@ public class BatteryManager: ObservableObject {
             let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
             DispatchQueue.main.async {
                 if code == 0 {
-                    // Check if CHTE is 1
-                    let isBypassed = out.contains("01 00 00 00") || out.contains("1 (bytes 01 00 00 00)")
+                    // Check if CHTE is 1 (bytes 01 00 00 00), BYPASS:1 or CH0B/BCLM active
+                    let isBypassed = out.contains("BYPASS:1") ||
+                                     out.contains("01 00 00 00") ||
+                                     out.contains("1 (bytes 01 00 00 00)") ||
+                                     out.contains("(bytes 02)")
                     self.isBypassActive = isBypassed
                 }
             }
@@ -595,12 +601,16 @@ public class BatteryManager: ObservableObject {
 
     public func setChargingInhibited(_ inhibit: Bool) {
         guard isHelperInstalled else { return }
-        let action = inhibit ? "charge-off" : "charge-on"
+        let cmd = inhibit
+            ? "sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)"
+            : "sudo -n /usr/local/bin/displaycontrol-power charge-on"
         DispatchQueue.global(qos: .utility).async {
-            let (_, code) = shell("sudo -n /usr/local/bin/displaycontrol-power \(action)")
+            let (out, code) = shell(cmd)
             DispatchQueue.main.async {
                 if code == 0 {
                     self.isBypassActive = inhibit
+                } else {
+                    appLog("⚠️ setChargingInhibited(\(inhibit)) failed with code \(code): \(out)")
                 }
             }
         }
@@ -717,21 +727,35 @@ public class BatteryManager: ObservableObject {
         isInstallingHelper = true
 
         DispatchQueue.global(qos: .userInitiated).async {
-            var smcSrc = Bundle.main.path(forResource: "smc", ofType: nil)
-            var helperSrc = Bundle.main.path(forResource: "displaycontrol-power", ofType: nil)
-            var installScript = Bundle.main.path(forResource: "install-helper", ofType: "sh")
+            // Find smc, helper and install script across bundle, working directory, and installed locations
+            let searchDirs = [
+                Bundle.main.resourcePath,
+                Bundle.main.bundleURL.appendingPathComponent("Contents/Resources").path,
+                "/Applications/HyperMac.app/Contents/Resources",
+                FileManager.default.currentDirectoryPath + "/Resources"
+            ].compactMap { $0 }
 
-            if smcSrc == nil {
-                smcSrc = "/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl/Resources/smc"
-            }
-            if helperSrc == nil {
-                helperSrc = "/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl/Resources/displaycontrol-power"
-            }
-            if installScript == nil {
-                installScript = "/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl/Resources/install-helper.sh"
+            var smcSrc: String? = Bundle.main.path(forResource: "smc", ofType: nil)
+            var helperSrc: String? = Bundle.main.path(forResource: "displaycontrol-power", ofType: nil)
+            var installScript: String? = Bundle.main.path(forResource: "install-helper", ofType: "sh")
+
+            for dir in searchDirs {
+                if smcSrc == nil {
+                    let path = (dir as NSString).appendingPathComponent("smc")
+                    if FileManager.default.fileExists(atPath: path) { smcSrc = path }
+                }
+                if helperSrc == nil {
+                    let path = (dir as NSString).appendingPathComponent("displaycontrol-power")
+                    if FileManager.default.fileExists(atPath: path) { helperSrc = path }
+                }
+                if installScript == nil {
+                    let path = (dir as NSString).appendingPathComponent("install-helper.sh")
+                    if FileManager.default.fileExists(atPath: path) { installScript = path }
+                }
             }
 
             guard let sSMC = smcSrc, let sHelper = helperSrc, let sInstall = installScript else {
+                appLog("❌ installHelper: missing resource paths (smc: \(smcSrc ?? "nil"), helper: \(helperSrc ?? "nil"), script: \(installScript ?? "nil"))")
                 DispatchQueue.main.async {
                     self.isInstallingHelper = false
                     completion?(false)
@@ -746,6 +770,9 @@ public class BatteryManager: ObservableObject {
             var errorDict: NSDictionary?
             if let scriptObj = NSAppleScript(source: appleScriptCmd) {
                 _ = scriptObj.executeAndReturnError(&errorDict)
+                if let err = errorDict {
+                    appLog("⚠️ installHelper AppleScript error: \(err)")
+                }
             }
 
             // Verify installation
@@ -756,6 +783,7 @@ public class BatteryManager: ObservableObject {
                 self.isInstallingHelper = false
                 self.isHelperInstalled = success
                 if success {
+                    self.checkSMCBypassStatus()
                     self.evaluatePowerManagement()
                 }
                 completion?(success)

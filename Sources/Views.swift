@@ -13,6 +13,8 @@ public struct MainView: View {
     @ObservedObject var updateManager: UpdateManager = UpdateManager.shared
     @ObservedObject var thermalManager: ThermalManager = ThermalManager.shared
     @ObservedObject var virtualDisplayManager: VirtualDisplayManager = VirtualDisplayManager.shared
+    @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
+    @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -60,7 +62,9 @@ public struct MainView: View {
                             displayManager: displayManager,
                             snapManager: snapManager,
                             windowManager: windowManager,
-                            clipboardManager: clipboardManager
+                            clipboardManager: clipboardManager,
+                            launchAtLoginManager: launchAtLoginManager,
+                            finderCutPasteManager: finderCutPasteManager
                         )
                     default:
                         DisplaysTabView(
@@ -250,7 +254,7 @@ struct ModernHeaderBar: View {
 
     private var statusText: String {
         if batteryManager.isBypassActive {
-            return "🛡️ 80% Bypass"
+            return "🛡️ \(batteryManager.chargeLimit)% Bypass"
         } else if batteryManager.isCharging {
             return "⚡️ Đang sạc"
         } else if batteryManager.isPluggedIn {
@@ -537,6 +541,7 @@ struct DisplaysTabView: View {
     @ObservedObject var displayManager: DisplayManager
     @ObservedObject var caffeinateManager: CaffeinateManager
     @ObservedObject var virtualDisplayManager: VirtualDisplayManager = VirtualDisplayManager.shared
+    @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -699,6 +704,7 @@ struct CaffeinateCardView: View {
 
 struct VirtualDisplayCardView: View {
     @ObservedObject var virtualDisplayManager: VirtualDisplayManager = VirtualDisplayManager.shared
+    @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
 
     var body: some View {
         VStack(spacing: 8) {
@@ -891,6 +897,8 @@ struct ShortcutsTabView: View {
     @ObservedObject var snapManager: WindowSnapManager
     @ObservedObject var windowManager: WindowManager
     @ObservedObject var clipboardManager: ClipboardManager
+    @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
+    @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -922,6 +930,102 @@ struct ShortcutsTabView: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.12)))
                 }
 
+                // Launch at Login Card
+                HStack(spacing: 8) {
+                    Image(systemName: "power.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.accentColor)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Khởi động cùng macOS")
+                            .font(.system(size: 10.5, weight: .bold))
+                        Text("Tự động chạy HyperMac ngay khi đăng nhập vào máy Mac")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: Binding<Bool>(
+                        get: { launchAtLoginManager.isEnabled },
+                        set: { launchAtLoginManager.setEnabled($0) }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+
+                // Finder Cut & Paste (Windows-style ⌘X ➔ ⌘V) Card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "scissors")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V)")
+                                .font(.system(size: 10.5, weight: .bold))
+                            Text("Cắt và di chuyển tệp như trên Windows (bấm ⌘X để cắt, ⌘V để di chuyển)")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        if finderCutPasteManager.isEnabled {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    finderCutPasteManager.isDetailsExpanded.toggle()
+                                }
+                            } label: {
+                                Image(systemName: finderCutPasteManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8.5, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(Color.primary.opacity(finderCutPasteManager.isDetailsExpanded ? 0.08 : 0.04)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(finderCutPasteManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                        }
+
+                        Toggle("", isOn: Binding<Bool>(
+                            get: { finderCutPasteManager.isEnabled },
+                            set: { finderCutPasteManager.isEnabled = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                    }
+
+                    if finderCutPasteManager.isEnabled && finderCutPasteManager.isDetailsExpanded {
+                        Divider().opacity(0.35)
+
+                        VStack(spacing: 5) {
+                            HStack(spacing: 6) {
+                                shortcutPill(key: "⌘ + X", desc: "Cắt tệp / thư mục")
+                                shortcutPill(key: "⌘ + V", desc: "Di chuyển đến đây")
+                                shortcutPill(key: "esc", desc: "Huỷ cắt")
+                                shortcutPill(key: "⌘ + C", desc: "Chuyển sang Copy")
+                            }
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.green)
+                                Text("Tự động nhận diện khi đổi tên hoặc tìm kiếm: vẫn cắt văn bản bình thường.")
+                                    .font(.system(size: 7.5))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+
                 // AltTab Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
@@ -939,6 +1043,22 @@ struct ShortcutsTabView: View {
 
                         Spacer()
 
+                        if windowManager.isAltTabEnabled {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    windowManager.isDetailsExpanded.toggle()
+                                }
+                            } label: {
+                                Image(systemName: windowManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8.5, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(Color.primary.opacity(windowManager.isDetailsExpanded ? 0.08 : 0.04)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(windowManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                        }
+
                         Toggle("", isOn: Binding<Bool>(
                             get: { windowManager.isAltTabEnabled },
                             set: { windowManager.isAltTabEnabled = $0 }
@@ -948,12 +1068,41 @@ struct ShortcutsTabView: View {
                         .labelsHidden()
                     }
 
-                    if windowManager.isAltTabEnabled {
+                    if windowManager.isAltTabEnabled && windowManager.isDetailsExpanded {
+                        Divider().opacity(0.35)
+
+                        // Multi-monitor screen isolation toggle
+                        HStack(spacing: 6) {
+                            Image(systemName: "display.2")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(Color.accentColor)
+
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Chỉ hiện cửa sổ trên màn hình hiện tại")
+                                    .font(.system(size: 8.5, weight: .bold))
+                                Text("Lọc riêng các cửa sổ thuộc màn hình con trỏ chuột đang đứng")
+                                    .font(.system(size: 7.5))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding<Bool>(
+                                get: { windowManager.showOnlyCurrentScreenWindows },
+                                set: { windowManager.showOnlyCurrentScreenWindows = $0 }
+                            ))
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                            .labelsHidden()
+                        }
+                        .padding(.vertical, 2)
+
                         // AltTab Shortcuts Guide
                         HStack(spacing: 6) {
                             shortcutPill(key: "⌘ + Tab", desc: "Chuyển tiếp")
                             shortcutPill(key: "⌘ + ~", desc: "Lùi lại")
-                            shortcutPill(key: "W", desc: "Đóng cửa sổ")
+                            shortcutPill(key: "↑↓←→", desc: "Duyệt lưới nhiều hàng")
+                            shortcutPill(key: "W", desc: "Đóng")
                             shortcutPill(key: "Q", desc: "Thoát App")
                         }
 
@@ -997,6 +1146,22 @@ struct ShortcutsTabView: View {
 
                         Spacer()
 
+                        if snapManager.isSnapEnabled {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    snapManager.isDetailsExpanded.toggle()
+                                }
+                            } label: {
+                                Image(systemName: snapManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8.5, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(Color.primary.opacity(snapManager.isDetailsExpanded ? 0.08 : 0.04)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(snapManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                        }
+
                         Toggle("", isOn: Binding<Bool>(
                             get: { snapManager.isSnapEnabled },
                             set: { snapManager.isSnapEnabled = $0 }
@@ -1006,13 +1171,21 @@ struct ShortcutsTabView: View {
                         .labelsHidden()
                     }
 
-                    if snapManager.isSnapEnabled {
-                        VStack(spacing: 4) {
+                    if snapManager.isSnapEnabled && snapManager.isDetailsExpanded {
+                        Divider().opacity(0.35)
+
+                        VStack(spacing: 5) {
                             HStack(spacing: 6) {
-                                shortcutPill(key: "⌥⌃←", desc: "Nửa trái")
-                                shortcutPill(key: "⌥⌃→", desc: "Nửa phải")
-                                shortcutPill(key: "⌥⌃↑", desc: "Toàn màn hình")
-                                shortcutPill(key: "⌥⌃↓", desc: "Căn giữa")
+                                shortcutPill(key: "⌃⌥←", desc: "Nửa trái")
+                                shortcutPill(key: "⌃⌥→", desc: "Nửa phải")
+                                shortcutPill(key: "⌃⌥↑", desc: "Nửa trên")
+                                shortcutPill(key: "⌃⌥↓", desc: "Nửa dưới")
+                            }
+                            HStack(spacing: 6) {
+                                shortcutPill(key: "⌃⌥↩", desc: "Toàn màn hình")
+                                shortcutPill(key: "⌃⌥⌫", desc: "Căn giữa")
+                                shortcutPill(key: "⌃⌥←↑/U", desc: "4 góc")
+                                Spacer()
                             }
                             HStack(spacing: 6) {
                                 shortcutPill(key: "⌥⌘→", desc: "Sang màn hình phải")
@@ -1042,6 +1215,22 @@ struct ShortcutsTabView: View {
 
                         Spacer()
 
+                        if clipboardManager.isMonitoringEnabled {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    clipboardManager.isDetailsExpanded.toggle()
+                                }
+                            } label: {
+                                Image(systemName: clipboardManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8.5, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(Color.primary.opacity(clipboardManager.isDetailsExpanded ? 0.08 : 0.04)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(clipboardManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết cài đặt")
+                        }
+
                         Toggle("", isOn: Binding<Bool>(
                             get: { clipboardManager.isMonitoringEnabled },
                             set: { clipboardManager.isMonitoringEnabled = $0 }
@@ -1051,7 +1240,9 @@ struct ShortcutsTabView: View {
                         .labelsHidden()
                     }
 
-                    if clipboardManager.isMonitoringEnabled {
+                    if clipboardManager.isMonitoringEnabled && clipboardManager.isDetailsExpanded {
+                        Divider().opacity(0.35)
+
                         // Shortcuts & Quick Actions
                         HStack(spacing: 6) {
                             shortcutPill(key: "⌘⇧C", desc: "Mở bảng HUD")
@@ -1638,6 +1829,43 @@ struct BatteryCardView: View {
     // SUB-TAB 0: NGUỒN SMC
     private var powerOverviewSubTab: some View {
         VStack(spacing: 7) {
+            if !batteryManager.isHelperInstalled {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Cần cấp quyền SMC để khóa sạc")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .foregroundStyle(.primary)
+                        Text("Xác nhận Touch ID hoặc mật khẩu máy 1 lần")
+                            .font(.system(size: 7.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        batteryManager.installHelper()
+                    } label: {
+                        HStack(spacing: 4) {
+                            if batteryManager.isInstallingHelper {
+                                ProgressView().controlSize(.mini)
+                            }
+                            Text(batteryManager.isInstallingHelper ? "Đang cài..." : "Cấp quyền ngay")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3.5)
+                        .background(Color.orange.opacity(0.18))
+                        .foregroundStyle(.orange)
+                        .cornerRadius(5)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(batteryManager.isInstallingHelper)
+                }
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.08)))
+            }
+
             HStack(spacing: 8) {
                 Image(systemName: "lock.shield").font(.system(size: 11)).foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 1) {
@@ -1649,7 +1877,12 @@ struct BatteryCardView: View {
                 Spacer()
                 Toggle("", isOn: Binding<Bool>(
                     get: { batteryManager.isProtectionEnabled },
-                    set: { batteryManager.isProtectionEnabled = $0 }
+                    set: { newVal in
+                        batteryManager.isProtectionEnabled = newVal
+                        if newVal && !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
+                            batteryManager.installHelper()
+                        }
+                    }
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.mini)
@@ -1708,6 +1941,16 @@ struct BatteryCardView: View {
                 get: { batteryManager.isSmartAlertsEnabled },
                 set: { batteryManager.isSmartAlertsEnabled = $0 }
             ))
+
+            HStack(spacing: 4) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.secondary)
+                Text("Lưu ý: Tắt 'Sạc pin tối ưu hoá' trong Cài đặt hệ thống để tránh macOS tự sạc lên 100%.")
+                    .font(.system(size: 7.2))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 1)
         }
     }
 
@@ -2371,6 +2614,28 @@ struct FooterView: View {
             }
 
             Spacer()
+
+            // Author Link Button
+            Button {
+                if let url = URL(string: "https://bit.ly/4ectK8U") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 8))
+                    Text("Tác giả")
+                        .font(.system(size: 8.5, weight: .medium))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(
+                    Capsule().fill(Color.primary.opacity(0.06))
+                )
+                .foregroundStyle(Color.primary)
+            }
+            .buttonStyle(.plain)
+            .help("Xem trang tác giả")
 
             // Update Check / Action Button
             Button {

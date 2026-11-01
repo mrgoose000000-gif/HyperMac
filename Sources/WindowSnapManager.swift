@@ -12,6 +12,10 @@ public enum SnapAction {
     case center
     case topHalf
     case bottomHalf
+    case topLeft
+    case topRight
+    case bottomLeft
+    case bottomRight
 }
 
 // MARK: - Window Snap Manager (Rectangle Architecture)
@@ -25,6 +29,11 @@ public class WindowSnapManager: ObservableObject {
             UserDefaults.standard.set(isSnapEnabled, forKey: "window_snap_enabled")
         }
     }
+    @Published public var isDetailsExpanded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDetailsExpanded, forKey: "window_snap_details_expanded")
+        }
+    }
 
     private init() {
         if UserDefaults.standard.object(forKey: "window_snap_enabled") != nil {
@@ -32,6 +41,7 @@ public class WindowSnapManager: ObservableObject {
         } else {
             self.isSnapEnabled = true
         }
+        self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "window_snap_details_expanded")
     }
 
     // MARK: - Coordinate Conversion (Cocoa Bottom-Left to Accessibility Top-Left)
@@ -252,6 +262,46 @@ public class WindowSnapManager: ObservableObject {
                 width: visible.width,
                 height: halfH
             )
+
+        case .topLeft:
+            let halfW = floor(visible.width / 2.0)
+            let halfH = floor(visible.height / 2.0)
+            return CGRect(
+                x: visible.origin.x,
+                y: visible.origin.y,
+                width: halfW,
+                height: halfH
+            )
+
+        case .topRight:
+            let halfW = floor(visible.width / 2.0)
+            let halfH = floor(visible.height / 2.0)
+            return CGRect(
+                x: visible.origin.x + (visible.width - halfW),
+                y: visible.origin.y,
+                width: halfW,
+                height: halfH
+            )
+
+        case .bottomLeft:
+            let halfW = floor(visible.width / 2.0)
+            let halfH = floor(visible.height / 2.0)
+            return CGRect(
+                x: visible.origin.x,
+                y: visible.origin.y + (visible.height - halfH),
+                width: halfW,
+                height: halfH
+            )
+
+        case .bottomRight:
+            let halfW = floor(visible.width / 2.0)
+            let halfH = floor(visible.height / 2.0)
+            return CGRect(
+                x: visible.origin.x + (visible.width - halfW),
+                y: visible.origin.y + (visible.height - halfH),
+                width: halfW,
+                height: halfH
+            )
         }
     }
 
@@ -334,13 +384,31 @@ public class WindowSnapManager: ObservableObject {
             return destination
         }
 
-        // 2. Snap Detection (Left Half / Right Half / Top Half / Bottom Half)
+        // 2. Snap Detection (Left Half / Right Half / Top Half / Bottom Half / Corners)
         let touchesLeft = abs(window.minX - source.minX) <= 32.0
         let touchesRight = abs(window.maxX - source.maxX) <= 32.0
         let touchesTop = abs(window.minY - source.minY) <= 32.0
         let touchesBottom = abs(window.maxY - source.maxY) <= 32.0
         let isHalfWidth = abs(widthFrac - 0.5) <= 0.08
         let isHalfHeight = abs(heightFrac - 0.5) <= 0.08
+
+        // Quarter Screen (4 Corners)
+        if isHalfWidth && isHalfHeight {
+            let halfW = floor(destination.width / 2.0)
+            let halfH = floor(destination.height / 2.0)
+            if touchesLeft && touchesTop {
+                return CGRect(x: destination.minX, y: destination.minY, width: halfW, height: halfH)
+            }
+            if touchesRight && touchesTop {
+                return CGRect(x: destination.minX + (destination.width - halfW), y: destination.minY, width: halfW, height: halfH)
+            }
+            if touchesLeft && touchesBottom {
+                return CGRect(x: destination.minX, y: destination.minY + (destination.height - halfH), width: halfW, height: halfH)
+            }
+            if touchesRight && touchesBottom {
+                return CGRect(x: destination.minX + (destination.width - halfW), y: destination.minY + (destination.height - halfH), width: halfW, height: halfH)
+            }
+        }
 
         // Left Half
         if touchesLeft && isNearlyFullHeight && isHalfWidth {

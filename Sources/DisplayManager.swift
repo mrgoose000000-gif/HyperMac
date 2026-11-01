@@ -133,7 +133,7 @@ public class DisplayManager: ObservableObject {
         _ = SLSGetDisplayList(16, &displayIDs, &count)
 
         let physicalExternalNames = getAppleSiliconExternalDisplayNames()
-        var externalIdx = 1
+        var externalIdx = 0
         var updatedList: [DisplayInfo] = []
 
         for i in 0..<Int(count) {
@@ -162,12 +162,18 @@ public class DisplayManager: ObservableObject {
                 continue
             }
 
-            var name = getDisplayName(for: id, isBuiltIn: isBuiltIn)
-            if !isBuiltIn && !isVirtualDisplay && (name == "External Display" || name.isEmpty) && !physicalExternalNames.isEmpty {
-                let nameIndex = min(externalIdx - 1, physicalExternalNames.count - 1)
-                name = physicalExternalNames[nameIndex]
+            var currentExtIdx: Int? = nil
+            if !isBuiltIn && !isVirtualDisplay {
+                currentExtIdx = externalIdx
                 externalIdx += 1
             }
+
+            let name = getDisplayName(
+                for: id,
+                isBuiltIn: isBuiltIn,
+                externalIndex: currentExtIdx,
+                physicalNames: physicalExternalNames
+            )
 
             // Cache metadata when active or has real dimensions
             if hasValidSize {
@@ -196,11 +202,7 @@ public class DisplayManager: ObservableObject {
                 currentBrightness = brightnessCache[id] ?? 0.8
             }
 
-            var idx: Int? = nil
-            if !isBuiltIn {
-                idx = externalIdx
-                externalIdx += 1
-            }
+            let displayExtIndex = currentExtIdx.map { $0 + 1 }
 
             updatedList.append(DisplayInfo(
                 id: id,
@@ -209,7 +211,7 @@ public class DisplayManager: ObservableObject {
                 brightness: currentBrightness,
                 isConnected: isActive,
                 resolution: resolution,
-                externalIndex: idx
+                externalIndex: displayExtIndex
             ))
         }
 
@@ -264,7 +266,12 @@ public class DisplayManager: ObservableObject {
         return names
     }
 
-    private func getDisplayName(for displayID: CGDirectDisplayID, isBuiltIn: Bool) -> String {
+    private func getDisplayName(
+        for displayID: CGDirectDisplayID,
+        isBuiltIn: Bool,
+        externalIndex: Int? = nil,
+        physicalNames: [String] = []
+    ) -> String {
         if isBuiltIn { return "Built-in Retina Display" }
 
         let vendor = CGDisplayVendorNumber(displayID)
@@ -273,51 +280,68 @@ public class DisplayManager: ObservableObject {
             return "Màn hình ảo (HyperMac)"
         }
 
-        // 1. Try Apple Silicon IOKit connection manager first
-        let asNames = getAppleSiliconExternalDisplayNames()
-        if let first = asNames.first, !first.isEmpty {
-            return first
+        // 1. Native AppKit NSScreen lookup (Most accurate for each specific active display)
+        for screen in NSScreen.screens {
+            if let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+               num == displayID {
+                let localized = screen.localizedName
+                if !localized.isEmpty && localized != "Display" {
+                    return localized
+                }
+            }
         }
 
-        // 2. Try classic Intel IODisplayConnect
+        // 2. Cached display name from previous active session
+        if let cached = cachedDisplayNames[displayID], !cached.isEmpty, cached != "External Display" {
+            return cached
+        }
+
+        // 3. Try classic IODisplayConnect (matched by target vendor + model)
         let targetVendor = CGDisplayVendorNumber(displayID)
         let targetModel  = CGDisplayModelNumber(displayID)
 
         var iter = io_iterator_t()
-        guard IOServiceGetMatchingServices(
+        if IOServiceGetMatchingServices(
             kIOMainPortDefault,
             IOServiceMatching("IODisplayConnect"),
             &iter
-        ) == kIOReturnSuccess else {
-            return "External Display"
+        ) == kIOReturnSuccess {
+            defer { IOObjectRelease(iter) }
+            var service = IOIteratorNext(iter)
+            while service != 0 {
+                defer {
+                    IOObjectRelease(service)
+                    service = IOIteratorNext(iter)
+                }
+
+                guard let infoRef = IODisplayCreateInfoDictionary(service, kIODisplayOnlyPreferredName) else {
+                    continue
+                }
+                let info = infoRef.takeRetainedValue() as NSDictionary
+
+                guard let v = info[kDisplayVendorIDKey] as? UInt32,
+                      let m = info[kDisplayProductIDKey] as? UInt32,
+                      v == targetVendor, m == targetModel else {
+                    continue
+                }
+
+                if let names = info[kDisplayProductNameKey] as? [String: String],
+                   let name = names.values.first, !name.isEmpty {
+                    return name
+                }
+            }
         }
-        defer { IOObjectRelease(iter) }
 
-        var service = IOIteratorNext(iter)
-        while service != 0 {
-            defer {
-                IOObjectRelease(service)
-                service = IOIteratorNext(iter)
-            }
-
-            guard let infoRef = IODisplayCreateInfoDictionary(service, kIODisplayOnlyPreferredName) else {
-                continue
-            }
-            let info = infoRef.takeRetainedValue() as NSDictionary
-
-            guard let vendor = info[kDisplayVendorIDKey] as? UInt32,
-                  let model  = info[kDisplayProductIDKey] as? UInt32,
-                  vendor == targetVendor, model == targetModel else {
-                continue
-            }
-
-            if let names = info[kDisplayProductNameKey] as? [String: String],
-               let name = names.values.first, !name.isEmpty {
+        // 4. Fallback to physical external names list matching by specific monitor index
+        if let idx = externalIndex, idx >= 0, idx < physicalNames.count {
+            let name = physicalNames[idx]
+            if !name.isEmpty {
                 return name
             }
         }
 
-        return "External Display"
+        let fallbackNum = (externalIndex ?? 0) + 1
+        return "Màn hình ngoài \(fallbackNum)"
     }
 
     // MARK: - Built-in Brightness via DisplayServices (Apple Silicon Native)

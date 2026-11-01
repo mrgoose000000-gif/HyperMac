@@ -87,6 +87,11 @@ public class ClipboardManager: ObservableObject {
             gIsClipboardEnabled = isMonitoringEnabled
         }
     }
+    @Published public var isDetailsExpanded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDetailsExpanded, forKey: "clipboard_details_expanded")
+        }
+    }
     @Published public var maxItemsCount: Int = 100 {
         didSet {
             UserDefaults.standard.set(maxItemsCount, forKey: "clipboard_max_items")
@@ -151,6 +156,7 @@ public class ClipboardManager: ObservableObject {
         if UserDefaults.standard.object(forKey: "clipboard_ignore_concealed") != nil {
             self.ignoreConcealedTypes = UserDefaults.standard.bool(forKey: "clipboard_ignore_concealed")
         }
+        self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "clipboard_details_expanded")
 
         // Load stored items
         loadItemsFromDisk()

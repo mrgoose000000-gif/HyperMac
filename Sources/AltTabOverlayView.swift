@@ -23,26 +23,26 @@ public struct AltTabOverlayView: View {
         ZStack {
             // Native HUD Glass Background
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color.white.opacity(0.15), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.5), radius: 24, y: 8)
+                .shadow(color: Color.black.opacity(0.5), radius: 28, y: 10)
 
             VStack(spacing: 8) {
                 // 1. Top Minimal Status Header
                 headerBar
 
-                // 2. Center Horizontal Carousel of Window Cards
-                cardsCarousel
+                // 2. Center Multi-Row Grid of Window Cards
+                cardsGrid
 
                 // 3. Bottom Keyboard Hints Bar
                 footerHintsBar
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
-        .frame(height: 225)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Header Bar
@@ -51,28 +51,28 @@ public struct AltTabOverlayView: View {
         HStack(spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "command")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(Color.cyan)
                 Text("HYPERMAC")
-                    .font(.system(size: 10, weight: .heavy, design: .rounded))
+                    .font(.system(size: 10.5, weight: .heavy, design: .rounded))
                     .foregroundStyle(.primary)
             }
 
             if let item = selectedItem {
                 Text("•")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9.5))
                     .foregroundStyle(.secondary.opacity(0.6))
 
                 Text(item.appName)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Color.cyan)
 
                 if item.title != item.appName && !item.title.isEmpty {
                     Text("—")
-                        .font(.system(size: 9))
+                        .font(.system(size: 9.5))
                         .foregroundStyle(.secondary.opacity(0.6))
                     Text(item.title)
-                        .font(.system(size: 9.5, weight: .regular))
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -81,52 +81,83 @@ public struct AltTabOverlayView: View {
 
             Spacer()
 
+            if windowManager.showOnlyCurrentScreenWindows {
+                HStack(spacing: 3.5) {
+                    Image(systemName: "display")
+                        .font(.system(size: 8))
+                    Text("Màn hình này")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(Capsule().fill(Color.secondary.opacity(0.14)))
+                .foregroundStyle(.secondary)
+            }
+
             if !windowManager.windows.isEmpty {
                 Text("\(windowManager.selectedIndex + 1) / \(windowManager.windows.count)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2.5)
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
                     .background(Capsule().fill(Color.cyan.opacity(0.15)))
                     .foregroundStyle(Color.cyan)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
     }
 
-    // MARK: - Cards Carousel (No giant review screen!)
+    // MARK: - Cards Grid (Multi-Row Window Switcher)
 
-    private var cardsCarousel: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(windowManager.windows.enumerated()), id: \.element.id) { index, item in
-                        AltTabWindowTile(
-                            item: item,
-                            index: index,
-                            isSelected: windowManager.selectedIndex == index,
-                            onSelect: {
-                                windowManager.selectedIndex = index
-                                windowManager.commitSelection()
-                            },
-                            onClose: {
-                                windowManager.selectedIndex = index
-                                windowManager.closeSelectedWindow()
+    private var cardsGrid: some View {
+        let (columns, _) = WindowManager.computeGrid(windowCount: windowManager.windows.count)
+        let colCount = max(1, columns)
+        let allItems = Array(windowManager.windows.enumerated())
+        let rows = stride(from: 0, to: allItems.count, by: colCount).map {
+            Array(allItems[$0..<min($0 + colCount, allItems.count)])
+        }
+
+        return ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 12) {
+                    ForEach(0..<rows.count, id: \.self) { rowIndex in
+                        HStack(spacing: 12) {
+                            ForEach(rows[rowIndex], id: \.element.id) { index, item in
+                                AltTabWindowTile(
+                                    item: item,
+                                    index: index,
+                                    isSelected: windowManager.selectedIndex == index,
+                                    onSelect: {
+                                        windowManager.selectedIndex = index
+                                        windowManager.commitSelection()
+                                    },
+                                    onClose: {
+                                        windowManager.selectedIndex = index
+                                        windowManager.closeSelectedWindow()
+                                    }
+                                )
+                                .id(index)
                             }
-                        )
-                        .id(index)
+
+                            // Keep grid columns flush to the left on ragged last rows
+                            if rows[rowIndex].count < colCount {
+                                ForEach(0..<(colCount - rows[rowIndex].count), id: \.self) { _ in
+                                    Color.clear
+                                        .frame(width: 260, height: 188)
+                                }
+                            }
+                        }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 18)
                 .padding(.vertical, 4)
             }
             .onChange(of: windowManager.selectedIndex) {
-                withAnimation(.easeOut(duration: 0.15)) {
+                withAnimation(.easeOut(duration: 0.12)) {
                     proxy.scrollTo(windowManager.selectedIndex, anchor: .center)
                 }
             }
         }
-        .frame(height: 145)
     }
 
     // MARK: - Footer Hints Bar
@@ -134,7 +165,7 @@ public struct AltTabOverlayView: View {
     private var footerHintsBar: some View {
         HStack(spacing: 12) {
             HintChip(icon: "command", text: "⌘⇥ / ⇧⇥ Di chuyển")
-            HintChip(icon: "arrow.left.arrow.right", text: "~ Đảo chiều")
+            HintChip(icon: "arrow.up.and.down.and.arrow.left.and.right", text: "↑↓←→ Lưới hàng")
             HintChip(icon: "xmark.circle", text: "W Đóng")
             HintChip(icon: "power", text: "Q Thoát app")
             HintChip(icon: "escape", text: "⎋ Hủy")
@@ -158,13 +189,13 @@ struct AltTabWindowTile: View {
         Button(action: onSelect) {
             ZStack {
                 // Background Tile
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Color.cyan.opacity(0.16) : Color.black.opacity(0.35))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? Color.cyan.opacity(0.18) : Color.black.opacity(0.40))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(
-                                isSelected ? Color.cyan : Color.white.opacity(0.08),
-                                lineWidth: isSelected ? 2 : 1
+                                isSelected ? Color.cyan : Color.white.opacity(0.10),
+                                lineWidth: isSelected ? 2.5 : 1
                             )
                     )
 
@@ -179,31 +210,29 @@ struct AltTabWindowTile: View {
                     tileBottomLabel
                 }
             }
-            .frame(width: 185, height: 135)
-            .shadow(color: isSelected ? Color.cyan.opacity(0.35) : Color.clear, radius: 8, y: 2)
-            .scaleEffect(isSelected ? 1.04 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isSelected)
+            .frame(width: 260, height: 188)
+            .shadow(color: isSelected ? Color.cyan.opacity(0.40) : Color.clear, radius: 8, y: 2)
         }
         .buttonStyle(.plain)
     }
 
     private var tileTopBar: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             if item.isMinimized {
                 HStack(spacing: 3) {
-                    Circle().fill(Color.orange).frame(width: 5, height: 5)
+                    Circle().fill(Color.orange).frame(width: 5.5, height: 5.5)
                     Text("Thu nhỏ")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 7.5, weight: .bold))
                         .foregroundStyle(Color.orange)
                 }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1.5)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
                 .background(Capsule().fill(Color.orange.opacity(0.18)))
             } else {
-                HStack(spacing: 3.5) {
-                    Circle().fill(Color.red.opacity(0.75)).frame(width: 5, height: 5)
-                    Circle().fill(Color.yellow.opacity(0.75)).frame(width: 5, height: 5)
-                    Circle().fill(Color.green.opacity(0.75)).frame(width: 5, height: 5)
+                HStack(spacing: 4) {
+                    Circle().fill(Color.red.opacity(0.75)).frame(width: 5.5, height: 5.5)
+                    Circle().fill(Color.yellow.opacity(0.75)).frame(width: 5.5, height: 5.5)
+                    Circle().fill(Color.green.opacity(0.75)).frame(width: 5.5, height: 5.5)
                 }
             }
 
@@ -211,16 +240,16 @@ struct AltTabWindowTile: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 7.5, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Color.secondary.opacity(0.8))
-                    .frame(width: 15, height: 15)
+                    .frame(width: 17, height: 17)
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
             .buttonStyle(.plain)
             .help("Đóng cửa sổ (W)")
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
     }
 
     private var tileCenterContent: some View {
@@ -230,11 +259,11 @@ struct AltTabWindowTile: View {
                 Image(nsImage: thumb)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 170, maxHeight: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(maxWidth: 242, maxHeight: 114)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
 
                 // Corner App Icon Badge
@@ -245,53 +274,53 @@ struct AltTabWindowTile: View {
                             .resizable()
                             .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 18, height: 18)
-                            .background(Circle().fill(Color.black.opacity(0.7)))
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(Color.black.opacity(0.75)))
                             .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-                            .padding(4)
+                            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                            .padding(6)
                         Spacer()
                     }
                 }
             } else {
                 // Clean Genuine AltTab App Icon Mode (No bogus wallpaper!)
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     Image(nsImage: item.icon)
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 48, height: 48)
-                        .shadow(color: Color.black.opacity(0.3), radius: 4, y: 2)
+                        .frame(width: 64, height: 64)
+                        .shadow(color: Color.black.opacity(0.3), radius: 5, y: 2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: 76)
-        .padding(.horizontal, 6)
+        .frame(height: 118)
+        .padding(.horizontal, 8)
     }
 
     private var tileBottomLabel: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 1.5) {
             // Clean single title: If title equals app name, show app name only!
             let hasDistinctTitle = (item.title != item.appName) && !item.title.isEmpty
 
             Text(hasDistinctTitle ? item.title : item.appName)
-                .font(.system(size: 8.5, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(isSelected ? Color.cyan : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             if hasDistinctTitle {
                 Text(item.appName)
-                    .font(.system(size: 7.5, weight: .medium))
+                    .font(.system(size: 8.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 6)
-        .padding(.top, 3)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .padding(.bottom, 7)
     }
 }
 
@@ -304,10 +333,10 @@ struct HintChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 8.5))
+                .font(.system(size: 9))
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
         }
     }

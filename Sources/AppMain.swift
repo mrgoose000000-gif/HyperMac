@@ -68,8 +68,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Start Global Key Interceptor (F1/F2, AltTab, Snapping, Clipboard)
         KeyInterceptor.shared.start()
 
-        // Eagerly initialize Clipboard Manager
+        // Eagerly initialize Clipboard Manager & Finder Cut/Paste Manager
         _ = ClipboardManager.shared
+        _ = FinderCutPasteManager.shared
 
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
@@ -101,13 +102,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             .frame(width: 380, height: 570)
 
         if let out = ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_OUT"], !out.isEmpty {
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            if let image = renderer.nsImage,
-               let tiff = image.tiffRepresentation,
-               let rep = NSBitmapImageRep(data: tiff),
-               let png = rep.representation(using: .png, properties: [:]) {
-                try? png.write(to: URL(fileURLWithPath: out))
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 380, height: 600),
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            let hosting = NSHostingView(rootView: view)
+            hosting.frame = NSRect(x: 0, y: 0, width: 380, height: 600)
+            window.contentView = hosting
+            window.layoutIfNeeded()
+
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+
+            if let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+                hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+                if let png = bitmap.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: out))
+                }
             }
             NSApp.terminate(nil)
             return
