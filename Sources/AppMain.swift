@@ -68,9 +68,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Start Global Key Interceptor (F1/F2, AltTab, Snapping, Clipboard)
         KeyInterceptor.shared.start()
 
-        // Eagerly initialize Clipboard Manager & Finder Cut/Paste Manager
+        // Eagerly initialize Managers
         _ = ClipboardManager.shared
         _ = FinderCutPasteManager.shared
+        _ = SystemCleanerManager.shared
 
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
@@ -98,6 +99,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let tab = Int(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_TAB"] ?? "") ?? 1
         DisplayManager.shared.selectedMainTab = tab
 
+        if let subTabStr = ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_SUBTAB"], let subTab = Int(subTabStr) {
+            SystemCleanerManager.shared.selectedSection = subTab
+            if subTab == 0 {
+                SystemCleanerManager.shared.scanJunk()
+            } else if subTab == 1 {
+                SystemCleanerManager.shared.scanInstalledApps()
+                if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_INSPECT_APP"] == "1" {
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+                    if let app = SystemCleanerManager.shared.installedApps.first(where: { $0.bundleID == "com.google.Chrome" }) ?? SystemCleanerManager.shared.installedApps.first {
+                        SystemCleanerManager.shared.inspectAppLeftovers(for: app)
+                    }
+                }
+            } else if subTab == 2 {
+                SystemCleanerManager.shared.scanLargeFiles()
+            }
+        } else {
+            SystemCleanerManager.shared.scanJunk()
+        }
+
+        let waitSec = Double(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_WAIT"] ?? "") ?? 0.25
+
         let view = MainView(displayManager: DisplayManager.shared)
             .frame(width: 380, height: 570)
 
@@ -113,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             window.contentView = hosting
             window.layoutIfNeeded()
 
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            RunLoop.main.run(until: Date().addingTimeInterval(waitSec))
 
             if let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
                 hosting.cacheDisplay(in: hosting.bounds, to: bitmap)

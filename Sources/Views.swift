@@ -15,6 +15,7 @@ public struct MainView: View {
     @ObservedObject var virtualDisplayManager: VirtualDisplayManager = VirtualDisplayManager.shared
     @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
     @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
+    @ObservedObject var cleanerManager: SystemCleanerManager = SystemCleanerManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -66,6 +67,8 @@ public struct MainView: View {
                             launchAtLoginManager: launchAtLoginManager,
                             finderCutPasteManager: finderCutPasteManager
                         )
+                    case 3:
+                        CleanerTabView(cleanerManager: cleanerManager)
                     default:
                         DisplaysTabView(
                             displayManager: displayManager,
@@ -271,14 +274,15 @@ struct TopTabBar: View {
     @Binding var selectedTab: Int
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             tabButton(index: 0, title: "Màn hình", icon: "display")
-            tabButton(index: 1, title: "Pin & Phần cứng", icon: "shield.checkered")
-            tabButton(index: 2, title: "Phím tắt & Cửa sổ", icon: "keyboard")
+            tabButton(index: 1, title: "Phần cứng", icon: "bolt.batteryblock")
+            tabButton(index: 2, title: "Phím tắt", icon: "keyboard")
+            tabButton(index: 3, title: "Dọn dẹp", icon: "sparkles")
         }
         .padding(3)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.bottom, 6)
     }
 
@@ -286,11 +290,12 @@ struct TopTabBar: View {
         Button {
             selectedTab = index
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.system(size: 8.5, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 9.5, weight: selectedTab == index ? .bold : .medium))
+                    .font(.system(size: 8.5, weight: selectedTab == index ? .bold : .medium))
+                    .lineLimit(1)
             }
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity)

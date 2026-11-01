@@ -1,14 +1,14 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon & Intel)
 
-[![Version](https://img.shields.io/badge/version-v1.7.0-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.8.0-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Universal%202%20(Apple%20Silicon%20%26%20Intel)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
-> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành cho máy Mac (cả chip Apple Silicon M-series lẫn chip Intel). Ứng dụng gom trọn tính năng của **7 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
+> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành cho máy Mac (cả chip Apple Silicon M-series lẫn chip Intel). Ứng dụng gom trọn tính năng của **8 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
-> **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
+> **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
 
 ---
 
@@ -17,7 +17,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.7.0)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.0)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -143,6 +143,23 @@ Bảo vệ phần cứng tối đa, đặc biệt phù hợp cho các dòng MacB
 
 ---
 
+### 🧹 9. Dọn Dẹp Rác Hệ Thống & Gỡ Cài Đặt Ứng Dụng (Thay thế CleanMyMac & AppCleaner)
+Tích hợp trực tiếp tại tab **Dọn dẹp** trên thanh điều khiển của HyperMac, chia thành 3 phân vùng chuyên sâu:
+* **✨ Dọn rác hệ thống (System Junk Cleaner):**
+  * Tự động quét song song đa luồng toàn bộ Bộ nhớ đệm (`~/Library/Caches`), Nhật ký lỗi (`~/Library/Logs`), Thùng rác (`~/.Trash`), và Dữ liệu rác Xcode (`DerivedData`).
+  * Sử dụng giải thuật C-level `du` đo đếm dung lượng siêu tốc, giải phóng hàng chục GB dung lượng SSD chỉ trong vài giây.
+  * Tích hợp dọn sạch Thùng rác qua cầu nối Finder AppleScript chuẩn xác, an toàn, không lo bị chặn quyền macOS.
+* **📦 Gỡ bỏ ứng dụng tận gốc (Smart App Uninstaller):**
+  * Liệt kê toàn bộ ứng dụng cài đặt trong `/Applications` sắp xếp theo dung lượng thực tế.
+  * Tự động truy quét và bóc tách mọi tệp tàn dư (*leftovers*) rải rác trong `Application Support` (kể cả thư mục lồng sâu 2 cấp của Google, Microsoft, Adobe...), `Caches`, `Preferences`, `Saved Application State`, `Containers`, `Group Containers`, `WebKit Data`, `HTTPStorages`.
+  * Cơ chế Thùng rác an toàn: Chuyển toàn bộ ứng dụng và tệp rác vào Thùng rác (`~/.Trash`) thay vì xóa vĩnh viễn (`rm -rf`), người dùng có thể khôi phục lại bất kỳ lúc nào nếu đổi ý.
+  * Tự động Fallback Finder: Nếu ứng dụng thuộc quyền sở hữu quản trị `root:wheel` (như OneDrive, Microsoft Office), app tự động ủy quyền qua Finder để gỡ bỏ thành công mà không báo lỗi.
+* **📂 Dò tìm tệp lớn & tệp cũ (Large Files Finder):**
+  * Tùy chọn lọc kích thước: `≥ 100MB`, `≥ 200MB`, `≥ 500MB`, `≥ 1GB` trong các thư mục dung lượng lớn (`Downloads`, `Movies`, `Documents`).
+  * Xem nhanh vị trí tệp trong Finder hoặc dọn ngay vào Thùng rác với một chạm.
+
+---
+
 ## ❓ CÂU HỎI THƯỜNG GẶP (FAQ)
 
 <details>
@@ -203,6 +220,14 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.8.0] — 2026-11-02
+- **🧹 Tích hợp mô-đun Dọn dẹp & Gỡ ứng dụng (CleanMyMac & AppCleaner Replacement):**
+  - Bổ sung tab thứ 4 **Dọn dẹp** trên thanh Menu Bar của HyperMac, chia làm 3 phân vùng chuyên sâu.
+  - **✨ Dọn rác hệ thống (System Junk Cleaner):** Quét song song đa luồng toàn bộ Caches, Logs, Trash và Xcode DerivedData. Dọn dẹp sạch sẽ hàng chục GB dung lượng an toàn với thuật toán C-level `du`. Tích hợp làm sạch Thùng rác qua cầu nối Finder AppleScript không cần quyền Full Disk Access.
+  - **📦 Gỡ bỏ ứng dụng tận gốc (Smart App Uninstaller):** Tự động phát hiện và bóc tách toàn bộ tệp tàn dư (*leftovers*) trong `Application Support` (kể cả thư mục lồng sâu 2 cấp của Google, Microsoft, Adobe...), `Caches`, `Preferences`, `Saved Application State`, `Containers`, `Group Containers`, `WebKit Data`, `HTTPStorages`.
+  - **🛡️ Cơ chế Thùng rác an toàn & Fallback Finder:** Toàn bộ ứng dụng và tệp gỡ bỏ được đưa vào `~/.Trash` (thay vì xóa vĩnh viễn), có thể khôi phục lại dễ dàng. Tự động chuyển giao quyền qua Finder khi gỡ ứng dụng thuộc quyền sở hữu quản trị `root:wheel` (như OneDrive, MS Office).
+  - **📂 Dò tìm tệp lớn & cũ (Large & Old Files Finder):** Lọc nhanh tệp `≥ 100MB`, `≥ 200MB`, `≥ 500MB`, `≥ 1GB` trong Downloads, Movies, Documents. Mở nhanh trong Finder hoặc đưa vào Thùng rác 1-chạm.
 
 ### [v1.7.0] — 2026-11-01
 - **✂️ Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V - Windows Style):**
