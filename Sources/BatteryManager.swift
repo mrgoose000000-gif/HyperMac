@@ -39,12 +39,9 @@ public class BatteryManager: ObservableObject {
     @Published public var gasGaugeChip: String = ""
 
     // User Settings (Stored in UserDefaults)
-    @Published public var isProtectionEnabled: Bool = true {
+    @Published public var isProtectionEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(isProtectionEnabled, forKey: "battery_protection_enabled")
-            if isProtectionEnabled && !isHelperInstalled && !isInstallingHelper {
-                installHelper()
-            }
             evaluatePowerManagement()
         }
     }
@@ -156,7 +153,7 @@ public class BatteryManager: ObservableObject {
         if UserDefaults.standard.object(forKey: "battery_protection_enabled") != nil {
             self.isProtectionEnabled = UserDefaults.standard.bool(forKey: "battery_protection_enabled")
         } else {
-            self.isProtectionEnabled = true
+            self.isProtectionEnabled = false
         }
 
         if UserDefaults.standard.object(forKey: "battery_temp_alert_enabled") != nil {
@@ -718,6 +715,10 @@ public class BatteryManager: ObservableObject {
             let (_, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
             DispatchQueue.main.async {
                 self.isHelperInstalled = (code == 0)
+                if self.isHelperInstalled && self.isProtectionEnabled {
+                    self.checkSMCBypassStatus()
+                    self.evaluatePowerManagement()
+                }
             }
         }
     }
@@ -783,6 +784,7 @@ public class BatteryManager: ObservableObject {
                 self.isInstallingHelper = false
                 self.isHelperInstalled = success
                 if success {
+                    self.isProtectionEnabled = true
                     self.checkSMCBypassStatus()
                     self.evaluatePowerManagement()
                 }

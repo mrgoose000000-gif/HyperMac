@@ -1889,9 +1889,17 @@ struct BatteryCardView: View {
                 Toggle("", isOn: Binding<Bool>(
                     get: { batteryManager.isProtectionEnabled },
                     set: { newVal in
-                        batteryManager.isProtectionEnabled = newVal
-                        if newVal && !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
-                            batteryManager.installHelper()
+                        if newVal {
+                            batteryManager.isProtectionEnabled = true
+                            if !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
+                                batteryManager.installHelper { success in
+                                    if !success {
+                                        batteryManager.isProtectionEnabled = false
+                                    }
+                                }
+                            }
+                        } else {
+                            batteryManager.isProtectionEnabled = false
                         }
                     }
                 ))
