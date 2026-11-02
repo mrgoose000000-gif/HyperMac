@@ -3052,47 +3052,50 @@ struct DonateModalView: View {
                                 Image(nsImage: qrImg)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .frame(maxWidth: 185, maxHeight: 235)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .frame(maxWidth: 205, maxHeight: 255)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(Color.pink.opacity(0.25), lineWidth: 1)
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.pink.opacity(0.3), lineWidth: 1.2)
                                     )
-                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
 
-                                Text("Quét mã VietQR bằng mọi app ngân hàng")
-                                    .font(.system(size: 7.5))
+                                Text("Quét mã bằng mọi app ngân hàng")
+                                    .font(.system(size: 9.5, weight: .medium))
                                     .foregroundStyle(.secondary)
                             }
-                            .padding(.top, 2)
+                            .padding(.top, 1)
                         }
 
                         // Message Box
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.")
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(.primary.opacity(0.9))
+                                .font(.system(size: 10.5))
+                                .lineSpacing(2.5)
+                                .foregroundStyle(.primary.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
 
                             Text("Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.")
-                                .font(.system(size: 8.5, weight: .medium))
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .lineSpacing(2.5)
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
 
                             Text("Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️")
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(.primary.opacity(0.9))
+                                .font(.system(size: 10.5))
+                                .lineSpacing(2.5)
+                                .foregroundStyle(.primary.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(9)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.pink.opacity(0.06))
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.pink.opacity(0.07))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.pink.opacity(0.18), lineWidth: 0.8)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.pink.opacity(0.2), lineWidth: 1)
                         )
 
                         // Facebook Link Button
@@ -3101,11 +3104,11 @@ struct DonateModalView: View {
                                 NSWorkspace.shared.open(url)
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 5) {
                                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .font(.system(size: 9))
-                                Text("Nhắn tin Facebook cho tác giả ↗")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(.system(size: 10))
+                                Text("Nhắn tin qua Facebook cho tác giả ↗")
+                                    .font(.system(size: 10, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -3116,7 +3119,7 @@ struct DonateModalView: View {
                     }
                     .padding(.horizontal, 2)
                 }
-                .frame(maxHeight: 460)
+                .frame(maxHeight: 515)
             }
             .padding(12)
             .background(
