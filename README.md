@@ -5,6 +5,7 @@
 [![Architecture](https://img.shields.io/badge/architecture-Universal%202%20(Apple%20Silicon%20%26%20Intel)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![Donate](https://img.shields.io/badge/❤️_Donate-Ủng_hộ-ff69b4.svg)](#-ủng-hộ-phát-triển-donate)
 
 > 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành cho máy Mac (cả chip Apple Silicon M-series lẫn chip Intel). Ứng dụng gom trọn tính năng của **8 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
@@ -222,6 +223,10 @@ chmod +x build.sh
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
 ### [v1.8.1] — 2026-11-02
+- **❤️ Tích hợp nút Donate ủng hộ tác giả:**
+  - Bổ sung nút **❤️ Donate** ở thanh điều hướng dưới chân popover, mở modal quét mã QR ngân hàng tiện lợi với thông điệp tri ân người dùng.
+- **📋 Tối ưu phím tắt mở Clipboard HUD:**
+  - Chuẩn hóa dùng duy nhất tổ hợp phím **`⌘ + ⇧ + C`** để mở bảng lịch sử Clipboard, giải phóng hoàn toàn tổ hợp `⌘ + ⇧ + V` cho các tác vụ *Paste and Match Style* mặc định của macOS và ứng dụng khác.
 - **🪟 Chuẩn hóa tính năng Căn giữa cửa sổ (Center Window - Rectangle Standard):**
   - Giữ nguyên 100% kích thước (width x height) ban đầu của cửa sổ khi căn giữa, không tự ý thu nhỏ cửa sổ về kích thước mặc định như trước.
   - Khắc phục triệt để hiện tượng cửa sổ bị co cụm lại "nhỏ xíu" ở giữa màn hình khi dùng màn hình ngoài độ phân giải cao hoặc đa màn hình trên Mac mini.
@@ -299,6 +304,29 @@ chmod +x build.sh
   - Thêm mục **Tự động xoá** theo tuổi: Không / 7 / 30 / 90 ngày.
   - Thêm nút **Dọn ngay** và **Xoá tất cả** (giữ mục đã ghim).
 - **Phím tắt Clipboard hoạt động chuẩn xác:** `1–9` dán nhanh, `↑/↓` di chuyển, `↵` dán mục đang chọn, `⌥P` ghim, `⌥⌫` xoá.
+
+---
+
+## 💖 Ủng Hộ Phát Triển (Donate)
+
+HyperMac là dự án phần mềm mã nguồn mở hoàn toàn **miễn phí** và phi lợi nhuận. Nếu HyperMac giúp ích cho công việc và trải nghiệm sử dụng máy Mac hàng ngày của bạn, việc gửi tặng tác giả một ly cà phê là nguồn động viên vô cùng to lớn để mình tiếp tục duy trì và nâng cấp phần mềm! ☕✨
+
+<div align="center">
+
+<img src="Resources/donate_qr.jpg" alt="Mã QR Donate HyperMac" width="260" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);" />
+
+<br/>
+
+**Nguyễn Khắc Đại**  
+*Quét mã bằng mọi ứng dụng ngân hàng / ví điện tử*
+
+> *"Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.*  
+> *Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.*  
+> *Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️"*
+
+[![Nhắn tin Facebook cho tác giả](https://img.shields.io/badge/💬_Nhắn_tin_qua_Facebook_cho_tác_giả-1877F2?style=for-the-badge&logo=facebook&logoColor=white)](https://bit.ly/4ectK8U)
+
+</div>
 
 ---
 
