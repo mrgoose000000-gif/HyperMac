@@ -212,7 +212,7 @@ public class WindowSnapManager: ObservableObject {
 
     // MARK: - Snap Action Calculation
 
-    public func calculateSnapRect(action: SnapAction, visible: CGRect) -> CGRect {
+    public func calculateSnapRect(action: SnapAction, visible: CGRect, currentWindowRect: CGRect? = nil) -> CGRect {
         switch action {
         case .leftHalf:
             let halfW = floor(visible.width / 2.0)
@@ -236,8 +236,16 @@ public class WindowSnapManager: ObservableObject {
             return visible
 
         case .center:
-            let w = min(floor(visible.width * 0.78), 1200)
-            let h = min(floor(visible.height * 0.82), 850)
+            // Rectangle standard: Preserve window size, center on target display
+            var w: CGFloat
+            var h: CGFloat
+            if let cur = currentWindowRect, cur.width > 50, cur.height > 50 {
+                w = min(cur.width, visible.width)
+                h = min(cur.height, visible.height)
+            } else {
+                w = min(floor(visible.width * 0.78), 1200)
+                h = min(floor(visible.height * 0.82), 850)
+            }
             return CGRect(
                 x: visible.origin.x + (visible.width - w) / 2.0,
                 y: visible.origin.y + (visible.height - h) / 2.0,
@@ -316,7 +324,7 @@ public class WindowSnapManager: ObservableObject {
         let screen = screenContaining(windowRect: windowRect, in: screens)
         let visible = Self.axVisibleFrame(for: screen)
 
-        let newFrame = calculateSnapRect(action: action, visible: visible)
+        let newFrame = calculateSnapRect(action: action, visible: visible, currentWindowRect: windowRect)
         applyFrame(to: target.element, rect: newFrame)
     }
 

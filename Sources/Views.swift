@@ -1194,7 +1194,7 @@ struct ShortcutsTabView: View {
                             }
                             HStack(spacing: 6) {
                                 shortcutPill(key: "⌃⌥↩", desc: "Toàn màn hình")
-                                shortcutPill(key: "⌃⌥⌫", desc: "Căn giữa")
+                                shortcutPill(key: "⌃⌥C / ⌃⌥⌫", desc: "Căn giữa")
                                 shortcutPill(key: "⌃⌥←↑/U", desc: "4 góc")
                                 Spacer()
                             }

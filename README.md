@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon & Intel)
 
-[![Version](https://img.shields.io/badge/version-v1.8.0-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.8.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Universal%202%20(Apple%20Silicon%20%26%20Intel)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -17,7 +17,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.0)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.1)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -220,6 +220,15 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.8.1] — 2026-11-02
+- **🪟 Chuẩn hóa tính năng Căn giữa cửa sổ (Center Window - Rectangle Standard):**
+  - Giữ nguyên 100% kích thước (width x height) ban đầu của cửa sổ khi căn giữa, không tự ý thu nhỏ cửa sổ về kích thước mặc định như trước.
+  - Khắc phục triệt để hiện tượng cửa sổ bị co cụm lại "nhỏ xíu" ở giữa màn hình khi dùng màn hình ngoài độ phân giải cao hoặc đa màn hình trên Mac mini.
+  - Hỗ trợ thêm tổ hợp phím tắt chuẩn `⌃⌥C` (bên cạnh `⌃⌥⌫ / ⌃⌥Delete`) để căn giữa nhanh 1-chạm.
+- **⚡ Tối ưu hóa đo lường nguồn điện & khởi động:**
+  - Sửa lỗi hiển thị nhầm "Nguồn AC trực tiếp" và công suất củ sạc khi đang dùng pin cắm màn hình ngoài.
+  - Loại bỏ hoàn toàn hộp thoại hỏi mật khẩu quản trị ngoài ý muốn khi mở app.
 
 ### [v1.8.0] — 2026-11-02
 - **🛡️ Trung tâm Cấp quyền phần mềm (Permissions Hub):**

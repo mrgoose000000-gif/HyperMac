@@ -401,8 +401,8 @@ private func eventTapCallback(
                 return nil
             }
 
-            // 2. Delete / Forward Delete -> Center
-            if keycode == 51 || keycode == 117 {
+            // 2. C (Keycode 8) or Delete / Forward Delete -> Center
+            if keycode == 8 || keycode == 51 || keycode == 117 {
                 gLastSnapArrowKey = 0
                 DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.center) }
                 return nil
