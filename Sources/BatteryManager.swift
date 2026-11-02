@@ -347,6 +347,11 @@ public class BatteryManager: ObservableObject {
         self.isFullyCharged = dict["FullyCharged"] as? Bool ?? false
         self.timeRemaining = dict["TimeRemaining"] as? Int ?? 0
 
+        // If not physically plugged in, bypass cannot be active
+        if !self.isPluggedIn {
+            self.isBypassActive = false
+        }
+
         if let rawTemp = dict["Temperature"] as? Double {
             self.temperature = rawTemp / 100.0
         } else if let rawTempInt = dict["Temperature"] as? Int {
@@ -367,15 +372,23 @@ public class BatteryManager: ObservableObject {
         // Live Wattage = Voltage (V) * abs(Amperage (A))
         self.wattage = (self.voltage * Double(abs(self.amperage))) / 1000.0
 
-        // Parse Adapter details
-        if let adapter = dict["AdapterDetails"] as? [String: Any] {
-            self.adapterWatts = adapter["Watts"] as? Int ?? self.adapterWatts
-            self.adapterDescription = adapter["Description"] as? String ?? self.adapterDescription
-            self.adapterSerial = adapter["SerialString"] as? String ?? self.adapterSerial
-        } else if let adapterList = dict["AppleRawAdapterDetails"] as? [[String: Any]], let first = adapterList.first {
-            self.adapterWatts = first["Watts"] as? Int ?? self.adapterWatts
-            self.adapterDescription = first["Description"] as? String ?? self.adapterDescription
-            self.adapterSerial = first["SerialString"] as? String ?? self.adapterSerial
+        // Parse Adapter details (only valid when plugged in)
+        if self.isPluggedIn {
+            if let adapter = dict["AdapterDetails"] as? [String: Any], let w = adapter["Watts"] as? Int, w > 0 {
+                self.adapterWatts = w
+                self.adapterDescription = adapter["Description"] as? String ?? "USB-C PD"
+                self.adapterSerial = adapter["SerialString"] as? String ?? ""
+            } else if let adapterList = dict["AppleRawAdapterDetails"] as? [[String: Any]],
+                      let first = adapterList.first,
+                      let w = first["Watts"] as? Int, w > 0 {
+                self.adapterWatts = w
+                self.adapterDescription = first["Description"] as? String ?? "USB-C PD"
+                self.adapterSerial = first["SerialString"] as? String ?? ""
+            }
+        } else {
+            self.adapterWatts = 0
+            self.adapterDescription = ""
+            self.adapterSerial = ""
         }
 
         self.batterySerial = dict["Serial"] as? String ?? self.batterySerial
@@ -489,7 +502,9 @@ public class BatteryManager: ObservableObject {
                                      out.contains("01 00 00 00") ||
                                      out.contains("1 (bytes 01 00 00 00)") ||
                                      out.contains("(bytes 02)")
-                    self.isBypassActive = isBypassed
+                    self.isBypassActive = isBypassed && self.isPluggedIn
+                } else {
+                    self.isBypassActive = false
                 }
             }
         }
@@ -558,6 +573,7 @@ public class BatteryManager: ObservableObject {
 
         // 2. Normal power state
         if !isPluggedIn {
+            self.isBypassActive = false
             statusMessage = "Đang dùng pin (\(currentLevel)%)"
             return
         }
@@ -605,7 +621,7 @@ public class BatteryManager: ObservableObject {
             let (out, code) = shell(cmd)
             DispatchQueue.main.async {
                 if code == 0 {
-                    self.isBypassActive = inhibit
+                    self.isBypassActive = inhibit && self.isPluggedIn
                 } else {
                     appLog("⚠️ setChargingInhibited(\(inhibit)) failed with code \(code): \(out)")
                 }

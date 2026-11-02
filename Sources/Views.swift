@@ -246,19 +246,19 @@ struct ModernHeaderBar: View {
     }
 
     private var statusColor: Color {
-        if batteryManager.isBypassActive {
+        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return .cyan
         } else if batteryManager.isCharging {
             return .green
         } else if batteryManager.isPluggedIn {
             return .orange
         } else {
-            return .secondary
+            return batteryManager.currentLevel <= 20 ? .red : .secondary
         }
     }
 
     private var statusText: String {
-        if batteryManager.isBypassActive {
+        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return "🛡️ \(batteryManager.chargeLimit)% Bypass"
         } else if batteryManager.isCharging {
             return "⚡️ Đang sạc"
@@ -1645,7 +1645,7 @@ struct BatteryCardView: View {
                     Spacer()
 
                     // Live Wattage
-                    if batteryManager.isBypassActive {
+                    if batteryManager.isBypassActive && batteryManager.isPluggedIn {
                         Text("🛡️ 0.0W (Nguồn AC trực tiếp)")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.cyan)
@@ -1680,7 +1680,7 @@ struct BatteryCardView: View {
                         RoundedRectangle(cornerRadius: 5)
                             .fill(
                                 LinearGradient(
-                                    colors: batteryManager.isBypassActive
+                                    colors: (batteryManager.isBypassActive && batteryManager.isPluggedIn)
                                         ? [Color.cyan, Color.blue]
                                         : [Color.green, Color.mint],
                                     startPoint: .leading,
@@ -1741,11 +1741,11 @@ struct BatteryCardView: View {
                 .help("Bấm để mở kiểm soát nhiệt độ & quạt")
 
                 metricChip(
-                    icon: "bolt.fill",
-                    iconColor: .yellow,
+                    icon: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "bolt.fill" : "battery.100",
+                    iconColor: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? .yellow : .green,
                     title: "Củ sạc",
-                    val: batteryManager.adapterWatts > 0 ? "\(batteryManager.adapterWatts)W" : "Dùng Pin",
-                    sub: batteryManager.adapterWatts > 0 ? "USB-C PD" : "bq40z651"
+                    val: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "\(batteryManager.adapterWatts)W" : "Dùng Pin",
+                    sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? "USB-C PD" : batteryManager.adapterDescription) : "Không cắm sạc"
                 )
             }
 
@@ -1795,7 +1795,7 @@ struct BatteryCardView: View {
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(batteryManager.isBypassActive ? Color.cyan.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: 1)
+                        .stroke((batteryManager.isBypassActive && batteryManager.isPluggedIn) ? Color.cyan.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: 1)
                 )
         )
     }
