@@ -330,9 +330,9 @@ private func eventTapCallback(
             }
         }
 
-        // Command + Shift + C (or Cmd + Shift + V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
+        // Command + Shift + C -> Toggle Clipboard Manager HUD (Maccy Replacement)
         let isCmdShift = flags.contains(.maskCommand) && flags.contains(.maskShift) && !flags.contains(.maskControl)
-        if gIsClipboardEnabled && isCmdShift && (keycode == 8 || keycode == 9) {
+        if gIsClipboardEnabled && isCmdShift && keycode == 8 {
             DispatchQueue.main.async {
                 ClipboardManager.shared.toggleHUD()
             }
