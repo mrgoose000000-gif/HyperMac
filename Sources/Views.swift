@@ -17,6 +17,7 @@ public struct MainView: View {
     @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
     @ObservedObject var cleanerManager: SystemCleanerManager = SystemCleanerManager.shared
     @ObservedObject var permissionsManager: PermissionsManager = PermissionsManager.shared
+    @ObservedObject var languageManager: LanguageManager = LanguageManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -86,6 +87,7 @@ public struct MainView: View {
                 // Minimal Footer
                 FooterView(updateManager: updateManager)
             }
+            .id(languageManager.currentLanguage)
 
             // Update Modal Overlay
             if updateManager.showUpdateModal {
@@ -106,9 +108,9 @@ public struct MainView: View {
             set: { displayManager.showAlert = $0 }
         )) {
             Alert(
-                title: Text("Thông báo"),
+                title: Text(tr("Thông báo", "Notice")),
                 message: Text(displayManager.alertMessage ?? ""),
-                dismissButton: .default(Text("Đã hiểu"))
+                dismissButton: .default(Text(tr("Đã hiểu", "OK")))
             )
         }
     }
@@ -121,6 +123,7 @@ struct ModernHeaderBar: View {
     @ObservedObject var caffeinateManager: CaffeinateManager
     @ObservedObject var updateManager: UpdateManager
     @ObservedObject var thermalManager: ThermalManager = ThermalManager.shared
+    @ObservedObject var languageManager: LanguageManager = LanguageManager.shared
     var onSelectThermal: (() -> Void)? = nil
 
     var body: some View {
@@ -165,7 +168,26 @@ struct ModernHeaderBar: View {
                     .foregroundStyle(updateManager.hasNewUpdate ? Color.green : Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .help(updateManager.hasNewUpdate ? "Đã có bản mới! Bấm để cập nhật" : "Kiểm tra bản cập nhật mới")
+                .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra bản cập nhật mới", "Check for updates"))
+
+                // Language Switcher Badge (vi / en) — Directly to the right of version badge
+                Button {
+                    languageManager.promptLanguageSwitch()
+                } label: {
+                    Text(languageManager.currentLanguage == .vi ? "vi" : "en")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(Color.primary.opacity(0.08))
+                        )
+                }
+                .buttonStyle(.plain)
+                .fixedSize()
+                .help(languageManager.currentLanguage == .vi ? "Bấm để chuyển sang Tiếng Anh (English)" : "Click to switch to Vietnamese (Tiếng Việt)")
             }
 
             Spacer()
@@ -182,7 +204,7 @@ struct ModernHeaderBar: View {
                 .padding(.vertical, 2.5)
                 .background(Capsule().fill(Color.orange.opacity(0.18)))
                 .foregroundStyle(Color.orange)
-                .help("Chống sleep màn hình đang bật (\(caffeinateManager.remainingFormatted))")
+                .help(tr("Chống sleep màn hình đang bật (\(caffeinateManager.remainingFormatted))", "Keep-awake active (\(caffeinateManager.remainingFormatted))"))
             }
 
             // Live Thermal Chip
@@ -203,7 +225,7 @@ struct ModernHeaderBar: View {
                     .background(Capsule().fill(headerTempColor.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
-                .help("Nhiệt độ CPU hiện tại: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Bấm để mở kiểm soát nhiệt & quạt")
+                .help(tr("Nhiệt độ CPU hiện tại: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Bấm để mở kiểm soát nhiệt & quạt", "Current CPU temp: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Click for thermals & fan controls"))
             }
 
             // Live Status Chip
@@ -233,7 +255,7 @@ struct ModernHeaderBar: View {
                     .background(Circle().fill(Color.primary.opacity(0.05)))
             }
             .buttonStyle(.plain)
-            .help("Thoát HyperMac")
+            .help(tr("Thoát HyperMac", "Quit HyperMac"))
         }
         .padding(.horizontal, 14)
         .padding(.top, 10)
@@ -267,9 +289,9 @@ struct ModernHeaderBar: View {
         if batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return "🛡️ \(batteryManager.chargeLimit)% Bypass"
         } else if batteryManager.isCharging {
-            return "⚡️ Đang sạc"
+            return "⚡️ " + tr("Đang sạc", "Charging")
         } else if batteryManager.isPluggedIn {
-            return "🔌 Cắm điện"
+            return "🔌 " + tr("Cắm điện", "Plugged in")
         } else {
             return "🔋 \(batteryManager.currentLevel)%"
         }
@@ -283,10 +305,10 @@ struct TopTabBar: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            tabButton(index: 0, title: "Màn hình", icon: "display")
-            tabButton(index: 1, title: "Phần cứng", icon: "bolt.batteryblock")
-            tabButton(index: 2, title: "Phím tắt", icon: "keyboard")
-            tabButton(index: 3, title: "Dọn dẹp", icon: "sparkles")
+            tabButton(index: 0, title: tr("Màn hình", "Displays"), icon: "display")
+            tabButton(index: 1, title: tr("Phần cứng", "Hardware"), icon: "bolt.batteryblock")
+            tabButton(index: 2, title: tr("Phím tắt", "Shortcuts"), icon: "keyboard")
+            tabButton(index: 3, title: tr("Dọn dẹp", "Cleaner"), icon: "sparkles")
         }
         .padding(3)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
@@ -329,12 +351,12 @@ struct HardwareCareTabView: View {
             HStack(spacing: 4) {
                 sectionButton(
                     index: 0,
-                    title: "Pin & Nguồn SMC",
+                    title: tr("Pin & Nguồn SMC", "Battery & Power SMC"),
                     icon: "bolt.shield.fill"
                 )
                 sectionButton(
                     index: 1,
-                    title: "Nhiệt độ & Cảm biến",
+                    title: tr("Nhiệt độ & Cảm biến", "Thermals & Sensors"),
                     icon: "thermometer.sun.fill",
                     badge: thermalManager.cpuAvgTemp > 0 ? String(format: "%.0f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp) : nil
                 )
@@ -430,7 +452,7 @@ struct FileTransferSpeedCard: View {
         case let (_, destination?):
             return destination.displayName
         case let (source?, nil):
-            return "Đọc từ \(source.displayName)"
+            return "\(tr("Đọc từ", "Reading from")) \(source.displayName)"
         default:
             return busiestDisk?.displayName
         }
@@ -456,7 +478,7 @@ struct FileTransferSpeedCard: View {
     }
 
     private var tooltip: String {
-        var lines = ["Tổng hợp mọi ổ vật lý đang đọc/ghi"]
+        var lines = [tr("Tổng hợp mọi ổ vật lý đang đọc/ghi", "Aggregated active physical drives read/write")]
         for disk in diskSpeed.disks where disk.isActive {
             lines.append("\(disk.displayName): ↓\(speedText(disk.readMBps)) ↑\(speedText(disk.writeMBps))")
         }
@@ -473,7 +495,7 @@ struct FileTransferSpeedCard: View {
                     .font(.system(size: 9))
                     .foregroundStyle(diskSpeed.isEnabled && isActive ? Color.cyan : Color.secondary)
 
-                Text(diskSpeed.isEnabled ? "Chép file" : "Đo tốc độ chép file")
+                Text(diskSpeed.isEnabled ? tr("Chép file", "File Transfer") : tr("Đo tốc độ chép file", "Transfer Speed"))
                     .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -573,9 +595,9 @@ struct DisplaysTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("F1 / F2 chỉnh màn hình theo con trỏ chuột")
+                            Text(tr("F1 / F2 chỉnh màn hình theo con trỏ chuột", "F1 / F2 controls brightness at mouse cursor"))
                                 .font(.system(size: 10.5, weight: .medium))
-                            Text("Tự nhận diện màn hình trong hoặc ngoài để tăng giảm độ sáng")
+                            Text(tr("Tự nhận diện màn hình trong hoặc ngoài để tăng giảm độ sáng", "Auto-detect built-in or external display to adjust brightness"))
                                 .font(.system(size: 7.5))
                                 .foregroundStyle(.secondary)
                         }
@@ -640,7 +662,7 @@ struct CaffeinateCardView: View {
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     HStack(spacing: 6) {
-                        Text("Chống sleep màn (Caffeinate)")
+                        Text(tr("Chống sleep màn (Caffeinate)", "Keep Screen Awake (Caffeinate)"))
                             .font(.system(size: 11, weight: .semibold))
 
                         if caffeinateManager.isActive {
@@ -658,7 +680,7 @@ struct CaffeinateCardView: View {
                         }
                     }
 
-                    Text("Giữ màn hình luôn sáng như 'caffeinate -d' trong Terminal")
+                    Text(tr("Giữ màn hình luôn sáng như 'caffeinate -d' trong Terminal", "Prevents display sleep, similar to 'caffeinate -d' in Terminal"))
                         .font(.system(size: 8))
                         .foregroundStyle(.secondary)
                 }
@@ -735,7 +757,7 @@ struct VirtualDisplayCardView: View {
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     HStack(spacing: 6) {
-                        Text("Màn hình ảo (Dummy Display)")
+                        Text(tr("Màn hình ảo (Dummy Display)", "Virtual Display (Dummy Display)"))
                             .font(.system(size: 11, weight: .semibold))
 
                         if virtualDisplayManager.isVirtualDisplayActive {
@@ -754,8 +776,8 @@ struct VirtualDisplayCardView: View {
                     }
 
                     Text(virtualDisplayManager.isVirtualDisplayActive
-                         ? "Đang phát ảo · Tăng tốc GPU cho Parsec / TeamViewer"
-                         : "Tạo màn hình ảo cho máy gập, Mac mini headless")
+                         ? tr("Đang phát ảo · Tăng tốc GPU cho Parsec / TeamViewer", "Virtual screen active · GPU accelerated for Parsec / TeamViewer")
+                         : tr("Tạo màn hình ảo cho máy gập, Mac mini headless", "Create dummy display for clamshell mode or headless Mac mini"))
                         .font(.system(size: 8))
                         .foregroundStyle(.secondary)
                 }
@@ -775,7 +797,7 @@ struct VirtualDisplayCardView: View {
                         .background(Circle().fill(Color.primary.opacity(0.04)))
                 }
                 .buttonStyle(.plain)
-                .help(virtualDisplayManager.isCardExpanded ? "Thu gọn tùy chọn" : "Tùy chỉnh độ phân giải, HiDPI, Bảo mật")
+                .help(virtualDisplayManager.isCardExpanded ? tr("Thu gọn tùy chọn", "Collapse options") : tr("Tùy chỉnh độ phân giải, HiDPI, Bảo mật", "Customize resolution, HiDPI, Privacy"))
 
                 Toggle("", isOn: Binding<Bool>(
                     get: { virtualDisplayManager.isVirtualDisplayActive },
@@ -797,7 +819,7 @@ struct VirtualDisplayCardView: View {
 
                     // Resolution Preset Header
                     HStack {
-                        Text("ĐỘ PHÂN GIẢI MÀN HÌNH ẢO")
+                        Text(tr("ĐỘ PHÂN GIẢI MÀN HÌNH ẢO", "VIRTUAL DISPLAY RESOLUTION"))
                             .font(.system(size: 7.5, weight: .bold))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -861,7 +883,7 @@ struct VirtualDisplayCardView: View {
                             .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.04)))
                         }
                         .buttonStyle(.plain)
-                        .help("HiDPI giúp hiển thị văn bản và icon siêu mịn chuẩn Retina")
+                        .help(tr("HiDPI giúp hiển thị văn bản và icon siêu mịn chuẩn Retina", "HiDPI renders razor-sharp Retina text and icons"))
 
                         Spacer()
 
@@ -873,7 +895,7 @@ struct VirtualDisplayCardView: View {
                                 Image(systemName: virtualDisplayManager.isBlackoutPrimaryActive ? "eye.slash.fill" : "eye.slash")
                                     .font(.system(size: 9))
                                     .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.yellow : Color.secondary)
-                                Text(virtualDisplayManager.isBlackoutPrimaryActive ? "Đang tắt màn thật" : "Tắt tối màn thật")
+                                Text(virtualDisplayManager.isBlackoutPrimaryActive ? tr("Đang tắt màn thật", "Primary Screen Off") : tr("Tắt tối màn thật", "Blackout Primary"))
                                     .font(.system(size: 8.5, weight: .medium))
                                     .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.yellow : Color.primary)
                             }
@@ -885,7 +907,7 @@ struct VirtualDisplayCardView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .help("Tắt tối đen màn hình máy thật để chống nhìn trộm khi bạn điều khiển từ xa qua Parsec / TeamViewer")
+                        .help(tr("Tắt tối đen màn hình máy thật để chống nhìn trộm khi bạn điều khiển từ xa qua Parsec / TeamViewer", "Turn primary screen pitch black to prevent shoulder-surfing during remote sessions"))
                     }
                     .padding(.top, 2)
                 }
@@ -925,16 +947,16 @@ struct ShortcutsTabView: View {
                             .font(.system(size: 14))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Cần cấp quyền Trợ năng (Accessibility)")
+                            Text(tr("Cần cấp quyền Trợ năng (Accessibility)", "Accessibility Permission Required"))
                                 .font(.system(size: 10, weight: .bold))
-                            Text("Bật HyperMac trong Cài đặt hệ thống để phím tắt hoạt động.")
+                            Text(tr("Bật HyperMac trong Cài đặt hệ thống để phím tắt hoạt động.", "Enable HyperMac in System Settings to allow shortcut interception."))
                                 .font(.system(size: 8.5))
                                 .foregroundStyle(.secondary)
                         }
 
                         Spacer()
 
-                        Button("Cấp quyền") {
+                        Button(tr("Cấp quyền", "Grant")) {
                             displayManager.requestAccessibility()
                         }
                         .font(.system(size: 9, weight: .semibold))
@@ -951,9 +973,9 @@ struct ShortcutsTabView: View {
                         .foregroundStyle(Color.accentColor)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Khởi động cùng macOS")
+                        Text(tr("Khởi động cùng macOS", "Launch at Login"))
                             .font(.system(size: 10.5, weight: .bold))
-                        Text("Tự động chạy HyperMac ngay khi đăng nhập vào máy Mac")
+                        Text(tr("Tự động chạy HyperMac ngay khi đăng nhập vào máy Mac", "Automatically start HyperMac upon logging in"))
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary)
                     }
@@ -982,9 +1004,9 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V)")
+                            Text(tr("Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V)", "Finder Cut & Paste (⌘X ➔ ⌘V)"))
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text("Cắt và di chuyển tệp như trên Windows (bấm ⌘X để cắt, ⌘V để di chuyển)")
+                            Text(tr("Cắt và di chuyển tệp như trên Windows (bấm ⌘X để cắt, ⌘V để di chuyển)", "Cut & move files Windows-style (press ⌘X to cut, ⌘V to move)"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                         }
@@ -1004,7 +1026,7 @@ struct ShortcutsTabView: View {
                                     .background(Circle().fill(Color.primary.opacity(finderCutPasteManager.isDetailsExpanded ? 0.08 : 0.04)))
                             }
                             .buttonStyle(.plain)
-                            .help(finderCutPasteManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                            .help(finderCutPasteManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết phím tắt", "View shortcut details"))
                         }
 
                         Toggle("", isOn: Binding<Bool>(
@@ -1021,17 +1043,17 @@ struct ShortcutsTabView: View {
 
                         VStack(spacing: 5) {
                             HStack(spacing: 6) {
-                                shortcutPill(key: "⌘ + X", desc: "Cắt tệp / thư mục")
-                                shortcutPill(key: "⌘ + V", desc: "Di chuyển đến đây")
-                                shortcutPill(key: "esc", desc: "Huỷ cắt")
-                                shortcutPill(key: "⌘ + C", desc: "Chuyển sang Copy")
+                                shortcutPill(key: "⌘ + X", desc: tr("Cắt tệp / thư mục", "Cut file / folder"))
+                                shortcutPill(key: "⌘ + V", desc: tr("Di chuyển đến đây", "Move here"))
+                                shortcutPill(key: "esc", desc: tr("Huỷ cắt", "Cancel cut"))
+                                shortcutPill(key: "⌘ + C", desc: tr("Chuyển sang Copy", "Switch to Copy"))
                             }
 
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 8))
                                     .foregroundStyle(.green)
-                                Text("Tự động nhận diện khi đổi tên hoặc tìm kiếm: vẫn cắt văn bản bình thường.")
+                                Text(tr("Tự động nhận diện khi đổi tên hoặc tìm kiếm: vẫn cắt văn bản bình thường.", "Smart context: text cutting remains untouched while renaming or searching."))
                                     .font(.system(size: 7.5))
                                     .foregroundStyle(.secondary)
                                 Spacer()
@@ -1051,9 +1073,9 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Chuyển đổi cửa sổ (Command + Tab)")
+                            Text(tr("Chuyển đổi cửa sổ (Command + Tab)", "Window Switcher (Command + Tab)"))
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text("Thay thế AltTab với live preview độc lập & chuẩn MRU")
+                            Text(tr("Thay thế AltTab với live preview độc lập & chuẩn MRU", "AltTab replacement with live preview & MRU order"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                         }
@@ -1073,7 +1095,7 @@ struct ShortcutsTabView: View {
                                     .background(Circle().fill(Color.primary.opacity(windowManager.isDetailsExpanded ? 0.08 : 0.04)))
                             }
                             .buttonStyle(.plain)
-                            .help(windowManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                            .help(windowManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết phím tắt", "View shortcut details"))
                         }
 
                         Toggle("", isOn: Binding<Bool>(
@@ -1095,9 +1117,9 @@ struct ShortcutsTabView: View {
                                 .foregroundStyle(Color.accentColor)
 
                             VStack(alignment: .leading, spacing: 1) {
-                                Text("Chỉ hiện cửa sổ trên màn hình hiện tại")
+                                Text(tr("Chỉ hiện cửa sổ trên màn hình hiện tại", "Only show windows on current display"))
                                     .font(.system(size: 8.5, weight: .bold))
-                                Text("Lọc riêng các cửa sổ thuộc màn hình con trỏ chuột đang đứng")
+                                Text(tr("Lọc riêng các cửa sổ thuộc màn hình con trỏ chuột đang đứng", "Filter windows belonging to the display where cursor is located"))
                                     .font(.system(size: 7.5))
                                     .foregroundStyle(.secondary)
                             }
@@ -1116,11 +1138,11 @@ struct ShortcutsTabView: View {
 
                         // AltTab Shortcuts Guide
                         HStack(spacing: 6) {
-                            shortcutPill(key: "⌘ + Tab", desc: "Chuyển tiếp")
-                            shortcutPill(key: "⌘ + ~", desc: "Lùi lại")
-                            shortcutPill(key: "↑↓←→", desc: "Duyệt lưới nhiều hàng")
-                            shortcutPill(key: "W", desc: "Đóng")
-                            shortcutPill(key: "Q", desc: "Thoát App")
+                            shortcutPill(key: "⌘ + Tab", desc: tr("Chuyển tiếp", "Forward"))
+                            shortcutPill(key: "⌘ + ~", desc: tr("Lùi lại", "Backward"))
+                            shortcutPill(key: "↑↓←→", desc: tr("Duyệt lưới", "Grid nav"))
+                            shortcutPill(key: "W", desc: tr("Đóng", "Close"))
+                            shortcutPill(key: "Q", desc: tr("Thoát App", "Quit App"))
                         }
 
                         if !windowManager.hasScreenRecording {
@@ -1128,11 +1150,11 @@ struct ShortcutsTabView: View {
                                 Image(systemName: "camera.viewfinder")
                                     .font(.system(size: 9))
                                     .foregroundStyle(.cyan)
-                                Text("Cần quyền Ghi màn hình để hiện ảnh chụp cửa sổ thực tế.")
+                                Text(tr("Cần quyền Ghi màn hình để hiện ảnh chụp cửa sổ thực tế.", "Screen Recording permission needed for actual window snapshots."))
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Button("Cấp quyền") {
+                                Button(tr("Cấp quyền", "Grant")) {
                                     windowManager.requestScreenRecordingPermission()
                                 }
                                 .font(.system(size: 8, weight: .semibold))
@@ -1154,9 +1176,9 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Chia cửa sổ & Đa màn hình (Rectangle)")
+                            Text(tr("Chia cửa sổ & Đa màn hình (Rectangle)", "Window Snapping & Multi-Display (Rectangle)"))
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text("Bố trí cửa sổ nhanh với độ trễ 0ms")
+                            Text(tr("Bố trí cửa sổ nhanh với độ trễ 0ms", "Instant window positioning with 0ms latency"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                         }
@@ -1176,7 +1198,7 @@ struct ShortcutsTabView: View {
                                     .background(Circle().fill(Color.primary.opacity(snapManager.isDetailsExpanded ? 0.08 : 0.04)))
                             }
                             .buttonStyle(.plain)
-                            .help(snapManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết phím tắt")
+                            .help(snapManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết phím tắt", "View shortcut details"))
                         }
 
                         Toggle("", isOn: Binding<Bool>(
@@ -1193,20 +1215,20 @@ struct ShortcutsTabView: View {
 
                         VStack(spacing: 5) {
                             HStack(spacing: 6) {
-                                shortcutPill(key: "⌃⌥←", desc: "Nửa trái")
-                                shortcutPill(key: "⌃⌥→", desc: "Nửa phải")
-                                shortcutPill(key: "⌃⌥↑", desc: "Nửa trên")
-                                shortcutPill(key: "⌃⌥↓", desc: "Nửa dưới")
+                                shortcutPill(key: "⌃⌥←", desc: tr("Nửa trái", "Left Half"))
+                                shortcutPill(key: "⌃⌥→", desc: tr("Nửa phải", "Right Half"))
+                                shortcutPill(key: "⌃⌥↑", desc: tr("Nửa trên", "Top Half"))
+                                shortcutPill(key: "⌃⌥↓", desc: tr("Nửa dưới", "Bottom Half"))
                             }
                             HStack(spacing: 6) {
-                                shortcutPill(key: "⌃⌥↩", desc: "Toàn màn hình")
-                                shortcutPill(key: "⌃⌥C / ⌃⌥⌫", desc: "Căn giữa")
-                                shortcutPill(key: "⌃⌥←↑/U", desc: "4 góc")
+                                shortcutPill(key: "⌃⌥↩", desc: tr("Toàn màn hình", "Maximize"))
+                                shortcutPill(key: "⌃⌥C / ⌃⌥⌫", desc: tr("Căn giữa", "Center"))
+                                shortcutPill(key: "⌃⌥←↑/U", desc: tr("4 góc", "Quarters"))
                                 Spacer()
                             }
                             HStack(spacing: 6) {
-                                shortcutPill(key: "⌥⌘→", desc: "Sang màn hình phải")
-                                shortcutPill(key: "⌥⌘←", desc: "Sang màn hình trái")
+                                shortcutPill(key: "⌥⌘→", desc: tr("Sang màn hình phải", "Next Display"))
+                                shortcutPill(key: "⌥⌘←", desc: tr("Sang màn hình trái", "Previous Display"))
                                 Spacer()
                             }
                         }
@@ -1223,9 +1245,9 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Quản lý Clipboard (Thay thế Maccy)")
+                            Text(tr("Quản lý Clipboard (Thay thế Maccy)", "Clipboard History (Maccy Replacement)"))
                                 .font(.system(size: 10.5, weight: .bold))
-                            Text("Lịch sử sao chép thông minh, tìm kiếm & dán tức thì")
+                            Text(tr("Lịch sử sao chép thông minh, tìm kiếm & dán tức thì", "Smart clipboard history, search & instant paste"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                         }
@@ -1245,7 +1267,7 @@ struct ShortcutsTabView: View {
                                     .background(Circle().fill(Color.primary.opacity(clipboardManager.isDetailsExpanded ? 0.08 : 0.04)))
                             }
                             .buttonStyle(.plain)
-                            .help(clipboardManager.isDetailsExpanded ? "Thu gọn chi tiết" : "Xem chi tiết cài đặt")
+                            .help(clipboardManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết cài đặt", "View settings details"))
                         }
 
                         Toggle("", isOn: Binding<Bool>(
@@ -1262,16 +1284,16 @@ struct ShortcutsTabView: View {
 
                         // Shortcuts & Quick Actions
                         HStack(spacing: 6) {
-                            shortcutPill(key: "⌘⇧C", desc: "Mở bảng HUD")
-                            shortcutPill(key: "1..9", desc: "Dán tức thì")
-                            shortcutPill(key: "⌥P", desc: "Ghim")
-                            shortcutPill(key: "⌥⌫", desc: "Xóa")
+                            shortcutPill(key: "⌘⇧C", desc: tr("Mở bảng HUD", "Open HUD"))
+                            shortcutPill(key: "1..9", desc: tr("Dán tức thì", "Instant Paste"))
+                            shortcutPill(key: "⌥P", desc: tr("Ghim", "Pin"))
+                            shortcutPill(key: "⌥⌫", desc: tr("Xóa", "Delete"))
                         }
 
                         // Storage limit + automatic cleanup options
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(spacing: 4) {
-                                Text("Giới hạn:")
+                                Text(tr("Giới hạn:", "Max items:"))
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
 
@@ -1286,18 +1308,18 @@ struct ShortcutsTabView: View {
 
                                 Spacer()
 
-                                Text("\(clipboardManager.items.count) mục lưu")
+                                Text("\(clipboardManager.items.count) " + tr("mục lưu", "items stored"))
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
                             }
 
                             HStack(spacing: 4) {
-                                Text("Tự động xoá:")
+                                Text(tr("Tự động xoá:", "Auto cleanup:"))
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
 
                                 ForEach([0, 7, 30, 90], id: \.self) { days in
-                                    optionChip(days == 0 ? "Không" : "\(days) ngày",
+                                    optionChip(days == 0 ? tr("Không", "Never") : "\(days) " + tr("ngày", "days"),
                                                selected: clipboardManager.autoCleanupDays == days) {
                                         clipboardManager.autoCleanupDays = days
                                     }
@@ -1308,7 +1330,7 @@ struct ShortcutsTabView: View {
                                 Button {
                                     clipboardManager.cleanupNow()
                                 } label: {
-                                    Text("Dọn ngay")
+                                    Text(tr("Dọn ngay", "Clean now"))
                                         .font(.system(size: 8, weight: .bold))
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 2)
@@ -1316,12 +1338,12 @@ struct ShortcutsTabView: View {
                                         .foregroundStyle(Color.orange)
                                 }
                                 .buttonStyle(.plain)
-                                .help("Xoá mục chưa ghim cũ hơn \(clipboardManager.autoCleanupDays > 0 ? "\(clipboardManager.autoCleanupDays) ngày" : "30 ngày")")
+                                .help(tr("Xoá mục chưa ghim cũ hơn \(clipboardManager.autoCleanupDays > 0 ? "\(clipboardManager.autoCleanupDays) ngày" : "30 ngày")", "Delete unpinned items older than \(clipboardManager.autoCleanupDays > 0 ? "\(clipboardManager.autoCleanupDays) days" : "30 days")"))
 
                                 Button {
                                     clipboardManager.requestClearAllUnpinned()
                                 } label: {
-                                    Text(clipboardManager.pendingClearAllConfirm ? "Chắc chắn?" : "Xoá tất cả")
+                                    Text(clipboardManager.pendingClearAllConfirm ? tr("Chắc chắn?", "Confirm?") : tr("Xoá tất cả", "Clear all"))
                                         .font(.system(size: 8, weight: .bold))
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 2)
@@ -1329,7 +1351,7 @@ struct ShortcutsTabView: View {
                                         .foregroundStyle(Color.red)
                                 }
                                 .buttonStyle(.plain)
-                                .help("Xoá mọi mục chưa ghim (bấm 2 lần để xác nhận)")
+                                .help(tr("Xoá mọi mục chưa ghim (bấm 2 lần để xác nhận)", "Delete all unpinned items (click twice to confirm)"))
                             }
 
                             if let message = clipboardManager.cleanupMessage {
@@ -1342,8 +1364,8 @@ struct ShortcutsTabView: View {
 
                             if clipboardManager.hasUnlimitedHistory {
                                 Text(clipboardManager.autoCleanupDays == 0
-                                     ? "Không giới hạn số mục: nên bật tự động xoá để tránh phình bộ nhớ."
-                                     : "Không giới hạn số mục • tự động xoá sau \(clipboardManager.autoCleanupDays) ngày.")
+                                     ? tr("Không giới hạn số mục: nên bật tự động xoá để tránh phình bộ nhớ.", "Unlimited items: recommended to enable auto-cleanup to save memory.")
+                                     : tr("Không giới hạn số mục • tự động xoá sau \(clipboardManager.autoCleanupDays) ngày.", "Unlimited items • auto-cleans after \(clipboardManager.autoCleanupDays) days."))
                                     .font(.system(size: 7.5))
                                     .foregroundStyle(Color.orange.opacity(0.9))
                             }
@@ -1354,7 +1376,7 @@ struct ShortcutsTabView: View {
                             Image(systemName: "lock.shield")
                                 .font(.system(size: 8.5))
                                 .foregroundStyle(.green)
-                            Text("Tự động bỏ qua mật khẩu (1Password, Bitwarden, Keychain)")
+                            Text(tr("Tự động bỏ qua mật khẩu (1Password, Bitwarden, Keychain)", "Auto-ignore passwords (1Password, Bitwarden, Keychain)"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -1374,7 +1396,7 @@ struct ShortcutsTabView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "macwindow")
                                     .font(.system(size: 8.5))
-                                Text("Mở bảng Clipboard HUD (⌘ + ⇧ + C)")
+                                Text(tr("Mở bảng Clipboard HUD (⌘ + ⇧ + C)", "Open Clipboard HUD (⌘ + ⇧ + C)"))
                                     .font(.system(size: 8.5, weight: .semibold))
                             }
                             .padding(.horizontal, 8)
@@ -1397,9 +1419,9 @@ struct ShortcutsTabView: View {
                         .foregroundStyle(Color.accentColor)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Bấm đồng thời Chuột Trái + Phải mở F3")
+                        Text(tr("Bấm đồng thời Chuột Trái + Phải mở F3", "Left + Right click opens Mission Control (F3)"))
                             .font(.system(size: 10.5, weight: .semibold))
-                        Text("Mở Mission Control ngay trên chuột mà không cần chạm bàn phím")
+                        Text(tr("Mở Mission Control ngay trên chuột mà không cần chạm bàn phím", "Trigger Mission Control directly from mouse without keyboard"))
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary)
                     }
@@ -1470,7 +1492,7 @@ struct DisplayCardView: View {
                     Text(monitor.name)
                         .font(.system(size: 10.5, weight: .semibold))
                         .lineLimit(1)
-                    Text("\(monitor.resolution) • \(monitor.isBuiltIn ? "Màn hình chính" : "Màn hình ngoài")")
+                    Text("\(monitor.resolution) • \(monitor.isBuiltIn ? tr("Màn hình chính", "Built-in Display") : tr("Màn hình ngoài", "External Display"))")
                         .font(.system(size: 7.5))
                         .foregroundStyle(.secondary)
                 }
@@ -1512,7 +1534,7 @@ struct DisplayCardView: View {
                     Button {
                         displayManager.toggleConnection(for: monitor)
                     } label: {
-                        Text(monitor.isBuiltIn ? "Tắt màn" : "Ngắt mềm")
+                        Text(monitor.isBuiltIn ? tr("Tắt màn", "Turn Off") : tr("Ngắt mềm", "Disconnect"))
                             .font(.system(size: 7.5, weight: .semibold))
                             .foregroundStyle(.red)
                     }
@@ -1525,7 +1547,7 @@ struct DisplayCardView: View {
                         Circle()
                             .fill(Color.orange.opacity(0.8))
                             .frame(width: 5, height: 5)
-                        Text("Đang ngắt mềm (Đã tắt)")
+                        Text(tr("Đang ngắt mềm (Đã tắt)", "Disconnected (Turned Off)"))
                             .font(.system(size: 8.5, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
@@ -1538,7 +1560,7 @@ struct DisplayCardView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "power")
                                 .font(.system(size: 8, weight: .bold))
-                            Text("Bật lại")
+                            Text(tr("Bật lại", "Turn On"))
                                 .font(.system(size: 8.5, weight: .bold))
                         }
                         .padding(.horizontal, 9)
@@ -1577,7 +1599,7 @@ struct QuickActionsBar: View {
                     HStack(spacing: 4) {
                         Image(systemName: ext.isConnected ? "display.slash" : "display")
                             .font(.system(size: 9))
-                        Text(ext.isConnected ? "Ngắt màn ngoài" : "Bật màn ngoài")
+                        Text(ext.isConnected ? tr("Ngắt màn ngoài", "Disconnect External") : tr("Bật màn ngoài", "Connect External"))
                             .font(.system(size: 9, weight: ext.isConnected ? .regular : .bold))
                     }
                     .padding(.horizontal, 8)
@@ -1597,7 +1619,7 @@ struct QuickActionsBar: View {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 8.5))
-                        Text("Bật tất cả màn hình")
+                        Text(tr("Bật tất cả màn hình", "Turn On All Displays"))
                             .font(.system(size: 9, weight: .bold))
                     }
                     .foregroundStyle(Color.accentColor)
@@ -1618,7 +1640,7 @@ struct EmptyStateView: View {
             Image(systemName: "display.trianglebadge.exclamationmark")
                 .font(.system(size: 22))
                 .foregroundStyle(.tertiary)
-            Text("Không tìm thấy màn hình nào")
+            Text(tr("Không tìm thấy màn hình nào", "No displays detected"))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
@@ -1652,20 +1674,20 @@ struct BatteryCardView: View {
 
                     // Live Wattage
                     if batteryManager.isBypassActive && batteryManager.isPluggedIn {
-                        Text("🛡️ 0.0W (Nguồn AC trực tiếp)")
+                        Text("🛡️ 0.0W (" + tr("Nguồn AC trực tiếp", "Direct AC Power") + ")")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.cyan)
                     } else if batteryManager.isCharging {
-                        Text(String(format: "⚡️ +%.1fW (Đang sạc)", batteryManager.wattage))
+                        Text(String(format: "⚡️ +%.1fW (" + tr("Đang sạc", "Charging") + ")", batteryManager.wattage))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.green)
                     } else if batteryManager.isPluggedIn {
-                        Text("🔌 0.0W (Đã cắm sạc)")
+                        Text("🔌 0.0W (" + tr("Đã cắm sạc", "Plugged in") + ")")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.orange)
                     } else {
                         let mins = batteryManager.timeRemaining
-                        let timeStr = mins > 0 ? " • Còn ~\(mins / 60)h\(mins % 60)m" : ""
+                        let timeStr = mins > 0 ? " • " + tr("Còn ~\(mins / 60)h\(mins % 60)m", "~\(mins / 60)h\(mins % 60)m left") : ""
                         Text(String(format: "🔋 -%.1fW%@", batteryManager.wattage, timeStr))
                             .font(.system(size: 9.5, weight: .medium))
                             .foregroundStyle(.secondary)
@@ -1708,7 +1730,7 @@ struct BatteryCardView: View {
                 if batteryManager.isProtectionEnabled {
                     HStack {
                         Spacer()
-                        Text("Ngưỡng khóa: \(batteryManager.chargeLimit)%")
+                        Text(tr("Ngưỡng khóa: \(batteryManager.chargeLimit)%", "Charge limit: \(batteryManager.chargeLimit)%"))
                             .font(.system(size: 8, weight: .medium))
                             .foregroundStyle(.orange)
                     }
@@ -1720,16 +1742,16 @@ struct BatteryCardView: View {
                 metricChip(
                     icon: "heart.fill",
                     iconColor: .pink,
-                    title: "Độ khỏe cell",
+                    title: tr("Độ khỏe cell", "Cell Health"),
                     val: String(format: "%.1f%%", batteryManager.exactHealthPercent),
                     sub: "\(batteryManager.nominalCapacity)/\(batteryManager.designCapacity)"
                 )
                 metricChip(
                     icon: "arrow.triangle.2.circlepath",
                     iconColor: .purple,
-                    title: "Chu kỳ sạc",
-                    val: "\(batteryManager.cycleCount) lần",
-                    sub: "Thiết kế: 1000"
+                    title: tr("Chu kỳ sạc", "Cycle Count"),
+                    val: "\(batteryManager.cycleCount) " + tr("lần", "cycles"),
+                    sub: tr("Thiết kế: 1000", "Design: 1000")
                 )
                 Button {
                     onSelectThermalSection?()
@@ -1737,21 +1759,21 @@ struct BatteryCardView: View {
                     metricChip(
                         icon: "thermometer.medium",
                         iconColor: tempBadgeColor,
-                        title: "Nhiệt độ pin",
+                        title: tr("Nhiệt độ pin", "Battery Temp"),
                         val: String(format: "%.1f°C", batteryManager.temperature),
                         sub: tempStatusText + " ›",
                         valColor: tempBadgeColor
                     )
                 }
                 .buttonStyle(.plain)
-                .help("Bấm để mở kiểm soát nhiệt độ & quạt")
+                .help(tr("Bấm để mở kiểm soát nhiệt độ & quạt", "Click to open thermals & fans control"))
 
                 metricChip(
                     icon: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "bolt.fill" : "battery.100",
                     iconColor: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? .yellow : .green,
-                    title: "Củ sạc",
-                    val: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "\(batteryManager.adapterWatts)W" : "Dùng Pin",
-                    sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? "USB-C PD" : batteryManager.adapterDescription) : "Không cắm sạc"
+                    title: tr("Củ sạc", "Power Adapter"),
+                    val: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "\(batteryManager.adapterWatts)W" : tr("Dùng Pin", "On Battery"),
+                    sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? "USB-C PD" : batteryManager.adapterDescription) : tr("Không cắm sạc", "Unplugged")
                 )
             }
 
@@ -1760,9 +1782,9 @@ struct BatteryCardView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "flame.fill").font(.system(size: 11)).foregroundStyle(.red)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Cảnh báo: Pin đang ấm (\(String(format: "%.1f°C", batteryManager.temperature)))!")
+                        Text(tr("Cảnh báo: Pin đang ấm (\(String(format: "%.1f°C", batteryManager.temperature)))!", "Warning: Battery is warm (\(String(format: "%.1f°C", batteryManager.temperature)))!"))
                             .font(.system(size: 9.5, weight: .bold)).foregroundStyle(.red)
-                        Text("MacBook Air M2 không quạt. Hãy chuyển sang tab 'Đóng băng' để tạm dừng tiến trình nặng.")
+                        Text(tr("MacBook Air không quạt. Hãy chuyển sang tab 'Đóng băng' để tạm dừng tiến trình nặng.", "Fanless MacBook. Switch to 'Freeze' tab to suspend heavy processes."))
                             .font(.system(size: 8)).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -1773,10 +1795,10 @@ struct BatteryCardView: View {
 
             // Sub-Navigation Pills (4 Tabs: Nguồn SMC, Sleep Guard, Đóng băng CPU, Lịch hiệu chuẩn)
             HStack(spacing: 3) {
-                subTabButton(index: 0, title: "Nguồn SMC", icon: "bolt.shield")
+                subTabButton(index: 0, title: tr("Nguồn SMC", "SMC Power"), icon: "bolt.shield")
                 subTabButton(index: 1, title: "Sleep Guard", icon: "moon.stars")
-                subTabButton(index: 2, title: "Đóng băng", icon: "snowflake")
-                subTabButton(index: 3, title: "Lịch hiệu chuẩn", icon: "calendar.badge.clock")
+                subTabButton(index: 2, title: tr("Đóng băng", "Freeze Mode"), icon: "snowflake")
+                subTabButton(index: 3, title: tr("Lịch hiệu chuẩn", "Calibration"), icon: "calendar.badge.clock")
             }
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.05)))
@@ -1852,10 +1874,10 @@ struct BatteryCardView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Cần cấp quyền SMC để khóa sạc")
+                        Text(tr("Cần cấp quyền SMC để khóa sạc", "SMC Helper required to limit charge"))
                             .font(.system(size: 8.5, weight: .bold))
                             .foregroundStyle(.primary)
-                        Text("Xác nhận Touch ID hoặc mật khẩu máy 1 lần")
+                        Text(tr("Xác nhận Touch ID hoặc mật khẩu máy 1 lần", "Confirm with Touch ID or password once"))
                             .font(.system(size: 7.5))
                             .foregroundStyle(.secondary)
                     }
@@ -1867,7 +1889,7 @@ struct BatteryCardView: View {
                             if batteryManager.isInstallingHelper {
                                 ProgressView().controlSize(.mini)
                             }
-                            Text(batteryManager.isInstallingHelper ? "Đang cài..." : "Cấp quyền ngay")
+                            Text(batteryManager.isInstallingHelper ? tr("Đang cài...", "Installing...") : tr("Cấp quyền ngay", "Grant Now"))
                                 .font(.system(size: 8, weight: .bold))
                         }
                         .padding(.horizontal, 7)
@@ -1886,9 +1908,9 @@ struct BatteryCardView: View {
             HStack(spacing: 8) {
                 Image(systemName: "lock.shield").font(.system(size: 11)).foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Khóa sạc ở \(batteryManager.chargeLimit)% (Chạy điện trực tiếp)")
+                    Text(tr("Khóa sạc ở \(batteryManager.chargeLimit)% (Chạy điện trực tiếp)", "Charge limit at \(batteryManager.chargeLimit)% (Bypass Mode)"))
                         .font(.system(size: 10, weight: .semibold))
-                    Text("Cắm sạc liên tục không chai pin (SMC Bypass)")
+                    Text(tr("Cắm sạc liên tục không chai pin (SMC Bypass)", "Plug in continuously without battery wear (SMC Bypass)"))
                         .font(.system(size: 7.5)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -1916,14 +1938,14 @@ struct BatteryCardView: View {
 
             if batteryManager.isProtectionEnabled {
                 HStack(spacing: 6) {
-                    Text("Mức khóa:")
+                    Text(tr("Mức khóa:", "Limit:"))
                         .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(.secondary)
                     ForEach([70, 80, 90], id: \.self) { val in
                         Button {
                             batteryManager.chargeLimit = val
                         } label: {
-                            Text("\(val)%\(val == 80 ? " (Chuẩn)" : "")")
+                            Text("\(val)%\(val == 80 ? " (" + tr("Chuẩn", "Standard") + ")" : "")")
                                 .font(.system(size: 8, weight: batteryManager.chargeLimit == val ? .bold : .medium))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -1943,7 +1965,7 @@ struct BatteryCardView: View {
                     HStack(spacing: 4) {
                         Image(systemName: batteryManager.isTopUpActive ? "xmark.circle" : "bolt.fill")
                             .font(.system(size: 8))
-                        Text(batteryManager.isTopUpActive ? "Hủy sạc 100% (Khóa lại)" : "⚡️ Sạc đầy 100% tạm thời")
+                        Text(batteryManager.isTopUpActive ? tr("Hủy sạc 100% (Khóa lại)", "Cancel 100% (Re-lock)") : tr("⚡️ Sạc đầy 100% tạm thời", "⚡️ Temporary 100% Top-up"))
                             .font(.system(size: 8.5, weight: .semibold))
                     }
                     .padding(.horizontal, 7)
@@ -1954,15 +1976,15 @@ struct BatteryCardView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("Khi cần mang máy ra ngoài").font(.system(size: 7.5)).foregroundStyle(.tertiary)
+                Text(tr("Khi cần mang máy ra ngoài", "When taking laptop on the go")).font(.system(size: 7.5)).foregroundStyle(.tertiary)
             }
 
             // Toggles
-            toggleRow(icon: "thermometer.sun.fill", iconColor: .orange, title: "Thông báo khi pin nóng > 38°C", isOn: Binding<Bool>(
+            toggleRow(icon: "thermometer.sun.fill", iconColor: .orange, title: tr("Thông báo khi pin nóng > 38°C", "Alert when battery temp > 38°C"), isOn: Binding<Bool>(
                 get: { batteryManager.isTempAlertEnabled },
                 set: { batteryManager.isTempAlertEnabled = $0 }
             ))
-            toggleRow(icon: "bell.badge.fill", iconColor: .blue, title: "Cảnh báo chống chai pin (Màn ngoài, pin < 20%)", isOn: Binding<Bool>(
+            toggleRow(icon: "bell.badge.fill", iconColor: .blue, title: tr("Cảnh báo chống chai pin (Màn ngoài, pin < 20%)", "Battery health warning (External display, < 20%)"), isOn: Binding<Bool>(
                 get: { batteryManager.isSmartAlertsEnabled },
                 set: { batteryManager.isSmartAlertsEnabled = $0 }
             ))
@@ -1971,7 +1993,7 @@ struct BatteryCardView: View {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: 7))
                     .foregroundStyle(.secondary)
-                Text("Lưu ý: Tắt 'Sạc pin tối ưu hoá' trong Cài đặt hệ thống để tránh macOS tự sạc lên 100%.")
+                Text(tr("Lưu ý: Tắt 'Sạc pin tối ưu hoá' trong Cài đặt hệ thống để tránh macOS tự sạc lên 100%.", "Tip: Turn off 'Optimized Battery Charging' in macOS Settings to prevent macOS overriding limit."))
                     .font(.system(size: 7.2))
                     .foregroundStyle(.secondary)
             }
@@ -1985,9 +2007,9 @@ struct BatteryCardView: View {
             HStack(spacing: 8) {
                 Image(systemName: "moon.fill").font(.system(size: 11)).foregroundStyle(Color.purple)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Bảo vệ Sleep Guard khi gập máy")
+                    Text(tr("Bảo vệ Sleep Guard khi gập máy", "Sleep Guard Clamshell Protection"))
                         .font(.system(size: 10, weight: .semibold))
-                    Text("Chống Dark Wake và ngăn máy nóng ngầm trong balo")
+                    Text(tr("Chống Dark Wake và ngăn máy nóng ngầm trong balo", "Prevents Dark Wake & background heating in backpack"))
                         .font(.system(size: 7.5)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -2004,9 +2026,9 @@ struct BatteryCardView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "wave.3.forward.circle.fill").font(.system(size: 10)).foregroundStyle(.blue)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Tự ngắt Bluetooth khi gập máy")
+                        Text(tr("Tự ngắt Bluetooth khi gập máy", "Auto-disconnect Bluetooth on lid close"))
                             .font(.system(size: 9, weight: .medium))
-                        Text("AirPods/chuột không đánh thức máy ngầm qua đêm. Tự bật lại ngay khi mở máy.")
+                        Text(tr("AirPods/chuột không đánh thức máy ngầm qua đêm. Tự bật lại ngay khi mở máy.", "AirPods/mouse won't wake Mac overnight. Auto re-connects on lid open."))
                             .font(.system(size: 7.5)).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -2023,14 +2045,14 @@ struct BatteryCardView: View {
 
                 HStack(spacing: 5) {
                     Image(systemName: "lock.shield.fill").font(.system(size: 8.5)).foregroundStyle(.green)
-                    Text("Khóa SMC 80% được bảo lưu liên tục trong lúc ngủ và tái kích hoạt ngay khi mở màn hình.")
+                    Text(tr("Khóa SMC 80% được bảo lưu liên tục trong lúc ngủ và tái kích hoạt ngay khi mở màn hình.", "SMC 80% limit is preserved during sleep and reapplied on wake."))
                         .font(.system(size: 7.8)).foregroundStyle(.secondary)
                 }
 
                 if !batteryManager.lastSleepReport.isEmpty {
                     HStack(spacing: 5) {
                         Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 8)).foregroundStyle(.purple)
-                        Text("Lần gần nhất: \(batteryManager.lastSleepReport)")
+                        Text(tr("Lần gần nhất: \(batteryManager.lastSleepReport)", "Last report: \(batteryManager.lastSleepReport)"))
                             .font(.system(size: 8, weight: .medium)).foregroundStyle(.purple)
                     }
                     .padding(.horizontal, 6)
@@ -2045,7 +2067,7 @@ struct BatteryCardView: View {
     private var processFreezeSubTab: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Tiến trình ngốn CPU & Tỏa nhiệt:")
+                Text(tr("Tiến trình ngốn CPU & Tỏa nhiệt:", "Heavy CPU & Heat Generating Processes:"))
                     .font(.system(size: 9.5, weight: .semibold))
                 Spacer()
                 Button {
@@ -2053,7 +2075,7 @@ struct BatteryCardView: View {
                 } label: {
                     HStack(spacing: 2.5) {
                         Image(systemName: "arrow.clockwise").font(.system(size: 7.5))
-                        Text("Quét lại").font(.system(size: 8))
+                        Text(tr("Quét lại", "Refresh")).font(.system(size: 8))
                     }
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
@@ -2066,7 +2088,7 @@ struct BatteryCardView: View {
             if energyManager.processes.isEmpty {
                 HStack {
                     Spacer()
-                    Text("Máy đang rất mát mẻ, không có tiến trình nền nặng.")
+                    Text(tr("Máy đang rất mát mẻ, không có tiến trình nền nặng.", "System is running cool, no heavy background processes."))
                         .font(.system(size: 8)).foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -2090,7 +2112,7 @@ struct BatteryCardView: View {
                             Spacer()
 
                             if p.isFrozen {
-                                Text("❄️ ĐÃ ĐÓNG BĂNG")
+                                Text("❄️ " + tr("ĐÃ ĐÓNG BĂNG", "FROZEN"))
                                     .font(.system(size: 7, weight: .bold))
                                     .foregroundStyle(.cyan)
                                     .padding(.horizontal, 4)
@@ -2109,7 +2131,7 @@ struct BatteryCardView: View {
                                     energyManager.freezeProcess(pid: p.pid)
                                 }
                             } label: {
-                                Text(p.isFrozen ? "▶️ Rã đông" : "❄️ Đóng băng")
+                                Text(p.isFrozen ? ("▶️ " + tr("Rã đông", "Resume")) : ("❄️ " + tr("Đóng băng", "Freeze")))
                                     .font(.system(size: 7.5, weight: .semibold))
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
@@ -2126,7 +2148,7 @@ struct BatteryCardView: View {
                 }
             }
 
-            Text("💡 Đóng băng (SIGSTOP) giữ nguyên cửa sổ và dữ liệu trong RAM nhưng ngừng 100% việc đốt CPU và tỏa nhiệt trên M2.")
+            Text(tr("💡 Đóng băng (SIGSTOP) giữ nguyên cửa sổ và dữ liệu trong RAM nhưng ngừng 100% việc đốt CPU và tỏa nhiệt trên M2.", "💡 Freezing (SIGSTOP) keeps windows & data in RAM while completely halting CPU burn & heat."))
                 .font(.system(size: 7.2)).foregroundStyle(.secondary)
         }
     }
@@ -2141,9 +2163,9 @@ struct BatteryCardView: View {
                     .foregroundStyle(Color.accentColor)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Tự động đặt lịch hiệu chuẩn pin định kỳ")
+                    Text(tr("Tự động đặt lịch hiệu chuẩn pin định kỳ", "Auto-schedule Periodic Battery Calibration"))
                         .font(.system(size: 10, weight: .bold))
-                    Text("Cân bằng điện áp cell & khôi phục thước đo dung lượng chuẩn")
+                    Text(tr("Cân bằng điện áp cell & khôi phục thước đo dung lượng chuẩn", "Balances cell voltage & recalibrates gauge"))
                         .font(.system(size: 7.5))
                         .foregroundStyle(.secondary)
                 }
@@ -2162,7 +2184,7 @@ struct BatteryCardView: View {
             if batteryManager.isAutoCalibrationEnabled {
                 // Interval Selector Pills
                 HStack(spacing: 5) {
-                    Text("Chu kỳ:")
+                    Text(tr("Chu kỳ:", "Interval:"))
                         .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(.secondary)
 
@@ -2170,15 +2192,15 @@ struct BatteryCardView: View {
                         Button {
                             batteryManager.calibrationIntervalDays = days
                         } label: {
-                            Text("Mỗi \(days) ngày\(days == 30 ? " (Chuẩn)" : "")")
+                            Text(tr("Mỗi \(days) ngày", "Every \(days) days") + (days == 30 ? " (" + tr("Chuẩn", "Standard") + ")" : ""))
                                 .font(.system(size: 7.5, weight: batteryManager.calibrationIntervalDays == days ? .bold : .medium))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
                                         .fill(batteryManager.calibrationIntervalDays == days ? Color.accentColor : Color.primary.opacity(0.06))
-                                )
                                 .foregroundStyle(batteryManager.calibrationIntervalDays == days ? Color.white : Color.primary)
+                                )
                         }
                         .buttonStyle(.plain)
                     }
@@ -2190,7 +2212,7 @@ struct BatteryCardView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath").font(.system(size: 8)).foregroundStyle(.orange)
-                        Text("Lịch tiếp theo:")
+                        Text(tr("Lịch tiếp theo:", "Next date:"))
                             .font(.system(size: 8, weight: .medium))
                             .foregroundStyle(.secondary)
                         Text(formatDate(batteryManager.nextScheduledCalibrationDate))
@@ -2199,7 +2221,7 @@ struct BatteryCardView: View {
 
                         Spacer()
 
-                        Text("Còn \(batteryManager.daysRemainingUntilCalibration) ngày")
+                        Text(tr("Còn \(batteryManager.daysRemainingUntilCalibration) ngày", "\(batteryManager.daysRemainingUntilCalibration) days left"))
                             .font(.system(size: 7.5, weight: .bold))
                             .foregroundStyle(.orange)
                             .padding(.horizontal, 4)
@@ -2209,15 +2231,15 @@ struct BatteryCardView: View {
 
                     HStack {
                         Image(systemName: "checkmark.circle").font(.system(size: 8)).foregroundStyle(.green)
-                        Text("Lần gần nhất:")
+                        Text(tr("Lần gần nhất:", "Last completed:"))
                             .font(.system(size: 7.5, weight: .medium))
                             .foregroundStyle(.secondary)
-                        Text(batteryManager.lastCalibrationDate != nil ? formatDate(batteryManager.lastCalibrationDate!) : "Chưa thực hiện")
+                        Text(batteryManager.lastCalibrationDate != nil ? formatDate(batteryManager.lastCalibrationDate!) : tr("Chưa thực hiện", "Never performed"))
                             .font(.system(size: 7.5))
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("💡 Quy trình: Khi đến lịch, bạn rút sạc dùng máy tự nhiên xuống ≤ 20%. Khi cắm sạc lại, HyperMac sẽ tự động sạc 100% cân bằng cell ➔ ngâm 15p ➔ tự khóa lại 80% SMC Bypass.")
+                    Text(tr("💡 Quy trình: Khi đến lịch, bạn rút sạc dùng máy tự nhiên xuống ≤ 20%. Khi cắm sạc lại, HyperMac sẽ tự động sạc 100% cân bằng cell ➔ ngâm 15p ➔ tự khóa lại 80% SMC Bypass.", "💡 Procedure: When due, unplug & use normally down to ≤ 20%. Once plugged back in, HyperMac charges to 100% to balance cells ➔ soaks for 15m ➔ re-locks to 80% SMC Bypass."))
                         .font(.system(size: 7.2))
                         .foregroundStyle(.secondary)
                         .padding(.top, 1)
@@ -2233,7 +2255,7 @@ struct BatteryCardView: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "play.circle.fill").font(.system(size: 8.5))
-                        Text("Hiệu chuẩn ngay bây giờ (Chạy trước lịch)")
+                        Text(tr("Hiệu chuẩn ngay bây giờ (Chạy trước lịch)", "Calibrate now (Run ahead of schedule)"))
                             .font(.system(size: 8.5, weight: .semibold))
                     }
                     .padding(.horizontal, 8)
@@ -2259,7 +2281,7 @@ struct BatteryCardView: View {
                     Button {
                         batteryManager.cancelCalibration()
                     } label: {
-                        Text("Hủy hiệu chuẩn (Quay về khóa 80%)")
+                        Text(tr("Hủy hiệu chuẩn (Quay về khóa 80%)", "Cancel calibration (Revert to 80% lock)"))
                             .font(.system(size: 8, weight: .semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -2303,11 +2325,11 @@ struct BatteryCardView: View {
 
     private var tempStatusText: String {
         if batteryManager.temperature < 32.0 {
-            return "Mát mẻ"
+            return tr("Mát mẻ", "Cool")
         } else if batteryManager.temperature < 38.0 {
-            return "Ấm nhẹ"
+            return tr("Ấm nhẹ", "Warm")
         } else {
-            return "Nóng!"
+            return tr("Nóng!", "Hot!")
         }
     }
 }
@@ -2362,7 +2384,7 @@ struct ThermalAndFanCardView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("Cảm biến nhiệt Apple Silicon • Cập nhật mỗi 2.5s")
+                    Text(tr("Cảm biến nhiệt Apple Silicon • Cập nhật mỗi 2.5s", "Apple Silicon Thermal Sensors • Updates every 2.5s"))
                         .font(.system(size: 7.8))
                         .foregroundStyle(.secondary)
                 }
@@ -2374,7 +2396,7 @@ struct ThermalAndFanCardView: View {
                     Circle()
                         .fill(stateColor)
                         .frame(width: 5, height: 5)
-                    Text(thermalManager.thermalStateDescription)
+                    Text(localizedThermalStateDescription)
                         .font(.system(size: 8.5, weight: .bold))
                         .foregroundStyle(stateColor)
                 }
@@ -2399,7 +2421,7 @@ struct ThermalAndFanCardView: View {
                         .background(Circle().fill(Color.primary.opacity(0.05)))
                 }
                 .buttonStyle(.plain)
-                .help("Làm mới cảm biến nhiệt ngay lập tức")
+                .help(tr("Làm mới cảm biến nhiệt ngay lập tức", "Refresh thermal sensors immediately"))
             }
         }
         .padding(8)
@@ -2418,7 +2440,7 @@ struct ThermalAndFanCardView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(Color.accentColor)
 
-            Text("Hiện nhiệt độ trên Menu Bar")
+            Text(tr("Hiện nhiệt độ trên Menu Bar", "Show temperature on Menu Bar"))
                 .font(.system(size: 8))
                 .foregroundStyle(.secondary)
 
@@ -2446,50 +2468,50 @@ struct ThermalAndFanCardView: View {
     private var thermalMatrixGrid: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Label("Bản đồ nhiệt Apple Silicon (HID PMU)", systemImage: "cpu")
+                Label(tr("Bản đồ nhiệt Apple Silicon (HID PMU)", "Apple Silicon Thermal Matrix (HID PMU)"), systemImage: "cpu")
                     .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(.primary)
 
                 Spacer()
 
-                Text("Thời gian thực: 2.5s")
+                Text(tr("Thời gian thực: 2.5s", "Real-time: 2.5s"))
                     .font(.system(size: 7.5))
                     .foregroundStyle(.tertiary)
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
                 sensorTile(
-                    title: "CPU Trung bình",
+                    title: tr("CPU Trung bình", "CPU Average"),
                     temp: thermalManager.cpuAvgTemp,
                     icon: "cpu",
-                    sub: "Tất cả các nhân"
+                    sub: tr("Tất cả các nhân", "All Cores Average")
                 )
                 sensorTile(
-                    title: "CPU Nóng nhất",
+                    title: tr("CPU Nóng nhất", "CPU Peak"),
                     temp: thermalManager.cpuPeakTemp,
                     icon: "flame.fill",
                     sub: "Core Peak Hotspot"
                 )
                 sensorTile(
-                    title: "GPU Đồ họa",
+                    title: tr("GPU Đồ họa", "GPU Core"),
                     temp: thermalManager.gpuAvgTemp,
                     icon: "gamecontroller.fill",
-                    sub: "Cụm nhân GPU"
+                    sub: tr("Cụm nhân GPU", "GPU Cluster")
                 )
                 sensorTile(
-                    title: "Pin Cell",
+                    title: tr("Pin Cell", "Battery Pack"),
                     temp: thermalManager.batteryTemp,
                     icon: "battery.100.bolt",
                     sub: "Gas Gauge Pack"
                 )
                 sensorTile(
-                    title: "Ổ cứng SSD",
+                    title: tr("Ổ cứng SSD", "SSD Storage"),
                     temp: thermalManager.ssdTemp,
                     icon: "internaldrive.fill",
                     sub: "NAND Flash Storage"
                 )
                 sensorTile(
-                    title: "Hotspot Bo mạch",
+                    title: tr("Hotspot Bo mạch", "Motherboard Hotspot"),
                     temp: thermalManager.hotspotTemp,
                     icon: "thermometer.sun.fill",
                     sub: "PMU Calibration"
@@ -2547,7 +2569,7 @@ struct ThermalAndFanCardView: View {
                         .font(.system(size: 8.5))
                         .foregroundStyle(Color.accentColor)
 
-                    Text("Chi tiết \(thermalManager.detailedSensors.count) cảm biến PMU trên chip")
+                    Text(tr("Chi tiết \(thermalManager.detailedSensors.count) cảm biến PMU trên chip", "Detailed \(thermalManager.detailedSensors.count) on-chip PMU sensors"))
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(.primary)
 
@@ -2613,6 +2635,16 @@ struct ThermalAndFanCardView: View {
         }
     }
 
+    private var localizedThermalStateDescription: String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return tr("Mát mẻ (Bình thường)", "Nominal (Cool)")
+        case .fair: return tr("Ấm nhẹ (Tải vừa)", "Fair (Moderate)")
+        case .serious: return tr("Nóng (Đang giảm xung)", "Serious (Throttling)")
+        case .critical: return tr("Rất nóng (Throttling tối đa!)", "Critical (Heavy Throttling!)")
+        @unknown default: return tr("Bình thường", "Normal")
+        }
+    }
+
     private var headerIconColor: Color {
         Color.cyan
     }
@@ -2633,7 +2665,7 @@ struct FooterView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 8.5))
                     .foregroundStyle(.green)
-                Text("Open Source • Miễn phí")
+                Text(tr("Open Source • Miễn phí", "Open Source • Free"))
                     .font(.system(size: 8.5))
                     .foregroundStyle(.secondary)
             }
@@ -2649,7 +2681,7 @@ struct FooterView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 8))
-                    Text("Tác giả")
+                    Text(tr("Tác giả", "Author"))
                         .font(.system(size: 8.5, weight: .medium))
                 }
                 .padding(.horizontal, 6)
@@ -2660,7 +2692,7 @@ struct FooterView: View {
                 .foregroundStyle(Color.primary)
             }
             .buttonStyle(.plain)
-            .help("Xem trang tác giả")
+            .help(tr("Xem trang tác giả", "View author profile"))
 
             // Update Check / Action Button
             Button {
@@ -2669,7 +2701,7 @@ struct FooterView: View {
                 HStack(spacing: 3.5) {
                     Image(systemName: updateManager.hasNewUpdate ? "sparkles" : "arrow.triangle.2.circlepath")
                         .font(.system(size: 8))
-                    Text(updateManager.hasNewUpdate ? "Có bản v\(updateManager.latestVersionString)" : "Kiểm tra cập nhật")
+                    Text(updateManager.hasNewUpdate ? tr("Có bản v\(updateManager.latestVersionString)", "New v\(updateManager.latestVersionString)") : tr("Kiểm tra cập nhật", "Check updates"))
                         .font(.system(size: 8.5, weight: updateManager.hasNewUpdate ? .bold : .medium))
                 }
                 .padding(.horizontal, 7)
@@ -2680,7 +2712,7 @@ struct FooterView: View {
                 .foregroundStyle(updateManager.hasNewUpdate ? Color.green : Color.primary)
             }
             .buttonStyle(.plain)
-            .help(updateManager.hasNewUpdate ? "Đã có bản mới! Bấm để cập nhật" : "Kiểm tra phiên bản mới từ GitHub")
+            .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra phiên bản mới từ GitHub", "Check for newer version on GitHub"))
 
             // Donate Button
             Button {
@@ -2701,7 +2733,7 @@ struct FooterView: View {
                 .foregroundStyle(Color.primary)
             }
             .buttonStyle(.plain)
-            .help("Ủng hộ tác giả phát triển phần mềm")
+            .help(tr("Ủng hộ tác giả phát triển phần mềm", "Support the author"))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
@@ -2738,9 +2770,9 @@ struct UpdateModalView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Cập nhật HyperMac")
+                            Text(tr("Cập nhật HyperMac", "Update HyperMac"))
                                 .font(.system(size: 12, weight: .bold))
-                            Text("Phiên bản hiện tại: v\(UpdateManager.currentVersion)")
+                            Text(tr("Phiên bản hiện tại: v\(UpdateManager.currentVersion)", "Current version: v\(UpdateManager.currentVersion)"))
                                 .font(.system(size: 8.5))
                                 .foregroundStyle(.secondary)
                         }
@@ -2766,7 +2798,7 @@ struct UpdateModalView: View {
                     VStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.regular)
-                        Text("Đang kiểm tra bản cập nhật mới trên GitHub...")
+                        Text(tr("Đang kiểm tra bản cập nhật mới trên GitHub...", "Checking for updates on GitHub..."))
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                     }
@@ -2778,10 +2810,10 @@ struct UpdateModalView: View {
                             .font(.system(size: 32))
                             .foregroundStyle(.green)
 
-                        Text("Bạn đang dùng phiên bản mới nhất!")
+                        Text(tr("Bạn đang dùng phiên bản mới nhất!", "You are using the latest version!"))
                             .font(.system(size: 11.5, weight: .semibold))
 
-                        Text("HyperMac v\(ver) hiện là phiên bản cập nhật nhất. Máy của bạn đã sẵn sàng.")
+                        Text(tr("HyperMac v\(ver) hiện là phiên bản cập nhật nhất. Máy của bạn đã sẵn sàng.", "HyperMac v\(ver) is currently the newest release. You are all set."))
                             .font(.system(size: 9))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -2790,7 +2822,7 @@ struct UpdateModalView: View {
                         Button {
                             updateManager.checkForUpdates(silent: false)
                         } label: {
-                            Text("Kiểm tra lại")
+                            Text(tr("Kiểm tra lại", "Check Again"))
                                 .font(.system(size: 10, weight: .medium))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 4)
@@ -2808,14 +2840,14 @@ struct UpdateModalView: View {
                                 .font(.system(size: 14))
                                 .foregroundStyle(Color.cyan)
 
-                            Text("Đã có phiên bản mới: v\(ver)")
+                            Text(tr("Đã có phiên bản mới: v\(ver)", "New version available: v\(ver)"))
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(Color.cyan)
                         }
 
                         // Release Notes Box
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Điểm mới trong bản v\(ver):")
+                            Text(tr("Điểm mới trong bản v\(ver):", "What's new in v\(ver):"))
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(.secondary)
 
@@ -2841,7 +2873,7 @@ struct UpdateModalView: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "arrow.down.circle.fill")
                                         .font(.system(size: 11, weight: .semibold))
-                                    Text("Cập nhật ngay (Tự động tải & Cài đặt)")
+                                    Text(tr("Cập nhật ngay (Tự động tải & Cài đặt)", "Update Now (Auto Download & Install)"))
                                         .font(.system(size: 10.5, weight: .bold))
                                 }
                                 .frame(maxWidth: .infinity)
@@ -2857,7 +2889,7 @@ struct UpdateModalView: View {
                             Button {
                                 updateManager.openReleasePage()
                             } label: {
-                                Text("Xem chi tiết trên GitHub")
+                                Text(tr("Xem chi tiết trên GitHub", "View details on GitHub"))
                                     .font(.system(size: 9.5))
                                     .foregroundStyle(.secondary)
                             }
@@ -2872,14 +2904,14 @@ struct UpdateModalView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(Color.accentColor)
 
-                        Text("Đang tải bản cập nhật: \(Int(progress * 100))%")
+                        Text(tr("Đang tải bản cập nhật: \(Int(progress * 100))%", "Downloading update: \(Int(progress * 100))%"))
                             .font(.system(size: 11.5, weight: .semibold))
 
                         ProgressView(value: progress, total: 1.0)
                             .progressViewStyle(.linear)
                             .padding(.horizontal, 20)
 
-                        Text("HyperMac sẽ tự động thay thế và khởi động lại ngay sau khi tải xong.")
+                        Text(tr("HyperMac sẽ tự động thay thế và khởi động lại ngay sau khi tải xong.", "HyperMac will automatically replace the old version and restart once complete."))
                             .font(.system(size: 8.5))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -2892,10 +2924,10 @@ struct UpdateModalView: View {
                         ProgressView()
                             .controlSize(.regular)
 
-                        Text("Đang cài đặt & chuẩn bị khởi động lại...")
+                        Text(tr("Đang cài đặt & chuẩn bị khởi động lại...", "Installing & preparing to restart..."))
                             .font(.system(size: 11, weight: .semibold))
 
-                        Text("Ứng dụng sẽ tự động mở lại trong giây lát.")
+                        Text(tr("Ứng dụng sẽ tự động mở lại trong giây lát.", "The application will reopen automatically in a moment."))
                             .font(.system(size: 8.5))
                             .foregroundStyle(.secondary)
                     }
@@ -2907,7 +2939,7 @@ struct UpdateModalView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(.orange)
 
-                        Text("Không thể cập nhật tự động")
+                        Text(tr("Không thể cập nhật tự động", "Failed to update automatically"))
                             .font(.system(size: 11, weight: .semibold))
 
                         Text(errorMsg)
@@ -2920,7 +2952,7 @@ struct UpdateModalView: View {
                             Button {
                                 updateManager.checkForUpdates(silent: false)
                             } label: {
-                                Text("Thử lại")
+                                Text(tr("Thử lại", "Try Again"))
                                     .font(.system(size: 9.5, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
@@ -2931,7 +2963,7 @@ struct UpdateModalView: View {
                             Button {
                                 updateManager.openReleasePage()
                             } label: {
-                                Text("Mở GitHub Releases")
+                                Text(tr("Mở GitHub Releases", "Open GitHub Releases"))
                                     .font(.system(size: 9.5, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
@@ -2948,7 +2980,7 @@ struct UpdateModalView: View {
 
                 // Preferences Row: Auto check on launch
                 HStack {
-                    Text("Tự động kiểm tra bản mới khi mở HyperMac")
+                    Text(tr("Tự động kiểm tra bản mới khi mở HyperMac", "Automatically check for updates on startup"))
                         .font(.system(size: 8.5))
                         .foregroundStyle(.secondary)
 
@@ -3020,9 +3052,9 @@ struct DonateModalView: View {
                             .foregroundStyle(.pink)
 
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Ủng hộ tác giả (Donate)")
+                            Text(tr("Ủng hộ tác giả (Donate)", "Support Author (Donate)"))
                                 .font(.system(size: 12, weight: .bold))
-                            Text("Tiếp thêm động lực phát triển HyperMac")
+                            Text(tr("Tiếp thêm động lực phát triển HyperMac", "Fuel HyperMac's continuous development"))
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                         }
@@ -3038,7 +3070,7 @@ struct DonateModalView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Đóng")
+                    .help(tr("Đóng", "Close"))
                 }
 
                 Divider()
@@ -3060,7 +3092,7 @@ struct DonateModalView: View {
                                     )
                                     .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
 
-                                Text("Quét mã bằng mọi app ngân hàng")
+                                Text(tr("Quét mã bằng mọi app ngân hàng", "Scan QR with any banking app"))
                                     .font(.system(size: 9.5, weight: .medium))
                                     .foregroundStyle(.secondary)
                             }
@@ -3069,19 +3101,28 @@ struct DonateModalView: View {
 
                         // Message Box
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.")
+                            Text(tr(
+                                "Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.",
+                                "Thank you so much for clicking this button. From the bottom of my heart, I truly appreciate any contribution, big or small. It gives me great motivation to keep maintaining and improving this app."
+                            ))
                                 .font(.system(size: 10.5))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
 
-                            Text("Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.")
+                            Text(tr(
+                                "Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.",
+                                "I sincerely thank each and every one of you for your support 😊😊😊."
+                            ))
                                 .font(.system(size: 10.5, weight: .semibold))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
 
-                            Text("Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️")
+                            Text(tr(
+                                "Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️",
+                                "If possible, please send me a quick message on Facebook so I can thank you personally ❤️"
+                            ))
                                 .font(.system(size: 10.5))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary.opacity(0.92))
@@ -3107,7 +3148,7 @@ struct DonateModalView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "bubble.left.and.bubble.right.fill")
                                     .font(.system(size: 10))
-                                Text("Nhắn tin qua Facebook cho tác giả ↗")
+                                Text(tr("Nhắn tin qua Facebook cho tác giả ↗", "Message author on Facebook ↗"))
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)

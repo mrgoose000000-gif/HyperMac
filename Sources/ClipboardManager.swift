@@ -16,13 +16,13 @@ public enum ClipType: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .all: return "Tất cả"
-        case .text: return "Văn bản"
-        case .rtf: return "Định dạng"
-        case .image: return "Hình ảnh"
-        case .file: return "Tệp tin"
-        case .color: return "Màu sắc"
-        case .url: return "Liên kết"
+        case .all: return tr("Tất cả", "All")
+        case .text: return tr("Văn bản", "Text")
+        case .rtf: return tr("Định dạng", "Rich Text")
+        case .image: return tr("Hình ảnh", "Images")
+        case .file: return tr("Tệp tin", "Files")
+        case .color: return tr("Màu sắc", "Colors")
+        case .url: return tr("Liên kết", "Links")
         }
     }
 
@@ -61,14 +61,16 @@ public struct ClipItem: Identifiable, Codable, Equatable, Sendable {
     public var relativeTimeText: String {
         let elapsed = Date().timeIntervalSince(timestamp)
         if elapsed < 60 {
-            return "Vừa xong"
+            return tr("Vừa xong", "Just now")
         } else if elapsed < 3600 {
-            return "\(Int(elapsed / 60))p trước"
+            let m = Int(elapsed / 60)
+            return tr("\(m)p trước", "\(m)m ago")
         } else if elapsed < 86400 {
-            return "\(Int(elapsed / 3600))h trước"
+            let h = Int(elapsed / 3600)
+            return tr("\(h)h trước", "\(h)h ago")
         } else {
             let days = Int(elapsed / 86400)
-            return "\(days) ngày trước"
+            return tr("\(days) ngày trước", "\(days)d ago")
         }
     }
 }
@@ -524,14 +526,14 @@ public class ClipboardManager: ObservableObject {
         if removed > 0 {
             saveItemsToDisk()
             clampSelection()
-            showCleanupMessage("Đã xoá \(removed) mục cũ hơn \(days) ngày.")
+            showCleanupMessage(tr("Đã xoá \(removed) mục cũ hơn \(days) ngày.", "Cleaned \(removed) items older than \(days) days."))
         } else if items.isEmpty {
-            showCleanupMessage("Lịch sử đang trống, không có gì để dọn.")
+            showCleanupMessage(tr("Lịch sử đang trống, không có gì để dọn.", "Clipboard history is empty, nothing to clean."))
         } else if items.count == pinnedCount {
-            showCleanupMessage("Chỉ còn \(pinnedCount) mục đã ghim — luôn được giữ lại.")
+            showCleanupMessage(tr("Chỉ còn \(pinnedCount) mục đã ghim — luôn được giữ lại.", "Only \(pinnedCount) pinned items left — protected from cleanup."))
         } else {
             // Feedback rõ ràng: nút đã chạy, chỉ là chưa có mục nào đủ cũ.
-            showCleanupMessage("Không có mục nào cũ hơn \(days) ngày. Dùng \"Xoá tất cả\" để dọn ngay.")
+            showCleanupMessage(tr("Không có mục nào cũ hơn \(days) ngày. Dùng \"Xoá tất cả\" để dọn ngay.", "No items older than \(days) days. Use \"Clear All\" to clean immediately."))
         }
     }
 
@@ -544,20 +546,20 @@ public class ClipboardManager: ObservableObject {
             items = items.filter { $0.isPinned }
             saveItemsToDisk()
             clampSelection()
-            showCleanupMessage(removed > 0 ? "Đã xoá \(removed) mục (giữ lại mục đã ghim)." : "Không có mục nào để xoá.")
+            showCleanupMessage(removed > 0 ? tr("Đã xoá \(removed) mục (giữ lại mục đã ghim).", "Cleaned \(removed) items (preserved pinned items).") : tr("Không có mục nào để xoá.", "Nothing to delete."))
             return
         }
 
         let unpinned = items.filter { !$0.isPinned }.count
         guard unpinned > 0 else {
-            showCleanupMessage("Không có mục nào để xoá (chỉ còn mục đã ghim).")
+            showCleanupMessage(tr("Không có mục nào để xoá (chỉ còn mục đã ghim).", "Nothing to delete (only pinned items left)."))
             return
         }
 
         pendingClearAllConfirm = true
         pendingClearAllToken &+= 1
         let token = pendingClearAllToken
-        showCleanupMessage("Bấm lần nữa để xoá \(unpinned) mục chưa ghim.")
+        showCleanupMessage(tr("Bấm lần nữa để xoá \(unpinned) mục chưa ghim.", "Press again to delete \(unpinned) unpinned items."))
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
             guard let self, self.pendingClearAllToken == token else { return }
             self.pendingClearAllConfirm = false

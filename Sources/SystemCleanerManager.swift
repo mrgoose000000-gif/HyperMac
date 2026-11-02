@@ -20,6 +20,26 @@ public struct JunkCategoryItem: Identifiable, Equatable, Sendable {
         SystemCleanerManager.formatBytes(sizeBytes)
     }
 
+    public var localizedTitle: String {
+        switch id {
+        case "caches": return tr("Bộ nhớ đệm ứng dụng & web", "App & Web Caches")
+        case "logs": return tr("Nhật ký & Báo cáo lỗi", "Logs & Crash Reports")
+        case "trash": return tr("Thùng rác hệ thống (Trash)", "System Trash")
+        case "developer": return tr("Dữ liệu rác lập trình viên (Xcode)", "Developer Junk (Xcode)")
+        default: return title
+        }
+    }
+
+    public var localizedSubtitle: String {
+        switch id {
+        case "caches": return tr("Cache Chrome, Safari, Spotify, Zalo, Adobe...", "Cache from Chrome, Safari, Spotify, Adobe...")
+        case "logs": return tr("Các tệp .log, .crash tích tụ lâu ngày", "Accumulated .log and .crash files")
+        case "trash": return tr("Các tệp đang nằm chờ dọn dẹp trong Thùng rác", "Files waiting in the Trash")
+        case "developer": return tr("DerivedData và bộ nhớ build tạm", "DerivedData and build artifacts")
+        default: return subtitle
+        }
+    }
+
     public static func == (lhs: JunkCategoryItem, rhs: JunkCategoryItem) -> Bool {
         lhs.id == rhs.id && lhs.sizeBytes == rhs.sizeBytes && lhs.isSelected == rhs.isSelected && lhs.fileCount == rhs.fileCount
     }
@@ -34,6 +54,17 @@ public struct LeftoverFileItem: Identifiable, Equatable, Sendable {
 
     public var sizeFormatted: String {
         SystemCleanerManager.formatBytes(sizeBytes)
+    }
+
+    public var localizedCategoryName: String {
+        switch categoryName {
+        case "Bộ nhớ đệm (Caches)": return tr("Bộ nhớ đệm (Caches)", "App Caches")
+        case "Cài đặt (Preferences)": return tr("Cài đặt (Preferences)", "Preferences")
+        case "Trạng thái lưu (Saved State)": return tr("Trạng thái lưu (Saved State)", "Saved Application State")
+        case "Nhật ký (Logs)": return tr("Nhật ký (Logs)", "Logs & Diagnostics")
+        case "Application Support": return "Application Support"
+        default: return categoryName
+        }
     }
 
     public static func == (lhs: LeftoverFileItem, rhs: LeftoverFileItem) -> Bool {
@@ -82,13 +113,16 @@ public struct LargeFileItem: Identifiable, Equatable, Sendable {
     public var relativeDateFormatted: String {
         let elapsed = Date().timeIntervalSince(modificationDate)
         if elapsed < 86400 {
-            return "Hôm nay"
+            return tr("Hôm nay", "Today")
         } else if elapsed < 86400 * 30 {
-            return "\(Int(elapsed / 86400)) ngày trước"
+            let days = Int(elapsed / 86400)
+            return tr("\(days) ngày trước", "\(days)d ago")
         } else if elapsed < 86400 * 365 {
-            return "\(Int(elapsed / (86400 * 30))) tháng trước"
+            let months = Int(elapsed / (86400 * 30))
+            return tr("\(months) tháng trước", "\(months)mo ago")
         } else {
-            return "\(Int(elapsed / (86400 * 365))) năm trước"
+            let years = Int(elapsed / (86400 * 365))
+            return tr("\(years) năm trước", "\(years)y ago")
         }
     }
 
@@ -387,7 +421,7 @@ public class SystemCleanerManager: ObservableObject {
                 self.isCleaningJunk = false
                 self.lastCleanedTimestamp = Date()
                 let freedStr = Self.formatBytes(initialTotal)
-                self.cleanedMessage = "🎉 Đã dọn sạch thành công \(freedStr) dung lượng!"
+                self.cleanedMessage = tr("🎉 Đã dọn sạch thành công \(freedStr) dung lượng!", "🎉 Successfully cleaned \(freedStr)!")
                 appLog("✨ SystemCleaner: Cleaned \(freedStr)")
                 // Re-scan to update counters
                 self.scanJunk()
@@ -609,12 +643,12 @@ public class SystemCleanerManager: ObservableObject {
                 if appDeleted {
                     let totalFreed = leftoversFreed + app.appSizeBytes
                     let freedStr = Self.formatBytes(totalFreed)
-                    self.uninstallMessage = "🗑️ Đã gỡ sạch \(app.name) và giải phóng \(freedStr)!"
+                    self.uninstallMessage = tr("🗑️ Đã gỡ sạch \(app.name) và giải phóng \(freedStr)!", "🗑️ Completely removed \(app.name) and freed \(freedStr)!")
                     self.installedApps.removeAll { $0.id == app.id }
                     self.selectedApp = nil
                 } else {
                     let freedStr = Self.formatBytes(leftoversFreed)
-                    self.uninstallMessage = "⚠️ Không thể xóa file .app (yêu cầu quyền quản trị macOS). Đã dọn sạch \(freedStr) tệp rác liên quan."
+                    self.uninstallMessage = tr("⚠️ Không thể xóa file .app (yêu cầu quyền quản trị macOS). Đã dọn sạch \(freedStr) tệp rác liên quan.", "⚠️ Could not delete .app bundle (admin privileges required). Cleaned \(freedStr) leftover files.")
                 }
                 appLog("✨ AppUninstaller: Uninstalled \(app.name), appDeleted=\(appDeleted)")
             }

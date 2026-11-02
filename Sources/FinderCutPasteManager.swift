@@ -186,16 +186,16 @@ public class FinderCutPasteManager: ObservableObject {
 
                 let title: String
                 if fileURLs.count == 1 {
-                    title = "Đã cắt: \(fileURLs[0].lastPathComponent)"
+                    title = tr("Đã cắt: \(fileURLs[0].lastPathComponent)", "Cut: \(fileURLs[0].lastPathComponent)")
                 } else {
-                    title = "Đã cắt \(fileURLs.count) tệp và thư mục"
+                    title = tr("Đã cắt \(fileURLs.count) tệp và thư mục", "Cut \(fileURLs.count) items")
                 }
 
                 self.showToast(
                     icon: "scissors",
                     iconColor: .cyan,
                     title: title,
-                    subtitle: "Bấm ⌘V để di chuyển • Esc để huỷ"
+                    subtitle: tr("Bấm ⌘V để di chuyển • Esc để huỷ", "Press ⌘V to move • Esc to cancel")
                 )
                 appLog("✂️ FinderCutPaste: Cut \(fileURLs.count) item(s)")
             } else {
@@ -237,18 +237,18 @@ public class FinderCutPasteManager: ObservableObject {
 
         let title: String
         if count == 1 {
-            title = "Đã di chuyển: \(first)"
+            title = tr("Đã di chuyển: \(first)", "Moved: \(first)")
         } else if count > 1 {
-            title = "Đã di chuyển \(count) tệp và thư mục"
+            title = tr("Đã di chuyển \(count) tệp và thư mục", "Moved \(count) items")
         } else {
-            title = "Đã di chuyển thành công"
+            title = tr("Đã di chuyển thành công", "Successfully moved")
         }
 
         showToast(
             icon: "shippingbox.fill",
             iconColor: .green,
             title: title,
-            subtitle: "Đã hoàn tất di chuyển vào thư mục hiện tại"
+            subtitle: tr("Đã hoàn tất di chuyển vào thư mục hiện tại", "Successfully moved to current folder")
         )
         appLog("📦 FinderCutPaste: Moved \(count) item(s) via ⌥⌘V")
     }
@@ -268,8 +268,8 @@ public class FinderCutPasteManager: ObservableObject {
             showToast(
                 icon: "xmark.circle.fill",
                 iconColor: .orange,
-                title: "Đã huỷ lệnh cắt",
-                subtitle: "Tệp vẫn giữ nguyên vị trí cũ"
+                title: tr("Đã huỷ lệnh cắt", "Cut Cancelled"),
+                subtitle: tr("Tệp vẫn giữ nguyên vị trí cũ", "Files remained in original location")
             )
             NSSound(named: "Pop")?.play()
         }

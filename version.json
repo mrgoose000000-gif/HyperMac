@@ -1,7 +1,7 @@
 {
-  "version": "1.7.0",
-  "name": "HyperMac v1.7.0 (Finder Cut & Paste + Snap Phím tắt mới + AltTab lưới đa hàng + Khởi động cùng macOS)",
-  "notes": "✨ Tính năng mới & Cải tiến trong v1.7.0:\n- ✂️ Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V): Mang trải nghiệm Cut & Paste tệp quen thuộc từ Windows lên macOS. Bấm ⌘X để cắt, ⌘V để di chuyển tệp vào thư mục đích (thay thế ⌥⌘V khó nhớ); bấm Esc hoặc ⌘C để hủy cắt. Tự động nhận diện khi đổi tên hoặc tìm kiếm để giữ nguyên cắt văn bản bình thường.\n- 🪟 Nâng cấp AltTab đa hàng & xem trước phóng to: Tăng kích thước preview cửa sổ giúp dễ nhìn hơn; bố cục lưới nhiều hàng tự động cân đối (adaptive grid); điều hướng bằng ↑↓←→ mượt mà; sửa triệt để hiện tượng viền xanh bị kẹt khi chuyển nhanh.\n- 🖥️ Lọc cửa sổ theo màn hình hiện tại: Tùy chọn chỉ hiển thị các cửa sổ nằm trên màn hình của con trỏ chuột, tối ưu cho thiết lập đa màn hình.\n- 📐 Tổ hợp phím Window Snap (Rectangle) mới: ⌃⌥↑ (nửa trên), ⌃⌥↓ (nửa dưới), ⌃⌥↩ (toàn màn hình), ⌃⌥⌫ (căn giữa) và 4 góc màn hình (U, I, J, K hoặc chording mũi tên); scale cửa sổ tỷ lệ chuẩn khi đổi màn hình.\n- 🚀 Khởi động cùng macOS: Tích hợp SMAppService và AppleScript fallback để HyperMac tự động chạy khi đăng nhập máy Mac.\n- 📂 Giao diện thu gọn (Collapsible): Bổ sung nút thu gọn / mở rộng chi tiết trên tất cả các thẻ cài đặt lớn giúp bảng điều khiển luôn gọn gàng, thanh thoát.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.7.0/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.7.0"
+  "version": "1.8.2",
+  "name": "HyperMac v1.8.2 (Hỗ trợ Tiếng Anh toàn diện + Chuyển đổi ngôn ngữ + Donate tác giả)",
+  "notes": "✨ Tính năng mới & Cải tiến trong v1.8.2:\n- 🌐 Hỗ trợ đa ngôn ngữ Tiếng Việt & Tiếng Anh: Bổ sung nút chuyển đổi nhanh (vi / en) ngay cạnh logo HyperMac trên thanh tiêu đề, xác nhận trước khi đổi và lưu cài đặt vĩnh viễn.\n- 🇬🇧 Bản dịch Tiếng Anh chuẩn nghĩa toàn diện: Toàn bộ 4 tab chính, cài đặt phím tắt, menu dọn rác, overlay AltTab, Clipboard và thông báo pin SMC đều hỗ trợ tiếng Anh mượt mà.\n- 💖 Cửa sổ Donate ủng hộ tác giả: Tích hợp mã QR ngân hàng sắc nét, lời nhắn tri ân và liên kết Facebook trực tiếp.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.8.2/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.8.2"
 }

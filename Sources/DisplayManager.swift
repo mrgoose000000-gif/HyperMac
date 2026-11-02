@@ -185,7 +185,7 @@ public class DisplayManager: ObservableObject {
             if hasValidSize {
                 resolution = "\(Int(bounds.width)) × \(Int(bounds.height))"
             } else {
-                resolution = cachedDisplayResolutions[id] ?? "Đã ngắt mềm"
+                resolution = cachedDisplayResolutions[id] ?? tr("Đã ngắt mềm", "Soft-disconnected")
             }
 
             // Load cached brightness from UserDefaults or in-memory cache
@@ -277,7 +277,7 @@ public class DisplayManager: ObservableObject {
         let vendor = CGDisplayVendorNumber(displayID)
         let model  = CGDisplayModelNumber(displayID)
         if (vendor == 0x1234 && model == 0x5678) || (VirtualDisplayManager.shared.isVirtualDisplayActive && displayID == VirtualDisplayManager.shared.virtualDisplayID) {
-            return "Màn hình ảo (HyperMac)"
+            return tr("Màn hình ảo (HyperMac)", "Virtual Display (HyperMac)")
         }
 
         // 1. Native AppKit NSScreen lookup (Most accurate for each specific active display)
@@ -341,7 +341,7 @@ public class DisplayManager: ObservableObject {
         }
 
         let fallbackNum = (externalIndex ?? 0) + 1
-        return "Màn hình ngoài \(fallbackNum)"
+        return tr("Màn hình ngoài \(fallbackNum)", "External Display \(fallbackNum)")
     }
 
     // MARK: - Built-in Brightness via DisplayServices (Apple Silicon Native)
@@ -459,7 +459,7 @@ public class DisplayManager: ObservableObject {
         let currentlyActive = monitors[idx].isConnected
 
         if currentlyActive && !canDisconnect(monitor) {
-            alertMessage = "Không thể ngắt tất cả màn hình! macOS cần giữ lại ít nhất 1 màn hình hoạt động để bạn tiếp tục sử dụng."
+            alertMessage = tr("Không thể ngắt tất cả màn hình! macOS cần giữ lại ít nhất 1 màn hình hoạt động để bạn tiếp tục sử dụng.", "Cannot disconnect all displays! macOS requires at least 1 active display to operate.")
             showAlert = true
             return
         }
@@ -471,7 +471,7 @@ public class DisplayManager: ObservableObject {
 
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else {
-            alertMessage = "Không thể khởi tạo phiên thay đổi cấu hình màn hình."
+            alertMessage = tr("Không thể khởi tạo phiên thay đổi cấu hình màn hình.", "Unable to initiate display configuration session.")
             showAlert = true
             return
         }
@@ -480,7 +480,7 @@ public class DisplayManager: ObservableObject {
         let confResult = SLSConfigureDisplayEnabled(cfg, targetID, shouldEnable)
         guard confResult == .success else {
             _ = CGCancelDisplayConfiguration(config)
-            alertMessage = "Lỗi thiết lập trạng thái màn hình (Mã lỗi: \(confResult.rawValue))."
+            alertMessage = tr("Lỗi thiết lập trạng thái màn hình (Mã lỗi: \(confResult.rawValue)).", "Error configuring display state (Error code: \(confResult.rawValue)).")
             showAlert = true
             return
         }
@@ -489,9 +489,9 @@ public class DisplayManager: ObservableObject {
         guard commitResult == .success else {
             CGRestorePermanentDisplayConfiguration()
             if shouldEnable {
-                alertMessage = "Không thể bật lại màn hình ngoài. Có vẻ cáp kết nối đã bị rút khỏi máy hoặc màn hình bị mất nguồn điện."
+                alertMessage = tr("Không thể bật lại màn hình ngoài. Có vẻ cáp kết nối đã bị rút khỏi máy hoặc màn hình bị mất nguồn điện.", "Cannot reconnect external display. Please check if cable is unplugged or display is powered off.")
             } else {
-                alertMessage = "Lỗi áp dụng cấu hình màn hình vào WindowServer (Mã lỗi: \(commitResult.rawValue))."
+                alertMessage = tr("Lỗi áp dụng cấu hình màn hình vào WindowServer (Mã lỗi: \(commitResult.rawValue)).", "Error applying display config to WindowServer (Error code: \(commitResult.rawValue)).")
             }
             showAlert = true
             refreshDisplays()

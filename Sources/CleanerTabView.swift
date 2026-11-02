@@ -43,9 +43,9 @@ public struct CleanerTabView: View {
 
     private var subTabBar: some View {
         HStack(spacing: 4) {
-            subTabButton(index: 0, title: "Dọn rác", icon: "sparkles")
-            subTabButton(index: 1, title: "Gỡ App", icon: "trash")
-            subTabButton(index: 2, title: "Tệp lớn", icon: "doc.badge.gearshape")
+            subTabButton(index: 0, title: tr("Dọn rác", "Junk"), icon: "sparkles")
+            subTabButton(index: 1, title: tr("Gỡ App", "Uninstaller"), icon: "trash")
+            subTabButton(index: 2, title: tr("Tệp lớn", "Large Files"), icon: "doc.badge.gearshape")
         }
         .padding(2.5)
         .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.04)))
@@ -100,11 +100,11 @@ public struct CleanerTabView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(cleanerManager.isScanningJunk ? "Đang quét hệ thống..." : (cleanerManager.totalJunkBytes > 0 ? SystemCleanerManager.formatBytes(cleanerManager.totalJunkBytes) : "Hệ thống sạch sẽ"))
+                        Text(cleanerManager.isScanningJunk ? tr("Đang quét hệ thống...", "Scanning system...") : (cleanerManager.totalJunkBytes > 0 ? SystemCleanerManager.formatBytes(cleanerManager.totalJunkBytes) : tr("Hệ thống sạch sẽ", "System is Clean")))
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
-                        Text(cleanerManager.isScanningJunk ? "Đang kiểm tra Caches, Logs & Trash..." : "Dung lượng rác có thể giải phóng ngay")
+                        Text(cleanerManager.isScanningJunk ? tr("Đang kiểm tra Caches, Logs & Trash...", "Checking Caches, Logs & Trash...") : tr("Dung lượng rác có thể giải phóng ngay", "Junk space ready to be freed"))
                             .font(.system(size: 8.5))
                             .foregroundStyle(.secondary)
                     }
@@ -124,7 +124,7 @@ public struct CleanerTabView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 9, weight: .bold))
-                            Text(cleanerManager.isCleaningJunk ? "Đang dọn sạch..." : "Dọn sạch ngay")
+                            Text(cleanerManager.isCleaningJunk ? tr("Đang dọn sạch...", "Cleaning...") : tr("Dọn sạch ngay", "Clean Now"))
                                 .font(.system(size: 9.5, weight: .bold))
                         }
                         .padding(.vertical, 6)
@@ -142,7 +142,7 @@ public struct CleanerTabView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 9, weight: .bold))
-                            Text("Quét lại")
+                            Text(tr("Quét lại", "Rescan"))
                                 .font(.system(size: 9.5, weight: .semibold))
                         }
                         .padding(.vertical, 6)
@@ -197,10 +197,10 @@ public struct CleanerTabView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(cat.title)
+                Text(cat.localizedTitle)
                     .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(.primary)
-                Text(cat.subtitle)
+                Text(cat.localizedSubtitle)
                     .font(.system(size: 7.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -237,7 +237,7 @@ public struct CleanerTabView: View {
                         .font(.system(size: 8.5))
                         .foregroundStyle(.secondary)
 
-                    TextField("Tìm ứng dụng cần gỡ...", text: Binding<String>(
+                    TextField(tr("Tìm ứng dụng cần gỡ...", "Search apps to uninstall..."), text: Binding<String>(
                         get: { cleanerManager.appSearchQuery },
                         set: { cleanerManager.appSearchQuery = $0 }
                     ))
@@ -268,7 +268,7 @@ public struct CleanerTabView: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
                 }
                 .buttonStyle(.plain)
-                .help("Quét lại danh sách ứng dụng")
+                .help(tr("Quét lại danh sách ứng dụng", "Rescan application list"))
             }
 
             // Uninstall Result Alert
@@ -301,7 +301,7 @@ public struct CleanerTabView: View {
                 if cleanerManager.isScanningApps {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
-                        Text("Đang quét danh sách ứng dụng trong /Applications...")
+                        Text(tr("Đang quét danh sách ứng dụng trong /Applications...", "Scanning apps in /Applications..."))
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary)
                     }
@@ -311,7 +311,7 @@ public struct CleanerTabView: View {
                         Image(systemName: "app.dashed")
                             .font(.system(size: 20))
                             .foregroundStyle(.secondary)
-                        Text("Không tìm thấy ứng dụng nào.")
+                        Text(tr("Không tìm thấy ứng dụng nào.", "No applications found."))
                             .font(.system(size: 8.5))
                             .foregroundStyle(.secondary)
                     }
@@ -319,11 +319,11 @@ public struct CleanerTabView: View {
                 } else {
                     VStack(spacing: 4) {
                         HStack {
-                            Text("\(filtered.count) ứng dụng")
+                            Text(tr("\(filtered.count) ứng dụng", "\(filtered.count) applications"))
                                 .font(.system(size: 7.5, weight: .bold))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("Bấm vào để xem & gỡ sạch file rác")
+                            Text(tr("Bấm vào để xem & gỡ sạch file rác", "Click to inspect & clean leftovers"))
                                 .font(.system(size: 7.5))
                                 .foregroundStyle(.secondary)
                         }
@@ -408,11 +408,11 @@ public struct CleanerTabView: View {
             // Leftovers list
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Các tệp sẽ được chuyển vào Thùng rác:")
+                    Text(tr("Các tệp sẽ được chuyển vào Thùng rác:", "Files that will be moved to Trash:"))
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("Tổng cộng: \(app.totalSizeFormatted)")
+                    Text(tr("Tổng cộng: \(app.totalSizeFormatted)", "Total: \(app.totalSizeFormatted)"))
                         .font(.system(size: 8.5, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.accentColor)
                 }
@@ -422,7 +422,7 @@ public struct CleanerTabView: View {
                     Image(systemName: "app.fill")
                         .font(.system(size: 8.5))
                         .foregroundStyle(Color.accentColor)
-                    Text("File cài đặt ứng dụng (.app)")
+                    Text(tr("File cài đặt ứng dụng (.app)", "App bundle (.app)"))
                         .font(.system(size: 8, weight: .medium))
                     Spacer()
                     Text(SystemCleanerManager.formatBytes(app.appSizeBytes))
@@ -436,13 +436,13 @@ public struct CleanerTabView: View {
                 if app.isInspectingLeftovers {
                     HStack(spacing: 4) {
                         ProgressView().controlSize(.mini)
-                        Text("Đang dò tìm file rác (Caches, Application Support...)...")
+                        Text(tr("Đang dò tìm file rác (Caches, Application Support...)...", "Searching for leftover files (Caches, Support...)..."))
                             .font(.system(size: 7.5))
                             .foregroundStyle(.secondary)
                     }
                     .padding(6)
                 } else if app.leftovers.isEmpty {
-                    Text("Không tìm thấy file rác ngoài thư mục .app.")
+                    Text(tr("Không tìm thấy file rác ngoài thư mục .app.", "No leftover files found outside .app bundle."))
                         .font(.system(size: 7.5))
                         .foregroundStyle(.secondary)
                         .padding(4)
@@ -463,7 +463,7 @@ public struct CleanerTabView: View {
                             .labelsHidden()
 
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(item.categoryName)
+                                Text(item.localizedCategoryName)
                                     .font(.system(size: 8, weight: .bold))
                                 Text(item.url.lastPathComponent)
                                     .font(.system(size: 7))
@@ -490,7 +490,7 @@ public struct CleanerTabView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "trash.fill")
                         .font(.system(size: 9.5, weight: .bold))
-                    Text(cleanerManager.isUninstalling ? "Đang gỡ sạch..." : "Gỡ bỏ tận gốc (\(app.totalSizeFormatted))")
+                    Text(cleanerManager.isUninstalling ? tr("Đang gỡ sạch...", "Uninstalling...") : tr("Gỡ bỏ tận gốc (\(app.totalSizeFormatted))", "Uninstall Completely (\(app.totalSizeFormatted))"))
                         .font(.system(size: 9.5, weight: .bold))
                 }
                 .padding(.vertical, 7)
@@ -512,7 +512,7 @@ public struct CleanerTabView: View {
         VStack(spacing: 8) {
             // Header with threshold selector
             HStack(spacing: 6) {
-                Text("Ngưỡng kích thước:")
+                Text(tr("Ngưỡng kích thước:", "Size threshold:"))
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
 
@@ -543,14 +543,14 @@ public struct CleanerTabView: View {
                         .font(.system(size: 8.5, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .help("Quét lại tệp lớn")
+                .help(tr("Quét lại tệp lớn", "Rescan large files"))
             }
             .padding(.horizontal, 2)
 
             if cleanerManager.isScanningLargeFiles {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
-                    Text("Đang quét các tệp lớn trong Downloads, Movies, Documents...")
+                    Text(tr("Đang quét các tệp lớn trong Downloads, Movies, Documents...", "Scanning large files in Downloads, Movies, Documents..."))
                         .font(.system(size: 8))
                         .foregroundStyle(.secondary)
                 }
@@ -560,7 +560,7 @@ public struct CleanerTabView: View {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 20))
                         .foregroundStyle(.secondary)
-                    Text("Không có tệp nào lớn hơn \(cleanerManager.largeFileThresholdMB)MB.")
+                    Text(tr("Không có tệp nào lớn hơn \(cleanerManager.largeFileThresholdMB)MB.", "No files larger than \(cleanerManager.largeFileThresholdMB)MB found."))
                         .font(.system(size: 8.5))
                         .foregroundStyle(.secondary)
                 }
@@ -609,7 +609,7 @@ public struct CleanerTabView: View {
                     .background(Circle().fill(Color.primary.opacity(0.05)))
             }
             .buttonStyle(.plain)
-            .help("Mở trong Finder")
+            .help(tr("Mở trong Finder", "Reveal in Finder"))
 
             // Move to Trash button
             Button {
@@ -622,7 +622,7 @@ public struct CleanerTabView: View {
                     .background(Circle().fill(Color.red.opacity(0.08)))
             }
             .buttonStyle(.plain)
-            .help("Chuyển vào Thùng rác")
+            .help(tr("Chuyển vào Thùng rác", "Move to Trash"))
         }
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 7).fill(Color(nsColor: .controlBackgroundColor)))

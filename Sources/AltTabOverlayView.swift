@@ -85,7 +85,7 @@ public struct AltTabOverlayView: View {
                 HStack(spacing: 3.5) {
                     Image(systemName: "display")
                         .font(.system(size: 8))
-                    Text("Màn hình này")
+                    Text(tr("Màn hình này", "This Display"))
                         .font(.system(size: 8, weight: .semibold))
                 }
                 .padding(.horizontal, 6)
@@ -164,12 +164,12 @@ public struct AltTabOverlayView: View {
 
     private var footerHintsBar: some View {
         HStack(spacing: 12) {
-            HintChip(icon: "command", text: "⌘⇥ / ⇧⇥ Di chuyển")
-            HintChip(icon: "arrow.up.and.down.and.arrow.left.and.right", text: "↑↓←→ Lưới hàng")
-            HintChip(icon: "xmark.circle", text: "W Đóng")
-            HintChip(icon: "power", text: "Q Thoát app")
-            HintChip(icon: "escape", text: "⎋ Hủy")
-            HintChip(icon: "checkmark.circle.fill", text: "Thả ⌘ Chọn")
+            HintChip(icon: "command", text: tr("⌘⇥ / ⇧⇥ Di chuyển", "⌘⇥ / ⇧⇥ Navigate"))
+            HintChip(icon: "arrow.up.and.down.and.arrow.left.and.right", text: tr("↑↓←→ Lưới hàng", "↑↓←→ Grid"))
+            HintChip(icon: "xmark.circle", text: tr("W Đóng", "W Close"))
+            HintChip(icon: "power", text: tr("Q Thoát app", "Q Quit App"))
+            HintChip(icon: "escape", text: tr("⎋ Hủy", "⎋ Cancel"))
+            HintChip(icon: "checkmark.circle.fill", text: tr("Thả ⌘ Chọn", "Release ⌘ Select"))
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 2)
@@ -221,7 +221,7 @@ struct AltTabWindowTile: View {
             if item.isMinimized {
                 HStack(spacing: 3) {
                     Circle().fill(Color.orange).frame(width: 5.5, height: 5.5)
-                    Text("Thu nhỏ")
+                    Text(tr("Thu nhỏ", "Minimized"))
                         .font(.system(size: 7.5, weight: .bold))
                         .foregroundStyle(Color.orange)
                 }
@@ -246,7 +246,7 @@ struct AltTabWindowTile: View {
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
             .buttonStyle(.plain)
-            .help("Đóng cửa sổ (W)")
+            .help(tr("Đóng cửa sổ (W)", "Close window (W)"))
         }
         .padding(.horizontal, 10)
         .padding(.top, 8)

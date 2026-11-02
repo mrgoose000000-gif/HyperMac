@@ -54,7 +54,7 @@ public struct ClipboardOverlayView: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
 
-            TextField("Tìm kiếm clipboard... (1-9 để dán nhanh)", text: $manager.searchText)
+            TextField(tr("Tìm kiếm clipboard... (1-9 để dán nhanh)", "Search clipboard... (1-9 to paste)"), text: $manager.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .medium))
                 .onSubmit {
@@ -83,7 +83,7 @@ public struct ClipboardOverlayView: View {
                     .background(Circle().fill(Color.primary.opacity(0.06)))
             }
             .buttonStyle(.plain)
-            .help("Đóng (Esc)")
+            .help(tr("Đóng (Esc)", "Close (Esc)"))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -202,7 +202,7 @@ public struct ClipboardOverlayView: View {
                                         .foregroundStyle(item.isPinned ? .orange : .secondary)
                                 }
                                 .buttonStyle(.plain)
-                                .help(item.isPinned ? "Bỏ ghim (⌥P)" : "Ghim lên đầu (⌥P)")
+                                .help(item.isPinned ? tr("Bỏ ghim (⌥P)", "Unpin (⌥P)") : tr("Ghim lên đầu (⌥P)", "Pin to top (⌥P)"))
 
                                 // Delete
                                 Button {
@@ -213,7 +213,7 @@ public struct ClipboardOverlayView: View {
                                         .foregroundStyle(.red.opacity(0.8))
                                 }
                                 .buttonStyle(.plain)
-                                .help("Xóa mục (⌥⌫)")
+                                .help(tr("Xóa mục (⌥⌫)", "Delete item (⌥⌫)"))
                             }
                         }
                     }
@@ -345,11 +345,11 @@ public struct ClipboardOverlayView: View {
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary.opacity(0.5))
 
-            Text("Lịch sử Clipboard trống")
+            Text(tr("Lịch sử Clipboard trống", "Clipboard History is Empty"))
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.secondary)
 
-            Text("Hãy sao chép (⌘C) văn bản, hình ảnh hoặc tệp tin để lưu vào HyperMac.")
+            Text(tr("Hãy sao chép (⌘C) văn bản, hình ảnh hoặc tệp tin để lưu vào HyperMac.", "Copy (⌘C) text, images or files to save them in HyperMac."))
                 .font(.system(size: 9.5))
                 .foregroundStyle(.secondary.opacity(0.8))
                 .multilineTextAlignment(.center)
@@ -365,22 +365,22 @@ public struct ClipboardOverlayView: View {
         HStack {
             // Key hints
             HStack(spacing: 8) {
-                legendItem(key: "↵", label: "Dán")
-                legendItem(key: "1-9", label: "Nhanh")
-                legendItem(key: "⌥P", label: "Ghim")
-                legendItem(key: "⌥⌫", label: "Xóa")
-                legendItem(key: "⎋", label: "Đóng")
+                legendItem(key: "↵", label: tr("Dán", "Paste"))
+                legendItem(key: "1-9", label: tr("Nhanh", "Quick"))
+                legendItem(key: "⌥P", label: tr("Ghim", "Pin"))
+                legendItem(key: "⌥⌫", label: tr("Xóa", "Delete"))
+                legendItem(key: "⎋", label: tr("Đóng", "Close"))
             }
 
             Spacer()
 
             // Count & Clear button
             HStack(spacing: 6) {
-                Text("\(manager.filteredItems.count) mục")
+                Text(tr("\(manager.filteredItems.count) mục", "\(manager.filteredItems.count) items"))
                     .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(.secondary)
 
-                Button("Xóa hết") {
+                Button(tr("Xóa hết", "Clear All")) {
                     manager.clearAllHistory()
                 }
                 .font(.system(size: 8.5, weight: .bold))

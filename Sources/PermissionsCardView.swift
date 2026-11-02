@@ -32,18 +32,18 @@ public struct PermissionsCardView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 5) {
-                            Text("Cấp quyền phần mềm")
+                            Text(tr("Cấp quyền phần mềm", "Permissions Hub"))
                                 .font(.system(size: 10.5, weight: .bold))
                                 .foregroundStyle(.primary)
 
                             if !permissionsManager.allGranted {
-                                Text("(\(permissionsManager.missingCount) quyền chưa cấp)")
+                                Text(tr("(\(permissionsManager.missingCount) quyền chưa cấp)", "(\(permissionsManager.missingCount) missing)"))
                                     .font(.system(size: 7.5, weight: .semibold))
                                     .foregroundStyle(.red)
                             }
                         }
 
-                        Text(permissionsManager.allGranted ? "Hệ thống đã nhận đầy đủ các quyền hoạt động" : "Bấm mũi tên để xem chi tiết & lý do cần cấp quyền")
+                        Text(permissionsManager.allGranted ? tr("Hệ thống đã nhận đầy đủ các quyền hoạt động", "All required system permissions granted") : tr("Bấm mũi tên để xem chi tiết & lý do cần cấp quyền", "Click arrow for details & required reasons"))
                             .font(.system(size: 7.5))
                             .foregroundStyle(.secondary)
                     }
@@ -54,7 +54,7 @@ public struct PermissionsCardView: View {
                     HStack(spacing: 3) {
                         Image(systemName: permissionsManager.allGranted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                             .font(.system(size: 8))
-                        Text(permissionsManager.allGranted ? "Đầy đủ quyền" : "Chưa đủ quyền")
+                        Text(permissionsManager.allGranted ? tr("Đầy đủ quyền", "All Granted") : tr("Chưa đủ quyền", "Permissions Missing"))
                             .font(.system(size: 8, weight: .bold))
                     }
                     .padding(.horizontal, 6)
@@ -84,14 +84,14 @@ public struct PermissionsCardView: View {
 
                     // 1. Accessibility (Trợ năng) - Bắt buộc
                     permissionRow(
-                        title: "1. Quyền Trợ năng (Accessibility)",
-                        tag: "BẮT BUỘC",
+                        title: tr("1. Quyền Trợ năng (Accessibility)", "1. Accessibility Permission"),
+                        tag: tr("BẮT BUỘC", "REQUIRED"),
                         tagColor: .red,
                         icon: "hand.raised.fill",
                         iconColor: .orange,
                         isGranted: permissionsManager.hasAccessibility,
-                        reason: "Cần thiết để nhận diện phím tắt chia cửa sổ (Rectangle), F1/F2 chỉnh sáng màn ngoài, chuyển tab AltTab và Cắt/Dán tệp Finder (⌘X ➔ ⌘V).",
-                        actionTitle: "Cấp quyền ngay",
+                        reason: tr("Cần thiết để nhận diện phím tắt chia cửa sổ (Rectangle), F1/F2 chỉnh sáng màn ngoài, chuyển tab AltTab và Cắt/Dán tệp Finder (⌘X ➔ ⌘V).", "Essential for window snapping (Rectangle), F1/F2 external brightness, AltTab switcher, and Finder Cut & Paste (⌘X ➔ ⌘V)."),
+                        actionTitle: tr("Cấp quyền ngay", "Grant Now"),
                         action: {
                             permissionsManager.openAccessibilitySettings()
                         }
@@ -99,14 +99,14 @@ public struct PermissionsCardView: View {
 
                     // 2. Screen Recording (Ghi màn hình) - Khuyên dùng
                     permissionRow(
-                        title: "2. Quyền Ghi màn hình (Screen Recording)",
-                        tag: "KHUYÊN DÙNG",
+                        title: tr("2. Quyền Ghi màn hình (Screen Recording)", "2. Screen Recording Permission"),
+                        tag: tr("KHUYÊN DÙNG", "RECOMMENDED"),
                         tagColor: .blue,
                         icon: "record.circle",
                         iconColor: .cyan,
                         isGranted: permissionsManager.hasScreenCapture,
-                        reason: "Dùng để chụp ảnh thu nhỏ trực tiếp (Live Thumbnail) sắc nét của các cửa sổ khi bấm ⌘+Tab. (Nếu không cấp, AltTab vẫn dùng được nhưng chỉ hiện icon).",
-                        actionTitle: "Mở Cài đặt",
+                        reason: tr("Dùng để chụp ảnh thu nhỏ trực tiếp (Live Thumbnail) sắc nét của các cửa sổ khi bấm ⌘+Tab. (Nếu không cấp, AltTab vẫn dùng được nhưng chỉ hiện icon).", "Used for sharp live window previews in ⌘+Tab. (Without this, AltTab still functions using app icons)."),
+                        actionTitle: tr("Mở Cài đặt", "Open Settings"),
                         action: {
                             permissionsManager.openScreenCaptureSettings()
                         }
@@ -114,14 +114,14 @@ public struct PermissionsCardView: View {
 
                     // 3. SMC Helper (Khóa sạc 80%) - Phần cứng
                     permissionRow(
-                        title: "3. Quản lý nguồn & Khóa sạc 80% (SMC)",
-                        tag: "PHẦN CỨNG",
+                        title: tr("3. Quản lý nguồn & Khóa sạc 80% (SMC)", "3. Power & Charge Limiter (SMC)"),
+                        tag: tr("PHẦN CỨNG", "HARDWARE"),
                         tagColor: .purple,
                         icon: "bolt.batteryblock.fill",
                         iconColor: .green,
                         isGranted: permissionsManager.hasSMCHelper,
-                        reason: "Giao tiếp trực tiếp với chip điều khiển nguồn SMC, tự động ngắt dòng điện khi pin đạt 80% để triệt tiêu nguy cơ chai pin, phồng pin.",
-                        actionTitle: "Cài đặt Helper",
+                        reason: tr("Giao tiếp trực tiếp với chip điều khiển nguồn SMC, tự động ngắt dòng điện khi pin đạt 80% để triệt tiêu nguy cơ chai pin, phồng pin.", "Communicates directly with SMC to stop charging at 80%, bypassing battery to prevent degradation."),
+                        actionTitle: tr("Cài đặt Helper", "Install Helper"),
                         action: {
                             permissionsManager.installSMCHelper()
                         }
@@ -129,14 +129,14 @@ public struct PermissionsCardView: View {
 
                     // 4. Bluetooth (Sleep Guard) - Tiết kiệm pin
                     permissionRow(
-                        title: "4. Quyền Bluetooth (Sleep Guard)",
-                        tag: "TIẾT KIỆM PIN",
+                        title: tr("4. Quyền Bluetooth (Sleep Guard)", "4. Bluetooth (Sleep Guard)"),
+                        tag: tr("TIẾT KIỆM PIN", "BATTERY SAVER"),
                         tagColor: .teal,
                         icon: "wave.3.forward.circle.fill",
                         iconColor: .teal,
                         isGranted: permissionsManager.hasBluetooth,
-                        reason: "Tự động ngắt kết nối Bluetooth khi gập màn hình máy Mac để chống tụt pin qua đêm (0% hao hụt pin).",
-                        actionTitle: "Mở Cài đặt",
+                        reason: tr("Tự động ngắt kết nối Bluetooth khi gập màn hình máy Mac để chống tụt pin qua đêm (0% hao hụt pin).", "Automatically turns off Bluetooth when lid is closed to eliminate overnight battery drain (0% loss)."),
+                        actionTitle: tr("Mở Cài đặt", "Open Settings"),
                         action: {
                             permissionsManager.openBluetoothSettings()
                         }
@@ -197,7 +197,7 @@ public struct PermissionsCardView: View {
                     HStack(spacing: 3) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 7, weight: .bold))
-                        Text("Đã cấp")
+                        Text(tr("Đã cấp", "Granted"))
                             .font(.system(size: 8, weight: .bold))
                     }
                     .foregroundStyle(.green)

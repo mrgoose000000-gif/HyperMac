@@ -524,20 +524,20 @@ public class BatteryManager: ObservableObject {
             case .discharging:
                 if currentLevel <= 20 {
                     calibrationState = .charging
-                    calibrationMessage = "Bước 2/3: Sạc đầy 100% để cân bằng cell (Hiện tại: \(currentLevel)%)"
+                    calibrationMessage = tr("Bước 2/3: Sạc đầy 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
                     setChargingInhibited(false)
                     sendNotification(
-                        title: "⚡️ Hiệu chuẩn pin: Đã đạt 20%",
+                        title: tr("⚡️ Hiệu chuẩn pin: Đã đạt 20%", "⚡️ Calibration: Reached 20%"),
                         body: isPluggedIn
-                            ? "Đang sạc liên tục lên 100% để cân bằng điện áp các cell pin."
-                            : "Hãy cắm sạc để HyperMac sạc cân bằng cell lên 100% và tự động khóa lại ở 80%."
+                            ? tr("Đang sạc liên tục lên 100% để cân bằng điện áp các cell pin.", "Charging continuously to 100% to balance cell voltages.")
+                            : tr("Hãy cắm sạc để HyperMac sạc cân bằng cell lên 100% và tự động khóa lại ở 80%.", "Please plug in charger to allow cell balancing up to 100%.")
                     )
                 } else {
                     setChargingInhibited(true)
                     if isPluggedIn {
-                        calibrationMessage = "Bước 1/3: Rút sạc dùng máy xuống 20% (Hiện tại: \(currentLevel)%)"
+                        calibrationMessage = tr("Bước 1/3: Rút sạc dùng máy xuống 20% (Hiện tại: \(currentLevel)%)", "Step 1/3: Unplug and discharge to 20% (Currently: \(currentLevel)%)")
                     } else {
-                        calibrationMessage = "Bước 1/3: Đang dùng pin xuống 20% (Hiện tại: \(currentLevel)%)"
+                        calibrationMessage = tr("Bước 1/3: Đang dùng pin xuống 20% (Hiện tại: \(currentLevel)%)", "Step 1/3: Discharging battery to 20% (Currently: \(currentLevel)%)")
                     }
                 }
                 return
@@ -545,11 +545,11 @@ public class BatteryManager: ObservableObject {
             case .charging:
                 if currentLevel >= 100 {
                     calibrationState = .resting
-                    calibrationMessage = "Bước 3/3: Giữ 100% trong 15 phút để ổn định hóa chất cell..."
+                    calibrationMessage = tr("Bước 3/3: Giữ 100% trong 15 phút để ổn định hóa chất cell...", "Step 3/3: Holding 100% for 15 min to stabilize chemistry...")
                     setChargingInhibited(false)
                     sendNotification(
-                        title: "🔋 Hiệu chuẩn pin: Đạt 100%",
-                        body: "Đang giữ 100% trong 15 phút để các cell pin cân bằng hoàn toàn."
+                        title: tr("🔋 Hiệu chuẩn pin: Đạt 100%", "🔋 Calibration: Reached 100%"),
+                        body: tr("Đang giữ 100% trong 15 phút để các cell pin cân bằng hoàn toàn.", "Holding 100% for 15 minutes to equalize all battery cells.")
                     )
                     restingTimer?.invalidate()
                     restingTimer = Timer.scheduledTimer(withTimeInterval: 900, repeats: false) { [weak self] _ in
@@ -559,7 +559,7 @@ public class BatteryManager: ObservableObject {
                     }
                 } else {
                     setChargingInhibited(false)
-                    calibrationMessage = "Bước 2/3: Đang sạc lên 100% (Hiện tại: \(currentLevel)%)"
+                    calibrationMessage = tr("Bước 2/3: Đang sạc lên 100% (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% (Currently: \(currentLevel)%)")
                 }
                 return
 
@@ -574,7 +574,7 @@ public class BatteryManager: ObservableObject {
         // 2. Normal power state
         if !isPluggedIn {
             self.isBypassActive = false
-            statusMessage = "Đang dùng pin (\(currentLevel)%)"
+            statusMessage = tr("Đang dùng pin (\(currentLevel)%)", "On battery (\(currentLevel)%)")
             return
         }
 
@@ -583,9 +583,9 @@ public class BatteryManager: ObservableObject {
             setChargingInhibited(false)
             if currentLevel >= 100 {
                 isTopUpActive = false
-                statusMessage = "Đã sạc đầy 100%"
+                statusMessage = tr("Đã sạc đầy 100%", "Fully charged 100%")
             } else {
-                statusMessage = "⚡️ Đang sạc đầy tạm thời (\(currentLevel)%)"
+                statusMessage = tr("⚡️ Đang sạc đầy tạm thời (\(currentLevel)%)", "⚡️ Temporary top-up (\(currentLevel)%)")
             }
             return
         }
@@ -593,20 +593,20 @@ public class BatteryManager: ObservableObject {
         if isProtectionEnabled {
             if currentLevel >= chargeLimit {
                 setChargingInhibited(true)
-                statusMessage = "🛡️ Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)"
+                statusMessage = tr("🛡️ Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)", "🛡️ Direct AC Power (Locked at \(chargeLimit)% to protect battery)")
             } else if currentLevel <= max(10, chargeLimit - 3) {
                 setChargingInhibited(false)
-                statusMessage = "⚡️ Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)"
+                statusMessage = tr("⚡️ Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)", "⚡️ Recharging up to \(chargeLimit)% (\(currentLevel)%)")
             } else {
                 if isBypassActive {
-                    statusMessage = "🛡️ Nguồn AC trực tiếp (\(currentLevel)%)"
+                    statusMessage = tr("🛡️ Nguồn AC trực tiếp (\(currentLevel)%)", "🛡️ Direct AC Power (\(currentLevel)%)")
                 } else {
-                    statusMessage = "⚡️ Đang sạc (\(currentLevel)%)"
+                    statusMessage = tr("⚡️ Đang sạc (\(currentLevel)%)", "⚡️ Charging (\(currentLevel)%)")
                 }
             }
         } else {
             setChargingInhibited(false)
-            statusMessage = isFullyCharged ? "Đã sạc đầy 100%" : "Đang sạc thường (\(currentLevel)%)"
+            statusMessage = isFullyCharged ? tr("Đã sạc đầy 100%", "Fully charged 100%") : tr("Đang sạc thường (\(currentLevel)%)", "Standard charging (\(currentLevel)%)")
         }
     }
 
@@ -646,11 +646,11 @@ public class BatteryManager: ObservableObject {
             if currentLevel <= 25 && isPluggedIn {
                 // Pin đã thấp sẵn và đang cắm sạc -> chuyển thẳng sang Bước 2 sạc cân bằng
                 calibrationState = .charging
-                calibrationMessage = "Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)"
+                calibrationMessage = tr("Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
                 setChargingInhibited(false)
                 sendNotification(
-                    title: "⚡️ Bắt đầu hiệu chuẩn pin tự động",
-                    body: "Pin đang ở mức \(currentLevel)%. HyperMac đang sạc lên 100% để cân bằng cell và sẽ tự động khóa lại ở 80%."
+                    title: tr("⚡️ Bắt đầu hiệu chuẩn pin tự động", "⚡️ Automatic Battery Calibration Started"),
+                    body: tr("Pin đang ở mức \(currentLevel)%. HyperMac đang sạc lên 100% để cân bằng cell và sẽ tự động khóa lại ở 80%.", "Battery is at \(currentLevel)%. HyperMac is charging to 100% and will lock back to 80%.")
                 )
             } else if calibrationState == .idle {
                 startCalibration(isAutomatic: true)
@@ -660,36 +660,36 @@ public class BatteryManager: ObservableObject {
 
     public func startCalibration(isAutomatic: Bool = false) {
         guard isHelperInstalled else {
-            statusMessage = "Cần cấp quyền SMC để hiệu chuẩn pin"
+            statusMessage = tr("Cần cấp quyền SMC để hiệu chuẩn pin", "SMC Helper required for calibration")
             return
         }
 
         if currentLevel <= 22 {
             // Pin đã thấp sẵn -> bắt đầu sạc cân bằng ngay
             calibrationState = .charging
-            calibrationMessage = "Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)"
+            calibrationMessage = tr("Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
             setChargingInhibited(false)
             sendNotification(
-                title: "⚡️ Hiệu chuẩn pin: Bắt đầu sạc cân bằng cell",
-                body: "Pin đang ở mức \(currentLevel)%. Đang nạp đầy 100% để cân bằng vi sai điện áp các cell."
+                title: tr("⚡️ Hiệu chuẩn pin: Bắt đầu sạc cân bằng cell", "⚡️ Battery Calibration: Cell Balancing Started"),
+                body: tr("Pin đang ở mức \(currentLevel)%. Đang nạp đầy 100% để cân bằng vi sai điện áp các cell.", "Battery is at \(currentLevel)%. Charging to 100% to equalize cell voltages.")
             )
             return
         }
 
         calibrationState = .discharging
         if isPluggedIn {
-            calibrationMessage = "Bước 1/3: Rút sạc dùng máy xuống 20% (Hiện tại: \(currentLevel)%)"
+            calibrationMessage = tr("Bước 1/3: Rút sạc dùng máy xuống 20% (Hiện tại: \(currentLevel)%)", "Step 1/3: Unplug and discharge to 20% (Currently: \(currentLevel)%)")
         } else {
-            calibrationMessage = "Bước 1/3: Đang dùng pin xuống 20% (Hiện tại: \(currentLevel)%)"
+            calibrationMessage = tr("Bước 1/3: Đang dùng pin xuống 20% (Hiện tại: \(currentLevel)%)", "Step 1/3: Discharging battery to 20% (Currently: \(currentLevel)%)")
         }
         setChargingInhibited(true)
 
-        let reason = isAutomatic ? "Tự động theo lịch \(calibrationIntervalDays) ngày" : "Thủ công"
+        let reason = isAutomatic ? tr("Tự động theo lịch \(calibrationIntervalDays) ngày", "Scheduled every \(calibrationIntervalDays) days") : tr("Thủ công", "Manual")
         sendNotification(
-            title: "🔬 Bắt đầu hiệu chuẩn pin (\(reason))",
+            title: tr("🔬 Bắt đầu hiệu chuẩn pin (\(reason))", "🔬 Battery Calibration Started (\(reason))"),
             body: isPluggedIn
-                ? "Bước 1: Rút sạc dùng máy tự nhiên xuống mức 20%. Sau đó cắm sạc lại để HyperMac tự động làm phần còn lại."
-                : "Bước 1: Tiếp tục dùng pin xuống mức 20%. Sau đó cắm sạc lại để HyperMac tự động làm phần còn lại."
+                ? tr("Bước 1: Rút sạc dùng máy tự nhiên xuống mức 20%. Sau đó cắm sạc lại để HyperMac tự động làm phần còn lại.", "Step 1: Unplug and use battery down to 20%. Then plug in charger to complete.")
+                : tr("Bước 1: Tiếp tục dùng pin xuống mức 20%. Sau đó cắm sạc lại để HyperMac tự động làm phần còn lại.", "Step 1: Continue battery use down to 20%. Then plug in charger to complete.")
         )
     }
 
@@ -704,11 +704,11 @@ public class BatteryManager: ObservableObject {
     private func completeCalibration() {
         calibrationState = .completed
         self.lastCalibrationDate = Date()
-        calibrationMessage = "🎉 Hiệu chuẩn hoàn tất! Lịch tiếp theo sau \(calibrationIntervalDays) ngày."
+        calibrationMessage = tr("🎉 Hiệu chuẩn hoàn tất! Lịch tiếp theo sau \(calibrationIntervalDays) ngày.", "🎉 Calibration complete! Next schedule in \(calibrationIntervalDays) days.")
         setChargingInhibited(true)
         sendNotification(
-            title: "🎉 Hiệu chuẩn pin thành công!",
-            body: "Dung lượng cell đã được cân bằng chính xác. Chế độ nguồn AC trực tiếp đã được tự động khóa lại ở \(chargeLimit)%."
+            title: tr("🎉 Hiệu chuẩn pin thành công!", "🎉 Battery Calibration Succeeded!"),
+            body: tr("Dung lượng cell đã được cân bằng chính xác. Chế độ nguồn AC trực tiếp đã được tự động khóa lại ở \(chargeLimit)%.", "Cell capacities calibrated accurately. Direct AC power locked at \(chargeLimit)%.")
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             if self?.calibrationState == .completed {

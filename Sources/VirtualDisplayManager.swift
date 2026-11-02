@@ -40,7 +40,7 @@ public class VirtualDisplayManager: ObservableObject {
     }
     @Published public var isBlackoutPrimaryActive: Bool = false
     @Published public var isCardExpanded: Bool = false
-    @Published public var statusMessage: String = "Màn hình ảo chưa bật"
+    @Published public var statusMessage: String = tr("Màn hình ảo chưa bật", "Virtual display disabled")
 
     // Presets for Remote Desktop (Parsec, TeamViewer, Moonlight) & Mac mini Headless
     public let resolutions: [VirtualResolution] = [
@@ -49,7 +49,7 @@ public class VirtualDisplayManager: ObservableObject {
         VirtualResolution(name: "4K UHD (3840 × 2160)", width: 3840, height: 2160, refreshRate: 60.0, isHiDPI: true),
         VirtualResolution(name: "MacBook 16:10 (1800 × 1169)", width: 1800, height: 1169, refreshRate: 60.0, isHiDPI: true),
         VirtualResolution(name: "iPad Retina 4:3 (2048 × 1536)", width: 2048, height: 1536, refreshRate: 60.0, isHiDPI: true),
-        VirtualResolution(name: "1080p 120Hz Siêu mượt", width: 1920, height: 1080, refreshRate: 120.0, isHiDPI: false)
+        VirtualResolution(name: tr("1080p 120Hz Siêu mượt", "1080p 120Hz Ultra Smooth"), width: 1920, height: 1080, refreshRate: 120.0, isHiDPI: false)
     ]
 
     private var originalPrimaryBrightness: Float = 0.8
@@ -91,13 +91,13 @@ public class VirtualDisplayManager: ObservableObject {
         )
 
         guard id != 0 else {
-            self.statusMessage = "Hệ thống không hỗ trợ tạo màn hình ảo"
+            self.statusMessage = tr("Hệ thống không hỗ trợ tạo màn hình ảo", "System does not support virtual displays")
             return
         }
 
         self.virtualDisplayID = id
         self.isVirtualDisplayActive = true
-        self.statusMessage = "Đang hoạt động (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)"
+        self.statusMessage = tr("Đang hoạt động (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)", "Active (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)")
 
         // Refresh DisplayManager to discover the new virtual screen
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -112,7 +112,7 @@ public class VirtualDisplayManager: ObservableObject {
         VirtualDisplayBridge.shared().destroyDisplay()
         isVirtualDisplayActive = false
         virtualDisplayID = 0
-        statusMessage = "Màn hình ảo đã tắt"
+        statusMessage = tr("Màn hình ảo đã tắt", "Virtual display turned off")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             DisplayManager.shared.refreshDisplays()
@@ -131,7 +131,7 @@ public class VirtualDisplayManager: ObservableObject {
         )
         if id != 0 {
             self.virtualDisplayID = id
-            self.statusMessage = "Đang hoạt động (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)"
+            self.statusMessage = tr("Đang hoạt động (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)", "Active (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 DisplayManager.shared.refreshDisplays()
             }

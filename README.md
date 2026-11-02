@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.8.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.8.2-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.1)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.2)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,14 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.8.2] — 2026-11-02
+- **🌐 Hỗ trợ đa ngôn ngữ Tiếng Việt & Tiếng Anh (i18n Localization):**
+  - Bổ sung nút chuyển đổi ngôn ngữ nhanh **`vi` / `en`** trực tiếp tại thanh tiêu đề (bên phải badge phiên bản).
+  - Tích hợp hộp thoại xác nhận an toàn trước khi chuyển đổi; ghi nhớ ngôn ngữ đã chọn vĩnh viễn qua `UserDefaults`.
+  - Toàn bộ giao diện người dùng (4 tab chính, cài đặt phím tắt, menu dọn rác, overlay AltTab, Clipboard và thông báo pin SMC) được dịch song ngữ chuẩn xác, tự nhiên.
+- **✨ Đồng bộ cập nhật & hoàn thiện giao diện:**
+  - Tối ưu hóa kích thước và độ sắc nét cho nút chuyển ngôn ngữ và các bảng điều khiển overlay.
 
 ### [v1.8.1] — 2026-11-02
 - **❤️ Tích hợp nút Donate ủng hộ tác giả:**

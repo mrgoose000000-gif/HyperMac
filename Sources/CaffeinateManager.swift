@@ -15,7 +15,7 @@ public enum CaffeinateDuration: Int, CaseIterable, Identifiable {
 
     public var title: String {
         switch self {
-        case .indefinite: return "Vô hạn"
+        case .indefinite: return tr("Vô hạn", "Infinite")
         case .min15: return "15m"
         case .min30: return "30m"
         case .hour1: return "1h"

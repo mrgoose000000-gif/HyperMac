@@ -217,7 +217,7 @@ final class DiskSpeedSampler {
     }
 
     private static func prettyDiskName(_ product: String) -> String {
-        if product.uppercased().contains("APPLE SSD") { return "SSD nội bộ" }
+        if product.uppercased().contains("APPLE SSD") { return tr("SSD nội bộ", "Internal SSD") }
         return product
     }
 

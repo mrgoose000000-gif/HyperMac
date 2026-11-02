@@ -100,6 +100,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let tab = Int(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_TAB"] ?? "") ?? 1
         DisplayManager.shared.selectedMainTab = tab
 
+        if let langStr = ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_LANG"] {
+            LanguageManager.shared.currentLanguage = (langStr.lowercased() == "en") ? .en : .vi
+        }
+
         if let subTabStr = ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_SUBTAB"], let subTab = Int(subTabStr) {
             SystemCleanerManager.shared.selectedSection = subTab
             if subTab == 0 {

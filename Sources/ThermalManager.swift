@@ -94,17 +94,17 @@ private class AppleSiliconHIDReader {
                 sensorList.append(SensorReading(name: name, displayName: label, temp: temp, category: "CPU"))
             } else if name.hasPrefix("PMU tdev") || name.hasPrefix("PMU2 tdev") {
                 gpuTemps.append(temp)
-                let gpuIdx = name.replacingOccurrences(of: "PMU tdev", with: "").replacingOccurrences(of: "PMU2 tdev", with: " Cụm ")
-                sensorList.append(SensorReading(name: name, displayName: "GPU Cụm \(gpuIdx)", temp: temp, category: "GPU"))
+                let gpuIdx = name.replacingOccurrences(of: "PMU tdev", with: "").replacingOccurrences(of: "PMU2 tdev", with: " ")
+                sensorList.append(SensorReading(name: name, displayName: tr("GPU Cụm \(gpuIdx)", "GPU Cluster \(gpuIdx)"), temp: temp, category: "GPU"))
             } else if name.contains("battery") {
                 batteryTemps.append(temp)
-                sensorList.append(SensorReading(name: name, displayName: "Pin Cell (Gas Gauge)", temp: temp, category: "Pin"))
+                sensorList.append(SensorReading(name: name, displayName: tr("Pin Cell (Gas Gauge)", "Battery Cell (Gas Gauge)"), temp: temp, category: tr("Pin", "Battery")))
             } else if name.contains("NAND") {
                 nandTemps.append(temp)
-                sensorList.append(SensorReading(name: name, displayName: "SSD NVMe Flash", temp: temp, category: "Ổ cứng"))
+                sensorList.append(SensorReading(name: name, displayName: "SSD NVMe Flash", temp: temp, category: tr("Ổ cứng", "Storage")))
             } else if name.contains("tcal") {
                 hotspotTemps.append(temp)
-                sensorList.append(SensorReading(name: name, displayName: "Hotspot Bo mạch", temp: temp, category: "Bo mạch"))
+                sensorList.append(SensorReading(name: name, displayName: tr("Hotspot Bo mạch", "Logic Board Hotspot"), temp: temp, category: tr("Bo mạch", "Logic Board")))
             }
         }
 
@@ -245,19 +245,19 @@ public class ThermalManager: ObservableObject {
         let state = ProcessInfo.processInfo.thermalState
         switch state {
         case .nominal:
-            self.thermalStateDescription = "Mát mẻ (Bình thường)"
+            self.thermalStateDescription = tr("Mát mẻ (Bình thường)", "Nominal (Cool)")
             self.isThrottling = false
         case .fair:
-            self.thermalStateDescription = "Ấm nhẹ (Tải vừa)"
+            self.thermalStateDescription = tr("Ấm nhẹ (Tải vừa)", "Fair (Moderate)")
             self.isThrottling = false
         case .serious:
-            self.thermalStateDescription = "Nóng (Đang giảm xung nhẹ)"
+            self.thermalStateDescription = tr("Nóng (Đang giảm xung nhẹ)", "Hot (Slight Throttling)")
             self.isThrottling = true
         case .critical:
-            self.thermalStateDescription = "Rất nóng (Thermal Throttling tối đa!)"
+            self.thermalStateDescription = tr("Rất nóng (Thermal Throttling tối đa!)", "Critical (Heavy Throttling!)")
             self.isThrottling = true
         @unknown default:
-            self.thermalStateDescription = "Bình thường"
+            self.thermalStateDescription = tr("Bình thường", "Normal")
             self.isThrottling = false
         }
 
