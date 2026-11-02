@@ -123,6 +123,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             PermissionsManager.shared.isExpanded = true
         }
 
+        if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_DONATE"] == "1" {
+            UpdateManager.shared.showDonateModal = true
+        }
+
         let waitSec = Double(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_WAIT"] ?? "") ?? 0.25
 
         let view = MainView(displayManager: DisplayManager.shared)

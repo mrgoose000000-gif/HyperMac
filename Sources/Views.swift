@@ -92,8 +92,14 @@ public struct MainView: View {
                 UpdateModalView(updateManager: updateManager)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+
+            // Donate Modal Overlay
+            if updateManager.showDonateModal {
+                DonateModalView(updateManager: updateManager)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: updateManager.showUpdateModal)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: updateManager.showUpdateModal || updateManager.showDonateModal)
         .frame(width: 380, height: 570)
         .alert(isPresented: Binding<Bool>(
             get: { displayManager.showAlert },
@@ -2676,12 +2682,26 @@ struct FooterView: View {
             .buttonStyle(.plain)
             .help(updateManager.hasNewUpdate ? "Đã có bản mới! Bấm để cập nhật" : "Kiểm tra phiên bản mới từ GitHub")
 
-            Button("Thoát") {
-                NSApplication.shared.terminate(nil)
+            // Donate Button
+            Button {
+                updateManager.showDonateModal = true
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.pink)
+                    Text("Donate")
+                        .font(.system(size: 8.5, weight: .medium))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(
+                    Capsule().fill(Color.primary.opacity(0.06))
+                )
+                .foregroundStyle(Color.primary)
             }
-            .font(.system(size: 9.5))
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .help("Ủng hộ tác giả phát triển phần mềm")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
@@ -2954,6 +2974,161 @@ struct UpdateModalView: View {
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .padding(.horizontal, 20)
+        }
+    }
+}
+
+// MARK: - Donate Modal View
+
+private func getDonateQRImage() -> NSImage? {
+    if let path = Bundle.main.path(forResource: "donate_qr", ofType: "jpg"),
+       let img = NSImage(contentsOfFile: path) {
+        return img
+    }
+    let fallbackPaths = [
+        "/Applications/HyperMac.app/Contents/Resources/donate_qr.jpg",
+        FileManager.default.currentDirectoryPath + "/Resources/donate_qr.jpg",
+        "/Users/khacdai24/.gemini/antigravity/brain/94879281-6fae-438e-aee5-006283e6be3d/.user_uploaded/media_1793609797893_7b196951.jpg"
+    ]
+    for p in fallbackPaths {
+        if FileManager.default.fileExists(atPath: p), let img = NSImage(contentsOfFile: p) {
+            return img
+        }
+    }
+    return nil
+}
+
+struct DonateModalView: View {
+    @ObservedObject var updateManager: UpdateManager
+
+    var body: some View {
+        ZStack {
+            // Dimmed semi-transparent backdrop
+            Color.black.opacity(0.45)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    updateManager.showDonateModal = false
+                }
+
+            // Modal Dialog Card
+            VStack(spacing: 8) {
+                // Header Bar
+                HStack {
+                    HStack(spacing: 5) {
+                        Image(systemName: "heart.circle.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.pink)
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Ủng hộ tác giả (Donate)")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Tiếp thêm động lực phát triển HyperMac")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        updateManager.showDonateModal = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Đóng")
+                }
+
+                Divider()
+
+                // Content
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        // QR Code Image
+                        if let qrImg = getDonateQRImage() {
+                            VStack(spacing: 4) {
+                                Image(nsImage: qrImg)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: 185, maxHeight: 235)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(Color.pink.opacity(0.25), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+
+                                Text("Quét mã VietQR bằng mọi app ngân hàng")
+                                    .font(.system(size: 7.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 2)
+                        }
+
+                        // Message Box
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.")
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(.primary.opacity(0.9))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text("Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.")
+                                .font(.system(size: 8.5, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text("Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️")
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(.primary.opacity(0.9))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color.pink.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.pink.opacity(0.18), lineWidth: 0.8)
+                        )
+
+                        // Facebook Link Button
+                        Button {
+                            if let url = URL(string: "https://bit.ly/4ectK8U") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .font(.system(size: 9))
+                                Text("Nhắn tin Facebook cho tác giả ↗")
+                                    .font(.system(size: 9, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.12)))
+                            .foregroundStyle(Color.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .frame(maxHeight: 460)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(NSColor.windowBackgroundColor))
+                    .shadow(color: Color.black.opacity(0.28), radius: 16, x: 0, y: 6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
         }
     }
 }

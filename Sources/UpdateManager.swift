@@ -72,6 +72,7 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
     @Published public var state: UpdateState = .idle
     @Published public var downloadProgress: Double = 0.0
     @Published public var showUpdateModal: Bool = false
+    @Published public var showDonateModal: Bool = false
     @Published public var hasNewUpdate: Bool = false
     @Published public var latestVersionString: String = ""
     @Published public var releaseNotes: String = ""
