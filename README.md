@@ -1,13 +1,13 @@
-# ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon & Intel)
+# ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
 [![Version](https://img.shields.io/badge/version-v1.8.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
-[![Architecture](https://img.shields.io/badge/architecture-Universal%202%20(Apple%20Silicon%20%26%20Intel)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
+[![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/❤️_Donate-Ủng_hộ-ff69b4.svg)](#-ủng-hộ-phát-triển-donate)
 
-> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành cho máy Mac (cả chip Apple Silicon M-series lẫn chip Intel). Ứng dụng gom trọn tính năng của **8 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
+> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4...)**. Ứng dụng gom trọn tính năng của **8 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
 > **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
 
@@ -166,7 +166,7 @@ Tích hợp trực tiếp tại tab **Dọn dẹp** trên thanh điều khiển 
 <details>
 <summary><b>1. Máy Mac chip Intel ("Chip I") có dùng được HyperMac không?</b></summary>
 
-> **Có hỗ trợ.** HyperMac được đóng gói Universal 2 (chạy native cả Apple Silicon M1/M2/M3/M4 lẫn Intel x86_64). Riêng tính năng bypass pin SMC yêu cầu kiến trúc vi điều khiển tương thích.
+> **Không hỗ trợ.** HyperMac được tối ưu chuyên sâu và chỉ hỗ trợ các dòng máy Mac chạy chip **Apple Silicon** (M1, M2, M3, M4...). Do ứng dụng khai thác trực tiếp tập lệnh kiến trúc ARM64, quản lý bypass sạc qua Apple Silicon SMC và đọc cảm biến nhiệt độ phần cứng đặc thù của dòng chip M, nên không thể chạy trên các đời máy Mac cũ dùng chip Intel.
 </details>
 
 <details>
