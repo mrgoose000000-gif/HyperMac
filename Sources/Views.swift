@@ -131,11 +131,11 @@ struct ModernHeaderBar: View {
             // Logo & Title
             HStack(spacing: 6) {
                 Image(systemName: "command.circle.fill")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: FS.value, weight: .bold))
                     .foregroundStyle(Color.accentColor)
 
                 Text("HyperMac")
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .font(.system(size: FS.title, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -147,12 +147,12 @@ struct ModernHeaderBar: View {
                 } label: {
                     HStack(spacing: 3) {
                         Text("v\(UpdateManager.currentVersion)")
-                            .font(.system(size: 8.5, weight: .bold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                         if updateManager.hasNewUpdate {
                             Circle()
-                                .fill(Color.green)
+                                .fill(Tone.good)
                                 .frame(width: 5, height: 5)
                         }
                     }
@@ -161,11 +161,11 @@ struct ModernHeaderBar: View {
                     .background(
                         Capsule().fill(
                             updateManager.hasNewUpdate
-                            ? Color.green.opacity(0.18)
+                            ? Tone.good.opacity(0.10)
                             : Color.primary.opacity(0.08)
                         )
                     )
-                    .foregroundStyle(updateManager.hasNewUpdate ? Color.green : Color.secondary)
+                    .foregroundStyle(updateManager.hasNewUpdate ? Tone.good : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra bản cập nhật mới", "Check for updates"))
@@ -175,7 +175,7 @@ struct ModernHeaderBar: View {
                     languageManager.promptLanguageSwitch()
                 } label: {
                     Text(languageManager.currentLanguage == .vi ? "vi" : "en")
-                        .font(.system(size: 8.5, weight: .bold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(Color.primary.opacity(0.85))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -192,21 +192,6 @@ struct ModernHeaderBar: View {
 
             Spacer()
 
-            // Keep-awake Active Indicator
-            if caffeinateManager.isActive {
-                HStack(spacing: 3) {
-                    Image(systemName: "cup.and.saucer.fill")
-                        .font(.system(size: 8.5))
-                    Text(caffeinateManager.remainingFormatted)
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2.5)
-                .background(Capsule().fill(Color.orange.opacity(0.18)))
-                .foregroundStyle(Color.orange)
-                .help(tr("Chống sleep màn hình đang bật (\(caffeinateManager.remainingFormatted))", "Keep-awake active (\(caffeinateManager.remainingFormatted))"))
-            }
-
             // Live Thermal Chip
             if thermalManager.cpuAvgTemp > 0 {
                 Button {
@@ -214,15 +199,15 @@ struct ModernHeaderBar: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "thermometer.medium")
-                            .font(.system(size: 8))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(headerTempColor)
                         Text(String(format: "%.0f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp))
-                            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                            .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
                     }
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2.5)
-                    .background(Capsule().fill(headerTempColor.opacity(0.12)))
+                    .background(Capsule().fill(Color.primary.opacity(0.06)))
                 }
                 .buttonStyle(.plain)
                 .help(tr("Nhiệt độ CPU hiện tại: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Bấm để mở kiểm soát nhiệt & quạt", "Current CPU temp: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Click for thermals & fan controls"))
@@ -230,26 +215,26 @@ struct ModernHeaderBar: View {
 
             // Live Status Chip
             HStack(spacing: 4) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 6, height: 6)
+                Image(systemName: statusIcon)
+                    .font(.system(size: FS.caption, weight: .semibold))
+                    .foregroundStyle(statusColor)
 
                 Text(statusText)
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(statusColor)
+                    .font(.system(size: FS.caption, weight: .semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Capsule().fill(statusColor.opacity(0.12)))
+            .background(Capsule().fill(Color.primary.opacity(0.06)))
 
             // Quit Button
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
                 Image(systemName: "power")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: FS.label, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(5)
                     .background(Circle().fill(Color.primary.opacity(0.05)))
@@ -265,7 +250,7 @@ struct ModernHeaderBar: View {
     private var headerTempColor: Color {
         let temp = thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp
         if temp < 60.0 {
-            return .green
+            return Tone.good
         } else if temp < 80.0 {
             return .orange
         } else {
@@ -275,25 +260,37 @@ struct ModernHeaderBar: View {
 
     private var statusColor: Color {
         if batteryManager.isBypassActive && batteryManager.isPluggedIn {
-            return .cyan
+            return .accentColor
         } else if batteryManager.isCharging {
-            return .green
+            return Tone.good
         } else if batteryManager.isPluggedIn {
-            return .orange
+            return .secondary
         } else {
-            return batteryManager.currentLevel <= 20 ? .red : .secondary
+            return batteryManager.currentLevel <= 20 ? Tone.bad : .secondary
+        }
+    }
+
+    private var statusIcon: String {
+        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
+            return "lock.shield.fill"
+        } else if batteryManager.isCharging {
+            return "bolt.fill"
+        } else if batteryManager.isPluggedIn {
+            return "powerplug.fill"
+        } else {
+            return "battery.50"
         }
     }
 
     private var statusText: String {
         if batteryManager.isBypassActive && batteryManager.isPluggedIn {
-            return "🛡️ \(batteryManager.chargeLimit)% Bypass"
+            return "\(batteryManager.chargeLimit)% Bypass"
         } else if batteryManager.isCharging {
-            return "⚡️ " + tr("Đang sạc", "Charging")
+            return "\(batteryManager.currentLevel)%"
         } else if batteryManager.isPluggedIn {
-            return "🔌 " + tr("Cắm điện", "Plugged in")
+            return "\(batteryManager.currentLevel)%"
         } else {
-            return "🔋 \(batteryManager.currentLevel)%"
+            return "\(batteryManager.currentLevel)%"
         }
     }
 }
@@ -311,7 +308,7 @@ struct TopTabBar: View {
             tabButton(index: 3, title: tr("Dọn dẹp", "Cleaner"), icon: "sparkles")
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.05)))
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
     }
@@ -322,15 +319,16 @@ struct TopTabBar: View {
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 8.5, weight: .semibold))
+                    .font(.system(size: FS.caption, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 8.5, weight: selectedTab == index ? .bold : .medium))
+                    .font(.system(size: FS.caption, weight: selectedTab == index ? .semibold : .medium))
                     .lineLimit(1)
             }
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity)
+            .contentShape(RoundedRectangle(cornerRadius: Rad.sm))
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: Rad.sm)
                     .fill(selectedTab == index ? Color.accentColor : Color.clear)
             )
             .foregroundStyle(selectedTab == index ? Color.white : Color.primary)
@@ -362,7 +360,7 @@ struct HardwareCareTabView: View {
                 )
             }
             .padding(3)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.04)))
             .padding(.horizontal, 12)
             .padding(.top, 4)
 
@@ -396,14 +394,12 @@ struct HardwareCareTabView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 8.5, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 8.5, weight: thermalManager.selectedSection == index ? .bold : .medium))
+                    .font(.system(size: FS.caption, weight: thermalManager.selectedSection == index ? .semibold : .medium))
 
                 if let badge = badge, !badge.isEmpty {
                     Text(badge)
-                        .font(.system(size: 7.5, weight: .heavy, design: .rounded))
+                        .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Capsule().fill(thermalManager.selectedSection == index ? Color.white.opacity(0.25) : Color.primary.opacity(0.08)))
@@ -411,8 +407,9 @@ struct HardwareCareTabView: View {
             }
             .padding(.vertical, 4.5)
             .frame(maxWidth: .infinity)
+            .contentShape(RoundedRectangle(cornerRadius: Rad.sm))
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: Rad.sm)
                     .fill(thermalManager.selectedSection == index ? Color.accentColor : Color.clear)
             )
             .foregroundStyle(thermalManager.selectedSection == index ? Color.white : Color.primary)
@@ -492,11 +489,11 @@ struct FileTransferSpeedCard: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.up.arrow.down.circle.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(diskSpeed.isEnabled && isActive ? Color.cyan : Color.secondary)
+                    .font(.system(size: FS.caption))
+                    .foregroundStyle(diskSpeed.isEnabled && isActive ? Color.accentColor : Color.secondary)
 
                 Text(diskSpeed.isEnabled ? tr("Chép file", "File Transfer") : tr("Đo tốc độ chép file", "Transfer Speed"))
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: FS.caption, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -504,12 +501,12 @@ struct FileTransferSpeedCard: View {
                 Spacer()
 
                 if diskSpeed.isEnabled {
-                    speedChip(icon: "arrow.down", value: diskSpeed.totalReadMBps, color: .cyan)
-                    speedChip(icon: "arrow.up", value: diskSpeed.totalWriteMBps, color: .orange)
+                    speedChip(icon: "arrow.down", value: diskSpeed.totalReadMBps, color: .accentColor)
+                    speedChip(icon: "arrow.up", value: diskSpeed.totalWriteMBps, color: .secondary)
 
                     if diskSpeed.networkLabel != nil {
                         Divider().frame(height: 9)
-                        speedChip(icon: "network", value: max(diskSpeed.networkReadMBps, diskSpeed.networkWriteMBps), color: .green)
+                        speedChip(icon: "network", value: max(diskSpeed.networkReadMBps, diskSpeed.networkWriteMBps), color: .secondary)
                     }
                 }
 
@@ -527,22 +524,15 @@ struct FileTransferSpeedCard: View {
 
             if diskSpeed.isEnabled, let detail = detailText {
                 Text(detail)
-                    .font(.system(size: 7.5))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(Color.primary.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(diskSpeed.isEnabled && isActive ? Color.cyan.opacity(0.25) : Color.clear, lineWidth: 1)
-                )
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .cardBackground()
         .help(diskSpeed.isEnabled ? tooltip : "Đo tốc độ chép file đang tắt")
         .animation(.easeOut(duration: 0.2), value: detailText)
     }
@@ -551,9 +541,9 @@ struct FileTransferSpeedCard: View {
         let active = value >= 0.05
         return HStack(spacing: 2) {
             Image(systemName: icon)
-                .font(.system(size: 6.5, weight: .bold))
+                .font(.system(size: FS.caption, weight: .semibold))
             Text(Self.speedText(value))
-                .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
                 .monospacedDigit()
         }
         .foregroundStyle(active ? color : Color.secondary.opacity(0.7))
@@ -591,14 +581,14 @@ struct DisplaysTabView: View {
                     // F1/F2 cursor-based brightness setting
                     HStack(spacing: 8) {
                         Image(systemName: "keyboard")
-                            .font(.system(size: 11))
+                            .font(.system(size: FS.body))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(tr("F1 / F2 chỉnh màn hình theo con trỏ chuột", "F1 / F2 controls brightness at mouse cursor"))
-                                .font(.system(size: 10.5, weight: .medium))
+                                .font(.system(size: FS.label, weight: .medium))
                             Text(tr("Tự nhận diện màn hình trong hoặc ngoài để tăng giảm độ sáng", "Auto-detect built-in or external display to adjust brightness"))
-                                .font(.system(size: 7.5))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -613,8 +603,8 @@ struct DisplaysTabView: View {
                         .labelsHidden()
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+                    .padding(.vertical, 8)
+                    .cardBackground()
 
                     // Display List
                     VStack(spacing: 8) {
@@ -651,37 +641,41 @@ struct CaffeinateCardView: View {
             // Main Row: Icon, Title, Badge, and Switch
             HStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(caffeinateManager.isActive ? Color.orange.opacity(0.2) : Color.primary.opacity(0.06))
+                    RoundedRectangle(cornerRadius: Rad.sm)
+                        .fill(Color.primary.opacity(0.06))
                         .frame(width: 28, height: 28)
 
                     Image(systemName: "cup.and.saucer.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(caffeinateManager.isActive ? Color.orange : Color.secondary)
+                        .font(.system(size: FS.title, weight: .semibold))
+                        .foregroundStyle(caffeinateManager.isActive ? Color.accentColor : Color.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     HStack(spacing: 6) {
-                        Text(tr("Chống sleep màn (Caffeinate)", "Keep Screen Awake (Caffeinate)"))
-                            .font(.system(size: 11, weight: .semibold))
+                        Text(tr("Chống sleep màn", "Keep Screen Awake"))
+                            .font(.system(size: FS.body, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
 
                         if caffeinateManager.isActive {
                             HStack(spacing: 3) {
                                 Circle()
-                                    .fill(Color.orange)
+                                    .fill(Color.accentColor)
                                     .frame(width: 5, height: 5)
                                 Text(caffeinateManager.remainingFormatted)
-                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                    .font(.system(size: FS.caption, weight: .medium, design: .monospaced))
+                                    .lineLimit(1)
+                                    .fixedSize()
                             }
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color.orange.opacity(0.18)))
-                            .foregroundStyle(Color.orange)
+                            .background(Capsule().fill(Color.primary.opacity(0.06)))
+                            .foregroundStyle(.secondary)
                         }
                     }
 
                     Text(tr("Giữ màn hình luôn sáng như 'caffeinate -d' trong Terminal", "Prevents display sleep, similar to 'caffeinate -d' in Terminal"))
-                        .font(.system(size: 8))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
 
@@ -703,14 +697,14 @@ struct CaffeinateCardView: View {
                         caffeinateManager.setDuration(duration)
                     } label: {
                         Text(duration.title)
-                            .font(.system(size: 9, weight: caffeinateManager.selectedDuration == duration ? .bold : .medium))
+                            .font(.system(size: FS.caption, weight: caffeinateManager.selectedDuration == duration ? .semibold : .medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3.5)
                             .frame(maxWidth: .infinity)
                             .background(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: Rad.sm)
                                     .fill(caffeinateManager.selectedDuration == duration
-                                          ? (caffeinateManager.isActive ? Color.orange : Color.accentColor)
+                                          ? Color.accentColor
                                           : Color.primary.opacity(0.05))
                             )
                             .foregroundStyle(
@@ -724,14 +718,7 @@ struct CaffeinateCardView: View {
             }
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(caffeinateManager.isActive ? Color.orange.opacity(0.06) : Color.primary.opacity(0.035))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(caffeinateManager.isActive ? Color.orange.opacity(0.3) : Color.clear, lineWidth: 1)
-                )
-        )
+        .cardBackground()
     }
 }
 
@@ -746,39 +733,39 @@ struct VirtualDisplayCardView: View {
             // Main Row: Icon, Title, Badge, Settings button, and Switch
             HStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(virtualDisplayManager.isVirtualDisplayActive ? Color.purple.opacity(0.2) : Color.primary.opacity(0.06))
+                    RoundedRectangle(cornerRadius: Rad.sm)
+                        .fill(virtualDisplayManager.isVirtualDisplayActive ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.06))
                         .frame(width: 28, height: 28)
 
                     Image(systemName: "display.2")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(virtualDisplayManager.isVirtualDisplayActive ? Color.purple : Color.secondary)
+                        .font(.system(size: FS.title, weight: .semibold))
+                        .foregroundStyle(virtualDisplayManager.isVirtualDisplayActive ? Color.accentColor : Color.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 1.5) {
                     HStack(spacing: 6) {
                         Text(tr("Màn hình ảo (Dummy Display)", "Virtual Display (Dummy Display)"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
 
                         if virtualDisplayManager.isVirtualDisplayActive {
                             HStack(spacing: 3) {
                                 Circle()
-                                    .fill(Color.purple)
+                                    .fill(Color.accentColor)
                                     .frame(width: 5, height: 5)
                                 Text("\(virtualDisplayManager.currentResolution.width)×\(virtualDisplayManager.currentResolution.height)")
-                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                    .font(.system(size: FS.caption, weight: .semibold, design: .monospaced))
                             }
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color.purple.opacity(0.18)))
-                            .foregroundStyle(Color.purple)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.10)))
+                            .foregroundStyle(Color.accentColor)
                         }
                     }
 
                     Text(virtualDisplayManager.isVirtualDisplayActive
                          ? tr("Đang phát ảo · Tăng tốc GPU cho Parsec / TeamViewer", "Virtual screen active · GPU accelerated for Parsec / TeamViewer")
                          : tr("Tạo màn hình ảo cho máy gập, Mac mini headless", "Create dummy display for clamshell mode or headless Mac mini"))
-                        .font(.system(size: 8))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
 
@@ -791,8 +778,8 @@ struct VirtualDisplayCardView: View {
                     }
                 } label: {
                     Image(systemName: virtualDisplayManager.isCardExpanded ? "chevron.up.circle.fill" : "gearshape")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(virtualDisplayManager.isCardExpanded ? Color.purple : Color.secondary)
+                        .font(.system(size: FS.body))
+                        .foregroundStyle(virtualDisplayManager.isCardExpanded ? Color.accentColor : Color.secondary)
                         .padding(4)
                         .background(Circle().fill(Color.primary.opacity(0.04)))
                 }
@@ -820,108 +807,109 @@ struct VirtualDisplayCardView: View {
                     // Resolution Preset Header
                     HStack {
                         Text(tr("ĐỘ PHÂN GIẢI MÀN HÌNH ẢO", "VIRTUAL DISPLAY RESOLUTION"))
-                            .font(.system(size: 7.5, weight: .bold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Spacer()
                         Text("\(virtualDisplayManager.currentResolution.width)×\(virtualDisplayManager.currentResolution.height) @ \(Int(virtualDisplayManager.currentResolution.refreshRate))Hz")
-                            .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color.purple)
+                            .font(.system(size: FS.caption, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.accentColor)
                     }
 
                     // Resolution Preset Grid (2 columns)
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                        ForEach(Array(virtualDisplayManager.resolutions.enumerated()), id: \.offset) { index, res in
-                            Button {
-                                virtualDisplayManager.selectedResolutionIndex = index
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(virtualDisplayManager.selectedResolutionIndex == index ? Color.purple : Color.secondary.opacity(0.3))
-                                        .frame(width: 4.5, height: 4.5)
-
-                                    Text(res.name)
-                                        .font(.system(size: 8, weight: virtualDisplayManager.selectedResolutionIndex == index ? .bold : .medium))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.85)
-
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4.5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(virtualDisplayManager.selectedResolutionIndex == index
-                                              ? Color.purple.opacity(0.15)
-                                              : Color.primary.opacity(0.04))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .stroke(virtualDisplayManager.selectedResolutionIndex == index
-                                                ? Color.purple.opacity(0.5)
-                                                : Color.clear, lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    resolutionGrid
 
                     // Bottom Quick Options: HiDPI toggle & Blackout Screen (Privacy)
-                    HStack(spacing: 6) {
-                        // HiDPI toggle
-                        Button {
-                            virtualDisplayManager.isHiDPIEnabled.toggle()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: virtualDisplayManager.isHiDPIEnabled ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(virtualDisplayManager.isHiDPIEnabled ? Color.purple : Color.secondary)
-                                Text("Retina (HiDPI)")
-                                    .font(.system(size: 8.5, weight: .medium))
-                            }
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3.5)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.04)))
-                        }
-                        .buttonStyle(.plain)
-                        .help(tr("HiDPI giúp hiển thị văn bản và icon siêu mịn chuẩn Retina", "HiDPI renders razor-sharp Retina text and icons"))
-
-                        Spacer()
-
-                        // Blackout Primary Display for Remote Privacy
-                        Button {
-                            virtualDisplayManager.toggleBlackoutPrimaryScreen()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: virtualDisplayManager.isBlackoutPrimaryActive ? "eye.slash.fill" : "eye.slash")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.yellow : Color.secondary)
-                                Text(virtualDisplayManager.isBlackoutPrimaryActive ? tr("Đang tắt màn thật", "Primary Screen Off") : tr("Tắt tối màn thật", "Blackout Primary"))
-                                    .font(.system(size: 8.5, weight: .medium))
-                                    .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.yellow : Color.primary)
-                            }
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(virtualDisplayManager.isBlackoutPrimaryActive ? Color.yellow.opacity(0.15) : Color.primary.opacity(0.04))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .help(tr("Tắt tối đen màn hình máy thật để chống nhìn trộm khi bạn điều khiển từ xa qua Parsec / TeamViewer", "Turn primary screen pitch black to prevent shoulder-surfing during remote sessions"))
-                    }
-                    .padding(.top, 2)
+                    quickOptionsRow
                 }
             }
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(virtualDisplayManager.isVirtualDisplayActive ? Color.purple.opacity(0.06) : Color.primary.opacity(0.035))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(virtualDisplayManager.isVirtualDisplayActive ? Color.purple.opacity(0.3) : Color.clear, lineWidth: 1)
+        .cardBackground()
+    }
+
+    private var resolutionGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
+            ForEach(Array(virtualDisplayManager.resolutions.enumerated()), id: \.offset) { index, res in
+                Button {
+                    virtualDisplayManager.selectedResolutionIndex = index
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(virtualDisplayManager.selectedResolutionIndex == index ? Color.accentColor : Color.secondary.opacity(0.3))
+                            .frame(width: 4.5, height: 4.5)
+
+                        Text(res.name)
+                            .font(.system(size: FS.caption, weight: virtualDisplayManager.selectedResolutionIndex == index ? .semibold : .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4.5)
+                    .background(
+                        RoundedRectangle(cornerRadius: Rad.sm)
+                            .fill(virtualDisplayManager.selectedResolutionIndex == index
+                                  ? Color.accentColor.opacity(0.10)
+                                  : Color.primary.opacity(0.04))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Rad.sm)
+                            .stroke(virtualDisplayManager.selectedResolutionIndex == index
+                                    ? Color.accentColor.opacity(0.5)
+                                    : Color.clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var quickOptionsRow: some View {
+        HStack(spacing: 6) {
+            // HiDPI toggle
+            Button {
+                virtualDisplayManager.isHiDPIEnabled.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: virtualDisplayManager.isHiDPIEnabled ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: FS.caption))
+                        .foregroundStyle(virtualDisplayManager.isHiDPIEnabled ? Color.accentColor : Color.secondary)
+                    Text("Retina (HiDPI)")
+                        .font(.system(size: FS.caption, weight: .medium))
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.04)))
+            }
+            .buttonStyle(.plain)
+            .help(tr("HiDPI giúp hiển thị văn bản và icon siêu mịn chuẩn Retina", "HiDPI renders razor-sharp Retina text and icons"))
+
+            Spacer()
+
+            // Blackout Primary Display for Remote Privacy
+            Button {
+                virtualDisplayManager.toggleBlackoutPrimaryScreen()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: virtualDisplayManager.isBlackoutPrimaryActive ? "eye.slash.fill" : "eye.slash")
+                        .font(.system(size: FS.caption))
+                        .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.orange : Color.secondary)
+                    Text(virtualDisplayManager.isBlackoutPrimaryActive ? tr("Đang tắt màn thật", "Primary Screen Off") : tr("Tắt tối màn thật", "Blackout Primary"))
+                        .font(.system(size: FS.caption, weight: .medium))
+                        .foregroundStyle(virtualDisplayManager.isBlackoutPrimaryActive ? Color.orange : Color.primary)
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
+                .background(
+                    RoundedRectangle(cornerRadius: Rad.sm)
+                        .fill(virtualDisplayManager.isBlackoutPrimaryActive ? Color.orange.opacity(0.10) : Color.primary.opacity(0.04))
                 )
-        )
+            }
+            .buttonStyle(.plain)
+            .help(tr("Tắt tối đen màn hình máy thật để chống nhìn trộm khi bạn điều khiển từ xa qua Parsec / TeamViewer", "Turn primary screen pitch black to prevent shoulder-surfing during remote sessions"))
+        }
+        .padding(.top, 2)
     }
 }
 
@@ -943,14 +931,14 @@ struct ShortcutsTabView: View {
                 if !displayManager.hasAccessibility {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: FS.subhead))
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(tr("Cần cấp quyền Trợ năng (Accessibility)", "Accessibility Permission Required"))
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: FS.label, weight: .semibold))
                             Text(tr("Bật HyperMac trong Cài đặt hệ thống để phím tắt hoạt động.", "Enable HyperMac in System Settings to allow shortcut interception."))
-                                .font(.system(size: 8.5))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -959,24 +947,24 @@ struct ShortcutsTabView: View {
                         Button(tr("Cấp quyền", "Grant")) {
                             displayManager.requestAccessibility()
                         }
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .controlSize(.mini)
                     }
                     .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.12)))
+                    .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.orange.opacity(0.12)))
                 }
 
                 // Launch at Login Card
                 HStack(spacing: 8) {
                     Image(systemName: "power.circle.fill")
-                        .font(.system(size: 13))
+                        .font(.system(size: FS.title))
                         .foregroundStyle(Color.accentColor)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tr("Khởi động cùng macOS", "Launch at Login"))
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.system(size: FS.label, weight: .semibold))
                         Text(tr("Tự động chạy HyperMac ngay khi đăng nhập vào máy Mac", "Automatically start HyperMac upon logging in"))
-                            .font(.system(size: 8))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
 
@@ -991,7 +979,7 @@ struct ShortcutsTabView: View {
                     .labelsHidden()
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
 
                 // Caffeinate (Anti-Sleep) Control Card
                 CaffeinateCardView(caffeinateManager: caffeinateManager)
@@ -1000,14 +988,16 @@ struct ShortcutsTabView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "scissors")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(tr("Cắt & Dán tệp trong Finder (⌘X ➔ ⌘V)", "Finder Cut & Paste (⌘X ➔ ⌘V)"))
-                                .font(.system(size: 10.5, weight: .bold))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Text(tr("Cắt và di chuyển tệp như trên Windows (bấm ⌘X để cắt, ⌘V để di chuyển)", "Cut & move files Windows-style (press ⌘X to cut, ⌘V to move)"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1020,7 +1010,7 @@ struct ShortcutsTabView: View {
                                 }
                             } label: {
                                 Image(systemName: finderCutPasteManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20, height: 20)
                                     .background(Circle().fill(Color.primary.opacity(finderCutPasteManager.isDetailsExpanded ? 0.08 : 0.04)))
@@ -1042,7 +1032,7 @@ struct ShortcutsTabView: View {
                         Divider().opacity(0.35)
 
                         VStack(spacing: 5) {
-                            HStack(spacing: 6) {
+                            ShortcutGrid {
                                 shortcutPill(key: "⌘ + X", desc: tr("Cắt tệp / thư mục", "Cut file / folder"))
                                 shortcutPill(key: "⌘ + V", desc: tr("Di chuyển đến đây", "Move here"))
                                 shortcutPill(key: "esc", desc: tr("Huỷ cắt", "Cancel cut"))
@@ -1051,10 +1041,10 @@ struct ShortcutsTabView: View {
 
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.green)
+                                    .font(.system(size: FS.caption))
+                                    .foregroundStyle(.secondary)
                                 Text(tr("Tự động nhận diện khi đổi tên hoặc tìm kiếm: vẫn cắt văn bản bình thường.", "Smart context: text cutting remains untouched while renaming or searching."))
-                                    .font(.system(size: 7.5))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
                                 Spacer()
                             }
@@ -1063,20 +1053,22 @@ struct ShortcutsTabView: View {
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
 
                 // AltTab Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "macwindow.on.rectangle")
-                            .font(.system(size: 12))
+                            .font(.system(size: FS.body))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Chuyển đổi cửa sổ (Command + Tab)", "Window Switcher (Command + Tab)"))
-                                .font(.system(size: 10.5, weight: .bold))
+                            Text(tr("Chuyển cửa sổ (⌘ Tab)", "Window Switcher (⌘ Tab)"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Text(tr("Thay thế AltTab với live preview độc lập & chuẩn MRU", "AltTab replacement with live preview & MRU order"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1089,7 +1081,7 @@ struct ShortcutsTabView: View {
                                 }
                             } label: {
                                 Image(systemName: windowManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20, height: 20)
                                     .background(Circle().fill(Color.primary.opacity(windowManager.isDetailsExpanded ? 0.08 : 0.04)))
@@ -1113,14 +1105,14 @@ struct ShortcutsTabView: View {
                         // Multi-monitor screen isolation toggle
                         HStack(spacing: 6) {
                             Image(systemName: "display.2")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(Color.accentColor)
+                                .font(.system(size: FS.caption))
+                                .foregroundStyle(.secondary)
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(tr("Chỉ hiện cửa sổ trên màn hình hiện tại", "Only show windows on current display"))
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                 Text(tr("Lọc riêng các cửa sổ thuộc màn hình con trỏ chuột đang đứng", "Filter windows belonging to the display where cursor is located"))
-                                    .font(.system(size: 7.5))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
                             }
 
@@ -1137,7 +1129,7 @@ struct ShortcutsTabView: View {
                         .padding(.vertical, 2)
 
                         // AltTab Shortcuts Guide
-                        HStack(spacing: 6) {
+                        ShortcutGrid {
                             shortcutPill(key: "⌘ + Tab", desc: tr("Chuyển tiếp", "Forward"))
                             shortcutPill(key: "⌘ + ~", desc: tr("Lùi lại", "Backward"))
                             shortcutPill(key: "↑↓←→", desc: tr("Duyệt lưới", "Grid nav"))
@@ -1148,38 +1140,40 @@ struct ShortcutsTabView: View {
                         if !windowManager.hasScreenRecording {
                             HStack(spacing: 6) {
                                 Image(systemName: "camera.viewfinder")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.cyan)
+                                    .font(.system(size: FS.caption))
+                                    .foregroundStyle(.secondary)
                                 Text(tr("Cần quyền Ghi màn hình để hiện ảnh chụp cửa sổ thực tế.", "Screen Recording permission needed for actual window snapshots."))
-                                    .font(.system(size: 8))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
                                 Spacer()
                                 Button(tr("Cấp quyền", "Grant")) {
                                     windowManager.requestScreenRecordingPermission()
                                 }
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(size: FS.caption, weight: .semibold))
                                 .controlSize(.mini)
                             }
                             .padding(5)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.cyan.opacity(0.08)))
+                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.accentColor.opacity(0.08)))
                         }
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
 
                 // Window Snapping (Rectangle) Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "rectangle.split.2x1")
-                            .font(.system(size: 12))
+                            .font(.system(size: FS.body))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Chia cửa sổ & Đa màn hình (Rectangle)", "Window Snapping & Multi-Display (Rectangle)"))
-                                .font(.system(size: 10.5, weight: .bold))
+                            Text(tr("Chia cửa sổ", "Window Snapping"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Text(tr("Bố trí cửa sổ nhanh với độ trễ 0ms", "Instant window positioning with 0ms latency"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1192,7 +1186,7 @@ struct ShortcutsTabView: View {
                                 }
                             } label: {
                                 Image(systemName: snapManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20, height: 20)
                                     .background(Circle().fill(Color.primary.opacity(snapManager.isDetailsExpanded ? 0.08 : 0.04)))
@@ -1214,41 +1208,41 @@ struct ShortcutsTabView: View {
                         Divider().opacity(0.35)
 
                         VStack(spacing: 5) {
-                            HStack(spacing: 6) {
+                            ShortcutGrid {
                                 shortcutPill(key: "⌃⌥←", desc: tr("Nửa trái", "Left Half"))
                                 shortcutPill(key: "⌃⌥→", desc: tr("Nửa phải", "Right Half"))
                                 shortcutPill(key: "⌃⌥↑", desc: tr("Nửa trên", "Top Half"))
                                 shortcutPill(key: "⌃⌥↓", desc: tr("Nửa dưới", "Bottom Half"))
                             }
-                            HStack(spacing: 6) {
+                            ShortcutGrid {
                                 shortcutPill(key: "⌃⌥↩", desc: tr("Toàn màn hình", "Maximize"))
                                 shortcutPill(key: "⌃⌥C / ⌃⌥⌫", desc: tr("Căn giữa", "Center"))
                                 shortcutPill(key: "⌃⌥←↑/U", desc: tr("4 góc", "Quarters"))
-                                Spacer()
                             }
-                            HStack(spacing: 6) {
+                            ShortcutGrid {
                                 shortcutPill(key: "⌥⌘→", desc: tr("Sang màn hình phải", "Next Display"))
                                 shortcutPill(key: "⌥⌘←", desc: tr("Sang màn hình trái", "Previous Display"))
-                                Spacer()
                             }
                         }
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
 
                 // Clipboard Manager (Maccy Replacement) Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.on.clipboard.fill")
-                            .font(.system(size: 12))
+                            .font(.system(size: FS.body))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Quản lý Clipboard (Thay thế Maccy)", "Clipboard History (Maccy Replacement)"))
-                                .font(.system(size: 10.5, weight: .bold))
+                            Text(tr("Lịch sử Clipboard", "Clipboard History"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Text(tr("Lịch sử sao chép thông minh, tìm kiếm & dán tức thì", "Smart clipboard history, search & instant paste"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1261,7 +1255,7 @@ struct ShortcutsTabView: View {
                                 }
                             } label: {
                                 Image(systemName: clipboardManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20, height: 20)
                                     .background(Circle().fill(Color.primary.opacity(clipboardManager.isDetailsExpanded ? 0.08 : 0.04)))
@@ -1283,7 +1277,7 @@ struct ShortcutsTabView: View {
                         Divider().opacity(0.35)
 
                         // Shortcuts & Quick Actions
-                        HStack(spacing: 6) {
+                        ShortcutGrid {
                             shortcutPill(key: "⌘⇧C", desc: tr("Mở bảng HUD", "Open HUD"))
                             shortcutPill(key: "1..9", desc: tr("Dán tức thì", "Instant Paste"))
                             shortcutPill(key: "⌥P", desc: tr("Ghim", "Pin"))
@@ -1294,8 +1288,9 @@ struct ShortcutsTabView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(spacing: 4) {
                                 Text(tr("Giới hạn:", "Max items:"))
-                                    .font(.system(size: 8))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
+                                    .frame(width: 80, alignment: .leading)
 
                                 ForEach([50, 100, 200, 500], id: \.self) { count in
                                     optionChip("\(count)", selected: clipboardManager.maxItemsCount == count) {
@@ -1309,14 +1304,15 @@ struct ShortcutsTabView: View {
                                 Spacer()
 
                                 Text("\(clipboardManager.items.count) " + tr("mục lưu", "items stored"))
-                                    .font(.system(size: 8))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
                             }
 
                             HStack(spacing: 4) {
                                 Text(tr("Tự động xoá:", "Auto cleanup:"))
-                                    .font(.system(size: 8))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
+                                    .frame(width: 80, alignment: .leading)
 
                                 ForEach([0, 7, 30, 90], id: \.self) { days in
                                     optionChip(days == 0 ? tr("Không", "Never") : "\(days) " + tr("ngày", "days"),
@@ -1325,17 +1321,19 @@ struct ShortcutsTabView: View {
                                     }
                                 }
 
-                                Spacer()
+                            }
 
+                            HStack(spacing: 8) {
                                 Button {
                                     clipboardManager.cleanupNow()
                                 } label: {
                                     Text(tr("Dọn ngay", "Clean now"))
-                                        .font(.system(size: 8, weight: .bold))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(Color.orange.opacity(0.14)))
-                                        .foregroundStyle(Color.orange)
+                                        .font(.system(size: FS.caption, weight: .medium))
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 4)
+                                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+                                        .foregroundStyle(Color.primary)
                                 }
                                 .buttonStyle(.plain)
                                 .help(tr("Xoá mục chưa ghim cũ hơn \(clipboardManager.autoCleanupDays > 0 ? "\(clipboardManager.autoCleanupDays) ngày" : "30 ngày")", "Delete unpinned items older than \(clipboardManager.autoCleanupDays > 0 ? "\(clipboardManager.autoCleanupDays) days" : "30 days")"))
@@ -1344,11 +1342,12 @@ struct ShortcutsTabView: View {
                                     clipboardManager.requestClearAllUnpinned()
                                 } label: {
                                     Text(clipboardManager.pendingClearAllConfirm ? tr("Chắc chắn?", "Confirm?") : tr("Xoá tất cả", "Clear all"))
-                                        .font(.system(size: 8, weight: .bold))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(Color.red.opacity(clipboardManager.pendingClearAllConfirm ? 0.22 : 0.10)))
-                                        .foregroundStyle(Color.red)
+                                        .font(.system(size: FS.caption, weight: .medium))
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 4)
+                                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(clipboardManager.pendingClearAllConfirm ? Color.red.opacity(0.14) : Color.primary.opacity(0.06)))
+                                        .foregroundStyle(Tone.bad)
                                 }
                                 .buttonStyle(.plain)
                                 .help(tr("Xoá mọi mục chưa ghim (bấm 2 lần để xác nhận)", "Delete all unpinned items (click twice to confirm)"))
@@ -1356,7 +1355,7 @@ struct ShortcutsTabView: View {
 
                             if let message = clipboardManager.cleanupMessage {
                                 Text(message)
-                                    .font(.system(size: 7.8, weight: .medium))
+                                    .font(.system(size: FS.caption, weight: .medium))
                                     .foregroundStyle(Color.orange.opacity(0.95))
                                     .fixedSize(horizontal: false, vertical: true)
                                     .transition(.opacity)
@@ -1366,7 +1365,7 @@ struct ShortcutsTabView: View {
                                 Text(clipboardManager.autoCleanupDays == 0
                                      ? tr("Không giới hạn số mục: nên bật tự động xoá để tránh phình bộ nhớ.", "Unlimited items: recommended to enable auto-cleanup to save memory.")
                                      : tr("Không giới hạn số mục • tự động xoá sau \(clipboardManager.autoCleanupDays) ngày.", "Unlimited items • auto-cleans after \(clipboardManager.autoCleanupDays) days."))
-                                    .font(.system(size: 7.5))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(Color.orange.opacity(0.9))
                             }
                         }
@@ -1374,10 +1373,10 @@ struct ShortcutsTabView: View {
                         // Ignore passwords toggle
                         HStack(spacing: 6) {
                             Image(systemName: "lock.shield")
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(.green)
+                                .font(.system(size: FS.caption))
+                                .foregroundStyle(.secondary)
                             Text(tr("Tự động bỏ qua mật khẩu (1Password, Bitwarden, Keychain)", "Auto-ignore passwords (1Password, Bitwarden, Keychain)"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Toggle("", isOn: Binding<Bool>(
@@ -1395,34 +1394,33 @@ struct ShortcutsTabView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "macwindow")
-                                    .font(.system(size: 8.5))
+                                    .font(.system(size: FS.caption))
                                 Text(tr("Mở bảng Clipboard HUD (⌘ + ⇧ + C)", "Open Clipboard HUD (⌘ + ⇧ + C)"))
-                                    .font(.system(size: 8.5, weight: .semibold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .frame(maxWidth: .infinity)
-                            .background(Color.accentColor.opacity(0.12))
-                            .foregroundStyle(Color.accentColor)
-                            .cornerRadius(5)
+                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+                            .foregroundStyle(.primary)
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
 
                 // Mouse Chording Card
                 HStack(spacing: 8) {
                     Image(systemName: "cursorarrow.click.2")
-                        .font(.system(size: 12))
+                        .font(.system(size: FS.body))
                         .foregroundStyle(Color.accentColor)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tr("Bấm đồng thời Chuột Trái + Phải mở F3", "Left + Right click opens Mission Control (F3)"))
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: FS.label, weight: .semibold))
                         Text(tr("Mở Mission Control ngay trên chuột mà không cần chạm bàn phím", "Trigger Mission Control directly from mouse without keyboard"))
-                            .font(.system(size: 8))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
 
@@ -1440,7 +1438,7 @@ struct ShortcutsTabView: View {
                     .labelsHidden()
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .cardBackground()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1450,8 +1448,10 @@ struct ShortcutsTabView: View {
     private func optionChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 8.5, weight: selected ? .bold : .medium))
-                .padding(.horizontal, 5)
+                .font(.system(size: FS.caption, weight: selected ? .semibold : .medium))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(selected ? Color.accentColor : Color.primary.opacity(0.06)))
                 .foregroundStyle(selected ? Color.white : Color.primary)
@@ -1460,16 +1460,22 @@ struct ShortcutsTabView: View {
     }
 
     private func shortcutPill(key: String, desc: String) -> some View {
-        HStack(spacing: 3) {
-            Text(key)
-                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08)))
+        HStack(spacing: 6) {
             Text(desc)
-                .font(.system(size: 9))
+                .font(.system(size: FS.caption))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Text(key)
+                .font(.system(size: FS.caption, weight: .medium, design: .monospaced))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1.5)
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.07)))
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -1485,22 +1491,22 @@ struct DisplayCardView: View {
             // Header Row
             HStack(spacing: 6) {
                 Image(systemName: monitor.isBuiltIn ? "laptopcomputer" : "display")
-                    .font(.system(size: 12))
+                    .font(.system(size: FS.body))
                     .foregroundStyle(monitor.isConnected ? Color.accentColor : Color.secondary)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(monitor.name)
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(.system(size: FS.label, weight: .semibold))
                         .lineLimit(1)
                     Text("\(monitor.resolution) • \(monitor.isBuiltIn ? tr("Màn hình chính", "Built-in Display") : tr("Màn hình ngoài", "External Display"))")
-                        .font(.system(size: 7.5))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
                 Text("\(Int(round(monitor.brightness * 100)))%")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(.system(size: FS.body, weight: .semibold, design: .rounded))
                     .foregroundStyle(monitor.isConnected ? Color.primary : Color.secondary)
             }
 
@@ -1521,10 +1527,10 @@ struct DisplayCardView: View {
                         Button("\(Int(val * 100))%") {
                             displayManager.setBrightness(val, for: monitor)
                         }
-                        .font(.system(size: 7.5, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
+                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.05)))
                         .buttonStyle(.plain)
                     }
 
@@ -1535,8 +1541,8 @@ struct DisplayCardView: View {
                         displayManager.toggleConnection(for: monitor)
                     } label: {
                         Text(monitor.isBuiltIn ? tr("Tắt màn", "Turn Off") : tr("Ngắt mềm", "Disconnect"))
-                            .font(.system(size: 7.5, weight: .semibold))
-                            .foregroundStyle(.red)
+                            .font(.system(size: FS.caption, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                     .disabled(monitor.isBuiltIn && !displayManager.canDisconnect(monitor))
@@ -1548,7 +1554,7 @@ struct DisplayCardView: View {
                             .fill(Color.orange.opacity(0.8))
                             .frame(width: 5, height: 5)
                         Text(tr("Đang ngắt mềm (Đã tắt)", "Disconnected (Turned Off)"))
-                            .font(.system(size: 8.5, weight: .medium))
+                            .font(.system(size: FS.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
 
@@ -1559,9 +1565,9 @@ struct DisplayCardView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "power")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: FS.caption, weight: .semibold))
                             Text(tr("Bật lại", "Turn On"))
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(.system(size: FS.caption, weight: .semibold))
                         }
                         .padding(.horizontal, 9)
                         .padding(.vertical, 3.5)
@@ -1575,10 +1581,10 @@ struct DisplayCardView: View {
         }
         .padding(8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: Rad.sm)
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: Rad.sm)
                         .stroke(isSelected ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.06), lineWidth: 1)
                 )
         )
@@ -1598,13 +1604,13 @@ struct QuickActionsBar: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: ext.isConnected ? "display.slash" : "display")
-                            .font(.system(size: 9))
+                            .font(.system(size: FS.caption))
                         Text(ext.isConnected ? tr("Ngắt màn ngoài", "Disconnect External") : tr("Bật màn ngoài", "Connect External"))
-                            .font(.system(size: 9, weight: ext.isConnected ? .regular : .bold))
+                            .font(.system(size: FS.caption, weight: ext.isConnected ? .regular : .bold))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .controlBackgroundColor)))
+                    .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color(nsColor: .controlBackgroundColor)))
                     .foregroundStyle(ext.isConnected ? Color.primary : Color.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -1618,9 +1624,9 @@ struct QuickActionsBar: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 8.5))
+                            .font(.system(size: FS.caption))
                         Text(tr("Bật tất cả màn hình", "Turn On All Displays"))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                     }
                     .foregroundStyle(Color.accentColor)
                 }
@@ -1638,10 +1644,10 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: "display.trianglebadge.exclamationmark")
-                .font(.system(size: 22))
+                .font(.system(size: FS.display))
                 .foregroundStyle(.tertiary)
             Text(tr("Không tìm thấy màn hình nào", "No displays detected"))
-                .font(.system(size: 10))
+                .font(.system(size: FS.label))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -1663,10 +1669,10 @@ struct BatteryCardView: View {
                 HStack(alignment: .lastTextBaseline) {
                     HStack(spacing: 2) {
                         Text("\(batteryManager.currentLevel)")
-                            .font(.system(size: 26, weight: .heavy, design: .rounded))
+                            .font(.system(size: FS.hero, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
                         Text("%")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: FS.body, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
 
@@ -1674,22 +1680,22 @@ struct BatteryCardView: View {
 
                     // Live Wattage
                     if batteryManager.isBypassActive && batteryManager.isPluggedIn {
-                        Text("🛡️ 0.0W (" + tr("Nguồn AC trực tiếp", "Direct AC Power") + ")")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.cyan)
+                        Text("0.0W (" + tr("Nguồn AC trực tiếp", "Direct AC Power") + ")")
+                            .font(.system(size: FS.label, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
                     } else if batteryManager.isCharging {
-                        Text(String(format: "⚡️ +%.1fW (" + tr("Đang sạc", "Charging") + ")", batteryManager.wattage))
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.green)
+                        Text(String(format: "+%.1fW (" + tr("Đang sạc", "Charging") + ")", batteryManager.wattage))
+                            .font(.system(size: FS.label, weight: .semibold))
+                            .foregroundStyle(Tone.good)
                     } else if batteryManager.isPluggedIn {
-                        Text("🔌 0.0W (" + tr("Đã cắm sạc", "Plugged in") + ")")
-                            .font(.system(size: 10, weight: .bold))
+                        Text("0.0W (" + tr("Đã cắm sạc", "Plugged in") + ")")
+                            .font(.system(size: FS.label, weight: .semibold))
                             .foregroundStyle(.orange)
                     } else {
                         let mins = batteryManager.timeRemaining
                         let timeStr = mins > 0 ? " • " + tr("Còn ~\(mins / 60)h\(mins % 60)m", "~\(mins / 60)h\(mins % 60)m left") : ""
-                        Text(String(format: "🔋 -%.1fW%@", batteryManager.wattage, timeStr))
-                            .font(.system(size: 9.5, weight: .medium))
+                        Text(String(format: "-%.1fW%@", batteryManager.wattage, timeStr))
+                            .font(.system(size: FS.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -1701,16 +1707,16 @@ struct BatteryCardView: View {
                     let limitFraction = min(1.0, max(0.0, Double(batteryManager.chargeLimit) / 100.0))
 
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: Rad.sm)
                             .fill(Color.primary.opacity(0.08))
                             .frame(height: 8)
 
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: Rad.sm)
                             .fill(
                                 LinearGradient(
                                     colors: (batteryManager.isBypassActive && batteryManager.isPluggedIn)
-                                        ? [Color.cyan, Color.blue]
-                                        : [Color.green, Color.mint],
+                                        ? [Color.accentColor, Color.accentColor]
+                                        : [Tone.good, Color.accentColor],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -1731,7 +1737,7 @@ struct BatteryCardView: View {
                     HStack {
                         Spacer()
                         Text(tr("Ngưỡng khóa: \(batteryManager.chargeLimit)%", "Charge limit: \(batteryManager.chargeLimit)%"))
-                            .font(.system(size: 8, weight: .medium))
+                            .font(.system(size: FS.caption, weight: .medium))
                             .foregroundStyle(.orange)
                     }
                 }
@@ -1741,14 +1747,14 @@ struct BatteryCardView: View {
             HStack(spacing: 5) {
                 metricChip(
                     icon: "heart.fill",
-                    iconColor: .pink,
+                    iconColor: .secondary,
                     title: tr("Độ khỏe cell", "Cell Health"),
                     val: String(format: "%.1f%%", batteryManager.exactHealthPercent),
                     sub: "\(batteryManager.nominalCapacity)/\(batteryManager.designCapacity)"
                 )
                 metricChip(
                     icon: "arrow.triangle.2.circlepath",
-                    iconColor: .purple,
+                    iconColor: .secondary,
                     title: tr("Chu kỳ sạc", "Cycle Count"),
                     val: "\(batteryManager.cycleCount) " + tr("lần", "cycles"),
                     sub: tr("Thiết kế: 1000", "Design: 1000")
@@ -1770,8 +1776,8 @@ struct BatteryCardView: View {
 
                 metricChip(
                     icon: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "bolt.fill" : "battery.100",
-                    iconColor: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? .yellow : .green,
-                    title: tr("Củ sạc", "Power Adapter"),
+                    iconColor: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? .secondary : .secondary,
+                    title: tr("Củ sạc", "Adapter"),
                     val: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "\(batteryManager.adapterWatts)W" : tr("Dùng Pin", "On Battery"),
                     sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? "USB-C PD" : batteryManager.adapterDescription) : tr("Không cắm sạc", "Unplugged")
                 )
@@ -1780,28 +1786,28 @@ struct BatteryCardView: View {
             // High-Temperature Alert Banner
             if batteryManager.temperature >= batteryManager.tempAlertThreshold {
                 HStack(spacing: 6) {
-                    Image(systemName: "flame.fill").font(.system(size: 11)).foregroundStyle(.red)
+                    Image(systemName: "flame.fill").font(.system(size: FS.body)).foregroundStyle(.red)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tr("Cảnh báo: Pin đang ấm (\(String(format: "%.1f°C", batteryManager.temperature)))!", "Warning: Battery is warm (\(String(format: "%.1f°C", batteryManager.temperature)))!"))
-                            .font(.system(size: 9.5, weight: .bold)).foregroundStyle(.red)
+                            .font(.system(size: FS.caption, weight: .semibold)).foregroundStyle(.red)
                         Text(tr("MacBook Air không quạt. Hãy chuyển sang tab 'Đóng băng' để tạm dừng tiến trình nặng.", "Fanless MacBook. Switch to 'Freeze' tab to suspend heavy processes."))
-                            .font(.system(size: 8)).foregroundStyle(.secondary)
+                            .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.1)))
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.red.opacity(0.1)))
             }
 
             // Sub-Navigation Pills (4 Tabs: Nguồn SMC, Sleep Guard, Đóng băng CPU, Lịch hiệu chuẩn)
             HStack(spacing: 3) {
                 subTabButton(index: 0, title: tr("Nguồn SMC", "SMC Power"), icon: "bolt.shield")
                 subTabButton(index: 1, title: "Sleep Guard", icon: "moon.stars")
-                subTabButton(index: 2, title: tr("Đóng băng", "Freeze Mode"), icon: "snowflake")
-                subTabButton(index: 3, title: tr("Lịch hiệu chuẩn", "Calibration"), icon: "calendar.badge.clock")
+                subTabButton(index: 2, title: tr("Đóng băng", "Freeze"), icon: "snowflake")
+                subTabButton(index: 3, title: tr("Hiệu chuẩn", "Calibrate"), icon: "calendar.badge.clock")
             }
             .padding(2)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.05)))
 
             // Sub-Tab Content
             switch batteryManager.selectedHardwareTab {
@@ -1818,28 +1824,23 @@ struct BatteryCardView: View {
             }
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke((batteryManager.isBypassActive && batteryManager.isPluggedIn) ? Color.cyan.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        )
+        .cardBackground()
     }
 
     private func metricChip(icon: String, iconColor: Color, title: String, val: String, sub: String, valColor: Color = .primary) -> some View {
         VStack(spacing: 1.5) {
             HStack(spacing: 2.5) {
-                Image(systemName: icon).font(.system(size: 7.5)).foregroundStyle(iconColor)
-                Text(title).font(.system(size: 7.5, weight: .medium)).foregroundStyle(.secondary)
+                Text(title).font(.system(size: FS.caption, weight: .medium)).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
-            Text(val).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(valColor)
-            Text(sub).font(.system(size: 6.8)).foregroundStyle(.tertiary).lineLimit(1)
+            Text(val).font(.system(size: FS.body, weight: .semibold, design: .rounded)).foregroundStyle(valColor)
+                .lineLimit(1).minimumScaleFactor(0.75)
+            Text(sub).font(.system(size: FS.caption)).foregroundStyle(.tertiary)
+                .lineLimit(1).minimumScaleFactor(0.75)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 58)
         .padding(.vertical, 4.5)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.04)))
     }
 
     private func subTabButton(index: Int, title: String, icon: String) -> some View {
@@ -1850,14 +1851,15 @@ struct BatteryCardView: View {
             }
         } label: {
             HStack(spacing: 2.5) {
-                Image(systemName: icon).font(.system(size: 7.5))
-                Text(title).font(.system(size: 8, weight: batteryManager.selectedHardwareTab == index ? .bold : .medium))
+                Text(title).font(.system(size: FS.caption, weight: batteryManager.selectedHardwareTab == index ? .semibold : .medium))
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 3.5)
             .frame(maxWidth: .infinity)
+            .contentShape(RoundedRectangle(cornerRadius: Rad.sm))
             .background(
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: Rad.sm)
                     .fill(batteryManager.selectedHardwareTab == index ? Color.accentColor : Color.clear)
             )
             .foregroundStyle(batteryManager.selectedHardwareTab == index ? Color.white : Color.primary)
@@ -1871,14 +1873,14 @@ struct BatteryCardView: View {
             if !batteryManager.isHelperInstalled {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
-                        .font(.system(size: 11))
+                        .font(.system(size: FS.body))
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tr("Cần cấp quyền SMC để khóa sạc", "SMC Helper required to limit charge"))
-                            .font(.system(size: 8.5, weight: .bold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.primary)
                         Text(tr("Xác nhận Touch ID hoặc mật khẩu máy 1 lần", "Confirm with Touch ID or password once"))
-                            .font(.system(size: 7.5))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -1890,11 +1892,11 @@ struct BatteryCardView: View {
                                 ProgressView().controlSize(.mini)
                             }
                             Text(batteryManager.isInstallingHelper ? tr("Đang cài...", "Installing...") : tr("Cấp quyền ngay", "Grant Now"))
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: FS.caption, weight: .semibold))
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3.5)
-                        .background(Color.orange.opacity(0.18))
+                        .background(Color.orange.opacity(0.10))
                         .foregroundStyle(.orange)
                         .cornerRadius(5)
                     }
@@ -1902,16 +1904,19 @@ struct BatteryCardView: View {
                     .disabled(batteryManager.isInstallingHelper)
                 }
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.08)))
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.orange.opacity(0.08)))
             }
 
             HStack(spacing: 8) {
-                Image(systemName: "lock.shield").font(.system(size: 11)).foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 1) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: FS.label))
+                    .foregroundStyle(batteryManager.isProtectionEnabled ? Color.accentColor : Color.secondary)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(tr("Khóa sạc ở \(batteryManager.chargeLimit)% (Chạy điện trực tiếp)", "Charge limit at \(batteryManager.chargeLimit)% (Bypass Mode)"))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: FS.label, weight: .semibold))
                     Text(tr("Cắm sạc liên tục không chai pin (SMC Bypass)", "Plug in continuously without battery wear (SMC Bypass)"))
-                        .font(.system(size: 7.5)).foregroundStyle(.secondary)
+                        .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Toggle("", isOn: Binding<Bool>(
@@ -1939,14 +1944,14 @@ struct BatteryCardView: View {
             if batteryManager.isProtectionEnabled {
                 HStack(spacing: 6) {
                     Text(tr("Mức khóa:", "Limit:"))
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                         .foregroundStyle(.secondary)
                     ForEach([70, 80, 90], id: \.self) { val in
                         Button {
                             batteryManager.chargeLimit = val
                         } label: {
                             Text("\(val)%\(val == 80 ? " (" + tr("Chuẩn", "Standard") + ")" : "")")
-                                .font(.system(size: 8, weight: batteryManager.chargeLimit == val ? .bold : .medium))
+                                .font(.system(size: FS.caption, weight: batteryManager.chargeLimit == val ? .semibold : .medium))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(batteryManager.chargeLimit == val ? Color.accentColor : Color.primary.opacity(0.06)))
@@ -1964,40 +1969,44 @@ struct BatteryCardView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: batteryManager.isTopUpActive ? "xmark.circle" : "bolt.fill")
-                            .font(.system(size: 8))
-                        Text(batteryManager.isTopUpActive ? tr("Hủy sạc 100% (Khóa lại)", "Cancel 100% (Re-lock)") : tr("⚡️ Sạc đầy 100% tạm thời", "⚡️ Temporary 100% Top-up"))
-                            .font(.system(size: 8.5, weight: .semibold))
+                            .font(.system(size: FS.caption))
+                        Text(batteryManager.isTopUpActive ? tr("Hủy sạc 100% (Khóa lại)", "Cancel 100% (Re-lock)") : tr("Sạc đầy 100% tạm thời", "Temporary 100% Top-up"))
+                            .font(.system(size: FS.caption, weight: .semibold))
+                            .lineLimit(1)
                     }
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3.5)
-                    .background(batteryManager.isTopUpActive ? Color.orange.opacity(0.18) : Color.primary.opacity(0.06))
+                    .background(batteryManager.isTopUpActive ? Color.orange.opacity(0.10) : Color.primary.opacity(0.06))
                     .foregroundStyle(batteryManager.isTopUpActive ? Color.orange : Color.primary)
                     .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text(tr("Khi cần mang máy ra ngoài", "When taking laptop on the go")).font(.system(size: 7.5)).foregroundStyle(.tertiary)
+                Text(tr("Khi cần mang máy ra ngoài", "When taking laptop on the go")).font(.system(size: FS.caption)).foregroundStyle(.tertiary)
+                    .lineLimit(1).minimumScaleFactor(0.7).layoutPriority(-1)
             }
 
             // Toggles
-            toggleRow(icon: "thermometer.sun.fill", iconColor: .orange, title: tr("Thông báo khi pin nóng > 38°C", "Alert when battery temp > 38°C"), isOn: Binding<Bool>(
+            toggleRow(icon: "thermometer.sun.fill", iconColor: .secondary, title: tr("Thông báo khi pin nóng > 38°C", "Alert when battery temp > 38°C"), isOn: Binding<Bool>(
                 get: { batteryManager.isTempAlertEnabled },
                 set: { batteryManager.isTempAlertEnabled = $0 }
             ))
-            toggleRow(icon: "bell.badge.fill", iconColor: .blue, title: tr("Cảnh báo chống chai pin (Màn ngoài, pin < 20%)", "Battery health warning (External display, < 20%)"), isOn: Binding<Bool>(
+            toggleRow(icon: "bell.badge.fill", iconColor: .secondary, title: tr("Cảnh báo chống chai pin (Màn ngoài, pin < 20%)", "Battery health warning (External display, < 20%)"), isOn: Binding<Bool>(
                 get: { batteryManager.isSmartAlertsEnabled },
                 set: { batteryManager.isSmartAlertsEnabled = $0 }
             ))
 
-            HStack(spacing: 4) {
-                Image(systemName: "lightbulb.fill")
-                    .font(.system(size: 7))
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "lightbulb")
+                    .font(.system(size: FS.label))
                     .foregroundStyle(.secondary)
+                    .frame(width: 16)
                 Text(tr("Lưu ý: Tắt 'Sạc pin tối ưu hoá' trong Cài đặt hệ thống để tránh macOS tự sạc lên 100%.", "Tip: Turn off 'Optimized Battery Charging' in macOS Settings to prevent macOS overriding limit."))
-                    .font(.system(size: 7.2))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 1)
+            .padding(.top, 2)
         }
     }
 
@@ -2005,12 +2014,12 @@ struct BatteryCardView: View {
     private var sleepGuardSubTab: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Image(systemName: "moon.fill").font(.system(size: 11)).foregroundStyle(Color.purple)
-                VStack(alignment: .leading, spacing: 1) {
+                Image(systemName: "moon").font(.system(size: FS.label)).foregroundStyle(.secondary).frame(width: 16)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(tr("Bảo vệ Sleep Guard khi gập máy", "Sleep Guard Clamshell Protection"))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: FS.label, weight: .semibold))
                     Text(tr("Chống Dark Wake và ngăn máy nóng ngầm trong balo", "Prevents Dark Wake & background heating in backpack"))
-                        .font(.system(size: 7.5)).foregroundStyle(.secondary)
+                        .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Toggle("", isOn: Binding<Bool>(
@@ -2024,12 +2033,12 @@ struct BatteryCardView: View {
 
             if batteryManager.isSleepGuardEnabled {
                 HStack(spacing: 8) {
-                    Image(systemName: "wave.3.forward.circle.fill").font(.system(size: 10)).foregroundStyle(.blue)
-                    VStack(alignment: .leading, spacing: 1) {
+                    Image(systemName: "wave.3.forward").font(.system(size: FS.label)).foregroundStyle(.secondary).frame(width: 16)
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(tr("Tự ngắt Bluetooth khi gập máy", "Auto-disconnect Bluetooth on lid close"))
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: FS.label, weight: .semibold))
                         Text(tr("AirPods/chuột không đánh thức máy ngầm qua đêm. Tự bật lại ngay khi mở máy.", "AirPods/mouse won't wake Mac overnight. Auto re-connects on lid open."))
-                            .font(.system(size: 7.5)).foregroundStyle(.secondary)
+                            .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Toggle("", isOn: Binding<Bool>(
@@ -2040,24 +2049,20 @@ struct BatteryCardView: View {
                     .controlSize(.mini)
                     .labelsHidden()
                 }
-                .padding(5)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
 
-                HStack(spacing: 5) {
-                    Image(systemName: "lock.shield.fill").font(.system(size: 8.5)).foregroundStyle(.green)
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield").font(.system(size: FS.label)).foregroundStyle(.secondary).frame(width: 16)
                     Text(tr("Khóa SMC 80% được bảo lưu liên tục trong lúc ngủ và tái kích hoạt ngay khi mở màn hình.", "SMC 80% limit is preserved during sleep and reapplied on wake."))
-                        .font(.system(size: 7.8)).foregroundStyle(.secondary)
+                        .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                 }
 
                 if !batteryManager.lastSleepReport.isEmpty {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 8)).foregroundStyle(.purple)
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: FS.label)).foregroundStyle(.secondary).frame(width: 16)
                         Text(tr("Lần gần nhất: \(batteryManager.lastSleepReport)", "Last report: \(batteryManager.lastSleepReport)"))
-                            .font(.system(size: 8, weight: .medium)).foregroundStyle(.purple)
+                            .font(.system(size: FS.caption)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.purple.opacity(0.08)))
                 }
             }
         }
@@ -2068,14 +2073,14 @@ struct BatteryCardView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(tr("Tiến trình ngốn CPU & Tỏa nhiệt:", "Heavy CPU & Heat Generating Processes:"))
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.system(size: FS.caption, weight: .semibold))
                 Spacer()
                 Button {
                     energyManager.refreshProcesses()
                 } label: {
                     HStack(spacing: 2.5) {
-                        Image(systemName: "arrow.clockwise").font(.system(size: 7.5))
-                        Text(tr("Quét lại", "Refresh")).font(.system(size: 8))
+                        Image(systemName: "arrow.clockwise").font(.system(size: FS.caption))
+                        Text(tr("Quét lại", "Refresh")).font(.system(size: FS.caption))
                     }
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
@@ -2089,7 +2094,7 @@ struct BatteryCardView: View {
                 HStack {
                     Spacer()
                     Text(tr("Máy đang rất mát mẻ, không có tiến trình nền nặng.", "System is running cool, no heavy background processes."))
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
+                        .font(.system(size: FS.caption)).foregroundStyle(.secondary)
                     Spacer()
                 }
                 .padding(.vertical, 4)
@@ -2098,29 +2103,29 @@ struct BatteryCardView: View {
                     ForEach(energyManager.processes) { p in
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(p.isFrozen ? Color.cyan : (p.cpu > 25.0 ? Color.red : Color.orange))
+                                .fill(p.isFrozen ? Color.accentColor : (p.cpu > 25.0 ? Color.red : Color.orange))
                                 .frame(width: 5, height: 5)
 
                             VStack(alignment: .leading, spacing: 0.5) {
                                 Text(p.name)
-                                    .font(.system(size: 8.5, weight: .semibold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .lineLimit(1)
                                 Text("PID: \(p.pid)")
-                                    .font(.system(size: 6.8)).foregroundStyle(.tertiary)
+                                    .font(.system(size: FS.caption)).foregroundStyle(.tertiary)
                             }
 
                             Spacer()
 
                             if p.isFrozen {
                                 Text("❄️ " + tr("ĐÃ ĐÓNG BĂNG", "FROZEN"))
-                                    .font(.system(size: 7, weight: .bold))
-                                    .foregroundStyle(.cyan)
+                                    .font(.system(size: FS.caption, weight: .semibold))
+                                    .foregroundStyle(Color.accentColor)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1.5)
-                                    .background(Capsule().fill(Color.cyan.opacity(0.12)))
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.12)))
                             } else {
                                 Text(String(format: "%.1f%% CPU", p.cpu))
-                                    .font(.system(size: 7.5, weight: .bold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .foregroundStyle(p.cpu > 25.0 ? Color.red : Color.orange)
                             }
 
@@ -2132,24 +2137,24 @@ struct BatteryCardView: View {
                                 }
                             } label: {
                                 Text(p.isFrozen ? ("▶️ " + tr("Rã đông", "Resume")) : ("❄️ " + tr("Đóng băng", "Freeze")))
-                                    .font(.system(size: 7.5, weight: .semibold))
+                                    .font(.system(size: FS.caption, weight: .semibold))
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
-                                    .background(p.isFrozen ? Color.green.opacity(0.15) : Color.cyan.opacity(0.15))
-                                    .foregroundStyle(p.isFrozen ? Color.green : Color.cyan)
+                                    .background(p.isFrozen ? Tone.good.opacity(0.10) : Color.accentColor.opacity(0.10))
+                                    .foregroundStyle(p.isFrozen ? Tone.good : Color.accentColor)
                                     .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2.5)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.03)))
+                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.03)))
                     }
                 }
             }
 
-            Text(tr("💡 Đóng băng (SIGSTOP) giữ nguyên cửa sổ và dữ liệu trong RAM nhưng ngừng 100% việc đốt CPU và tỏa nhiệt trên M2.", "💡 Freezing (SIGSTOP) keeps windows & data in RAM while completely halting CPU burn & heat."))
-                .font(.system(size: 7.2)).foregroundStyle(.secondary)
+            Text(tr("Đóng băng (SIGSTOP) giữ nguyên cửa sổ và dữ liệu trong RAM nhưng ngừng 100% việc đốt CPU và tỏa nhiệt trên M2.", "Freezing (SIGSTOP) keeps windows & data in RAM while completely halting CPU burn & heat."))
+                .font(.system(size: FS.caption)).foregroundStyle(.secondary)
         }
     }
 
@@ -2159,14 +2164,14 @@ struct BatteryCardView: View {
             // Master Auto-Schedule Toggle
             HStack(spacing: 8) {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 11))
+                    .font(.system(size: FS.body))
                     .foregroundStyle(Color.accentColor)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(tr("Tự động đặt lịch hiệu chuẩn pin định kỳ", "Auto-schedule Periodic Battery Calibration"))
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: FS.label, weight: .semibold))
                     Text(tr("Cân bằng điện áp cell & khôi phục thước đo dung lượng chuẩn", "Balances cell voltage & recalibrates gauge"))
-                        .font(.system(size: 7.5))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
 
@@ -2185,15 +2190,16 @@ struct BatteryCardView: View {
                 // Interval Selector Pills
                 HStack(spacing: 5) {
                     Text(tr("Chu kỳ:", "Interval:"))
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                         .foregroundStyle(.secondary)
 
                     ForEach([30, 45, 60], id: \.self) { days in
                         Button {
                             batteryManager.calibrationIntervalDays = days
                         } label: {
-                            Text(tr("Mỗi \(days) ngày", "Every \(days) days") + (days == 30 ? " (" + tr("Chuẩn", "Standard") + ")" : ""))
-                                .font(.system(size: 7.5, weight: batteryManager.calibrationIntervalDays == days ? .bold : .medium))
+                            Text(tr("\(days) ngày", "\(days) days") + (days == 30 ? " ★" : ""))
+                                .font(.system(size: FS.caption, weight: batteryManager.calibrationIntervalDays == days ? .semibold : .medium))
+                                .lineLimit(1)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(
@@ -2211,41 +2217,41 @@ struct BatteryCardView: View {
                 // Schedule Info Box
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Image(systemName: "clock.arrow.circlepath").font(.system(size: 8)).foregroundStyle(.orange)
+                        Image(systemName: "clock.arrow.circlepath").font(.system(size: FS.caption)).foregroundStyle(.secondary)
                         Text(tr("Lịch tiếp theo:", "Next date:"))
-                            .font(.system(size: 8, weight: .medium))
+                            .font(.system(size: FS.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                         Text(formatDate(batteryManager.nextScheduledCalibrationDate))
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.primary)
 
                         Spacer()
 
                         Text(tr("Còn \(batteryManager.daysRemainingUntilCalibration) ngày", "\(batteryManager.daysRemainingUntilCalibration) days left"))
-                            .font(.system(size: 7.5, weight: .bold))
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 4)
+                            .font(.system(size: FS.caption, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange.opacity(0.12)))
+                            .background(Capsule().fill(Color.primary.opacity(0.07)))
                     }
 
                     HStack {
-                        Image(systemName: "checkmark.circle").font(.system(size: 8)).foregroundStyle(.green)
+                        Image(systemName: "checkmark.circle").font(.system(size: FS.caption)).foregroundStyle(.secondary)
                         Text(tr("Lần gần nhất:", "Last completed:"))
-                            .font(.system(size: 7.5, weight: .medium))
+                            .font(.system(size: FS.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                         Text(batteryManager.lastCalibrationDate != nil ? formatDate(batteryManager.lastCalibrationDate!) : tr("Chưa thực hiện", "Never performed"))
-                            .font(.system(size: 7.5))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
 
-                    Text(tr("💡 Quy trình: Khi đến lịch, bạn rút sạc dùng máy tự nhiên xuống ≤ 20%. Khi cắm sạc lại, HyperMac sẽ tự động sạc 100% cân bằng cell ➔ ngâm 15p ➔ tự khóa lại 80% SMC Bypass.", "💡 Procedure: When due, unplug & use normally down to ≤ 20%. Once plugged back in, HyperMac charges to 100% to balance cells ➔ soaks for 15m ➔ re-locks to 80% SMC Bypass."))
-                        .font(.system(size: 7.2))
+                    Text(tr("Quy trình: Khi đến lịch, bạn rút sạc dùng máy tự nhiên xuống ≤ 20%. Khi cắm sạc lại, HyperMac sẽ tự động sạc 100% cân bằng cell ➔ ngâm 15p ➔ tự khóa lại 80% SMC Bypass.", "Procedure: When due, unplug & use normally down to ≤ 20%. Once plugged back in, HyperMac charges to 100% to balance cells ➔ soaks for 15m ➔ re-locks to 80% SMC Bypass."))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                         .padding(.top, 1)
                 }
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.03)))
             }
 
             // Action: Manual Run or Active Status
@@ -2254,9 +2260,9 @@ struct BatteryCardView: View {
                     batteryManager.startCalibration()
                 } label: {
                     HStack(spacing: 3) {
-                        Image(systemName: "play.circle.fill").font(.system(size: 8.5))
+                        Image(systemName: "play.circle.fill").font(.system(size: FS.caption))
                         Text(tr("Hiệu chuẩn ngay bây giờ (Chạy trước lịch)", "Calibrate now (Run ahead of schedule)"))
-                            .font(.system(size: 8.5, weight: .semibold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -2271,18 +2277,18 @@ struct BatteryCardView: View {
                     HStack {
                         ProgressView().controlSize(.mini)
                         Text(batteryManager.calibrationMessage)
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.orange)
                         Spacer()
                     }
                     .padding(5)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.orange.opacity(0.1)))
+                    .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.orange.opacity(0.1)))
 
                     Button {
                         batteryManager.cancelCalibration()
                     } label: {
                         Text(tr("Hủy hiệu chuẩn (Quay về khóa 80%)", "Cancel calibration (Revert to 80% lock)"))
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .frame(maxWidth: .infinity)
@@ -2296,9 +2302,15 @@ struct BatteryCardView: View {
     }
 
     private func toggleRow(icon: String, iconColor: Color, title: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 8.5)).foregroundStyle(iconColor)
-            Text(title).font(.system(size: 8)).foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: FS.label))
+                .foregroundStyle(iconColor)
+                .frame(width: 16)
+            Text(title)
+                .font(.system(size: FS.label))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)
@@ -2315,7 +2327,7 @@ struct BatteryCardView: View {
 
     private var tempBadgeColor: Color {
         if batteryManager.temperature < 32.0 {
-            return .green
+            return Tone.good
         } else if batteryManager.temperature < 38.0 {
             return .orange
         } else {
@@ -2345,6 +2357,9 @@ struct ThermalAndFanCardView: View {
             // 1. Device Profile & Thermal Health Header
             deviceHeaderCard
 
+            // 1b. Fan control (hidden on fanless Macs)
+            FanControlCardView(fan: FanManager.shared)
+
             // 2. Optional Menu Bar temperature pill
             menuBarMonitorRow
 
@@ -2366,18 +2381,18 @@ struct ThermalAndFanCardView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "thermometer.medium")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: FS.subhead, weight: .semibold))
                         .foregroundStyle(headerIconColor)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(thermalManager.machineModelName)
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: FS.body, weight: .semibold))
                             .foregroundStyle(.primary)
 
                         Text("HID PMU")
-                            .font(.system(size: 8, weight: .heavy))
+                            .font(.system(size: FS.caption, weight: .semibold))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.08)))
@@ -2385,7 +2400,7 @@ struct ThermalAndFanCardView: View {
                     }
 
                     Text(tr("Cảm biến nhiệt Apple Silicon • Cập nhật mỗi 2.5s", "Apple Silicon Thermal Sensors • Updates every 2.5s"))
-                        .font(.system(size: 7.8))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
 
@@ -2397,7 +2412,7 @@ struct ThermalAndFanCardView: View {
                         .fill(stateColor)
                         .frame(width: 5, height: 5)
                     Text(localizedThermalStateDescription)
-                        .font(.system(size: 8.5, weight: .bold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(stateColor)
                 }
                 .padding(.horizontal, 6)
@@ -2413,7 +2428,7 @@ struct ThermalAndFanCardView: View {
                     }
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 9.5, weight: .semibold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(thermalManager.isRefreshing ? 360 : 0))
                         .animation(thermalManager.isRefreshing ? .linear(duration: 0.4) : .default, value: thermalManager.isRefreshing)
@@ -2425,11 +2440,7 @@ struct ThermalAndFanCardView: View {
             }
         }
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.06), lineWidth: 1))
-        )
+        .cardBackground()
     }
 
     // MARK: - 2. Menu Bar Monitor (temperature only)
@@ -2437,19 +2448,19 @@ struct ThermalAndFanCardView: View {
     private var menuBarMonitorRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "menubar.dock.rectangle")
-                .font(.system(size: 9))
+                .font(.system(size: FS.caption))
                 .foregroundStyle(Color.accentColor)
 
             Text(tr("Hiện nhiệt độ trên Menu Bar", "Show temperature on Menu Bar"))
-                .font(.system(size: 8))
+                .font(.system(size: FS.caption))
                 .foregroundStyle(.secondary)
 
             Spacer()
 
             if thermalManager.showMenuBarMetrics {
                 Text("\(Int(thermalManager.cpuAvgTemp))°C")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.cyan)
+                    .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.accentColor)
             }
 
             Toggle("", isOn: Binding<Bool>(
@@ -2460,8 +2471,8 @@ struct ThermalAndFanCardView: View {
             .controlSize(.mini)
             .labelsHidden()
         }
-        .padding(6)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
+        .padding(8)
+        .cardBackground()
     }
 
     // MARK: - 3. Apple Silicon Thermal Matrix (6 Core Metrics)
@@ -2469,13 +2480,13 @@ struct ThermalAndFanCardView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Label(tr("Bản đồ nhiệt Apple Silicon (HID PMU)", "Apple Silicon Thermal Matrix (HID PMU)"), systemImage: "cpu")
-                    .font(.system(size: 9.5, weight: .bold))
+                    .font(.system(size: FS.caption, weight: .semibold))
                     .foregroundStyle(.primary)
 
                 Spacer()
 
                 Text(tr("Thời gian thực: 2.5s", "Real-time: 2.5s"))
-                    .font(.system(size: 7.5))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.tertiary)
             }
 
@@ -2519,32 +2530,28 @@ struct ThermalAndFanCardView: View {
             }
         }
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.06), lineWidth: 1))
-        )
+        .cardBackground()
     }
 
     private func sensorTile(title: String, temp: Double, icon: String, sub: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 11))
+                .font(.system(size: FS.body))
                 .foregroundStyle(tempColor(temp))
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 7.5, weight: .medium))
+                    .font(.system(size: FS.caption, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Text(temp > 0 ? String(format: "%.1f°C", temp) : "—")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(.system(size: FS.body, weight: .semibold, design: .rounded))
                     .foregroundStyle(tempColor(temp))
 
                 Text(sub)
-                    .font(.system(size: 6.8))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
@@ -2553,7 +2560,7 @@ struct ThermalAndFanCardView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4.5)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
+        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.03)))
     }
 
     // MARK: - 4. Detailed Sensor Breakdown Accordion
@@ -2566,22 +2573,22 @@ struct ThermalAndFanCardView: View {
             } label: {
                 HStack {
                     Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 8.5))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(Color.accentColor)
 
                     Text(tr("Chi tiết \(thermalManager.detailedSensors.count) cảm biến PMU trên chip", "Detailed \(thermalManager.detailedSensors.count) on-chip PMU sensors"))
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(.primary)
 
                     Spacer()
 
                     Image(systemName: thermalManager.isDetailExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7.5, weight: .bold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4.5)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.04)))
             }
             .buttonStyle(.plain)
 
@@ -2590,14 +2597,14 @@ struct ThermalAndFanCardView: View {
                     ForEach(thermalManager.detailedSensors) { s in
                         HStack {
                             Text(s.displayName)
-                                .font(.system(size: 7.5, weight: .medium))
+                                .font(.system(size: FS.caption, weight: .medium))
                                 .foregroundStyle(.primary)
                             Text("(\(s.name))")
-                                .font(.system(size: 6.8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.tertiary)
                             Spacer()
                             Text(String(format: "%.1f°C", s.temp))
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
                                 .foregroundStyle(tempColor(s.temp))
                         }
                         .padding(.horizontal, 6)
@@ -2605,7 +2612,7 @@ struct ThermalAndFanCardView: View {
                     }
                 }
                 .padding(4)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.02)))
+                .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.02)))
             }
         }
     }
@@ -2613,7 +2620,7 @@ struct ThermalAndFanCardView: View {
     private func tempColor(_ temp: Double) -> Color {
         guard temp > 0 else { return .secondary }
         if temp < 55.0 {
-            return .green
+            return Tone.good
         } else if temp < 75.0 {
             return .orange
         } else {
@@ -2627,7 +2634,7 @@ struct ThermalAndFanCardView: View {
         }
         let peak = thermalManager.cpuPeakTemp
         if peak < 60.0 {
-            return .green
+            return Tone.good
         } else if peak < 80.0 {
             return .orange
         } else {
@@ -2646,11 +2653,11 @@ struct ThermalAndFanCardView: View {
     }
 
     private var headerIconColor: Color {
-        Color.cyan
+        Color.accentColor
     }
 
     private var headerIconBackground: Color {
-        Color.cyan.opacity(0.12)
+        Color.accentColor.opacity(0.12)
     }
 }
 
@@ -2663,10 +2670,10 @@ struct FooterView: View {
         HStack {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.green)
+                    .font(.system(size: FS.caption))
+                    .foregroundStyle(.secondary)
                 Text(tr("Open Source • Miễn phí", "Open Source • Free"))
-                    .font(.system(size: 8.5))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
             }
 
@@ -2680,9 +2687,9 @@ struct FooterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 8))
+                        .font(.system(size: FS.caption))
                     Text(tr("Tác giả", "Author"))
-                        .font(.system(size: 8.5, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
@@ -2695,24 +2702,26 @@ struct FooterView: View {
             .help(tr("Xem trang tác giả", "View author profile"))
 
             // Update Check / Action Button
+            if !UpdateManager.updatesDisabled {
             Button {
                 updateManager.checkForUpdates(silent: false)
             } label: {
                 HStack(spacing: 3.5) {
                     Image(systemName: updateManager.hasNewUpdate ? "sparkles" : "arrow.triangle.2.circlepath")
-                        .font(.system(size: 8))
+                        .font(.system(size: FS.caption))
                     Text(updateManager.hasNewUpdate ? tr("Có bản v\(updateManager.latestVersionString)", "New v\(updateManager.latestVersionString)") : tr("Kiểm tra cập nhật", "Check updates"))
-                        .font(.system(size: 8.5, weight: updateManager.hasNewUpdate ? .bold : .medium))
+                        .font(.system(size: FS.caption, weight: updateManager.hasNewUpdate ? .semibold : .medium))
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2.5)
                 .background(
-                    Capsule().fill(updateManager.hasNewUpdate ? Color.green.opacity(0.18) : Color.primary.opacity(0.06))
+                    Capsule().fill(updateManager.hasNewUpdate ? Tone.good.opacity(0.10) : Color.primary.opacity(0.06))
                 )
-                .foregroundStyle(updateManager.hasNewUpdate ? Color.green : Color.primary)
+                .foregroundStyle(updateManager.hasNewUpdate ? Tone.good : Color.primary)
             }
             .buttonStyle(.plain)
             .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra phiên bản mới từ GitHub", "Check for newer version on GitHub"))
+            }
 
             // Donate Button
             Button {
@@ -2720,10 +2729,10 @@ struct FooterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.pink)
+                        .font(.system(size: FS.caption))
+                        .foregroundStyle(.secondary)
                     Text("Donate")
-                        .font(.system(size: 8.5, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
@@ -2766,14 +2775,14 @@ struct UpdateModalView: View {
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: FS.value, weight: .bold))
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 0) {
                             Text(tr("Cập nhật HyperMac", "Update HyperMac"))
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: FS.body, weight: .semibold))
                             Text(tr("Phiên bản hiện tại: v\(UpdateManager.currentVersion)", "Current version: v\(UpdateManager.currentVersion)"))
-                                .font(.system(size: 8.5))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -2784,7 +2793,7 @@ struct UpdateModalView: View {
                         updateManager.showUpdateModal = false
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(.system(size: FS.subhead))
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -2799,7 +2808,7 @@ struct UpdateModalView: View {
                         ProgressView()
                             .controlSize(.regular)
                         Text(tr("Đang kiểm tra bản cập nhật mới trên GitHub...", "Checking for updates on GitHub..."))
-                            .font(.system(size: 10.5))
+                            .font(.system(size: FS.label))
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 120)
@@ -2807,14 +2816,14 @@ struct UpdateModalView: View {
                 case .upToDate(let ver):
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.green)
+                            .font(.system(size: FS.huge))
+                            .foregroundStyle(.secondary)
 
                         Text(tr("Bạn đang dùng phiên bản mới nhất!", "You are using the latest version!"))
-                            .font(.system(size: 11.5, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
 
                         Text(tr("HyperMac v\(ver) hiện là phiên bản cập nhật nhất. Máy của bạn đã sẵn sàng.", "HyperMac v\(ver) is currently the newest release. You are all set."))
-                            .font(.system(size: 9))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 10)
@@ -2823,7 +2832,7 @@ struct UpdateModalView: View {
                             updateManager.checkForUpdates(silent: false)
                         } label: {
                             Text(tr("Kiểm tra lại", "Check Again"))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: FS.label, weight: .medium))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 4)
                                 .background(Capsule().fill(Color.primary.opacity(0.08)))
@@ -2837,30 +2846,30 @@ struct UpdateModalView: View {
                     VStack(spacing: 10) {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.cyan)
+                                .font(.system(size: FS.subhead))
+                                .foregroundStyle(.secondary)
 
                             Text(tr("Đã có phiên bản mới: v\(ver)", "New version available: v\(ver)"))
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color.cyan)
+                                .font(.system(size: FS.body, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
                         }
 
                         // Release Notes Box
                         VStack(alignment: .leading, spacing: 3) {
                             Text(tr("Điểm mới trong bản v\(ver):", "What's new in v\(ver):"))
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: FS.caption, weight: .semibold))
                                 .foregroundStyle(.secondary)
 
                             ScrollView(.vertical, showsIndicators: true) {
                                 Text(notes)
-                                    .font(.system(size: 9))
+                                    .font(.system(size: FS.caption))
                                     .lineSpacing(2)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(6)
                             }
                             .frame(height: 95)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: Rad.sm)
                                     .fill(Color.primary.opacity(0.04))
                             )
                         }
@@ -2872,14 +2881,14 @@ struct UpdateModalView: View {
                             } label: {
                                 HStack(spacing: 5) {
                                     Image(systemName: "arrow.down.circle.fill")
-                                        .font(.system(size: 11, weight: .semibold))
+                                        .font(.system(size: FS.body, weight: .semibold))
                                     Text(tr("Cập nhật ngay (Tự động tải & Cài đặt)", "Update Now (Auto Download & Install)"))
-                                        .font(.system(size: 10.5, weight: .bold))
+                                        .font(.system(size: FS.label, weight: .semibold))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 7)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 7)
+                                    RoundedRectangle(cornerRadius: Rad.sm)
                                         .fill(Color.accentColor)
                                 )
                                 .foregroundStyle(Color.white)
@@ -2890,7 +2899,7 @@ struct UpdateModalView: View {
                                 updateManager.openReleasePage()
                             } label: {
                                 Text(tr("Xem chi tiết trên GitHub", "View details on GitHub"))
-                                    .font(.system(size: 9.5))
+                                    .font(.system(size: FS.caption))
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
@@ -2901,18 +2910,18 @@ struct UpdateModalView: View {
                 case .downloading(let progress):
                     VStack(spacing: 10) {
                         Image(systemName: "arrow.down.app.fill")
-                            .font(.system(size: 28))
+                            .font(.system(size: FS.hero))
                             .foregroundStyle(Color.accentColor)
 
                         Text(tr("Đang tải bản cập nhật: \(Int(progress * 100))%", "Downloading update: \(Int(progress * 100))%"))
-                            .font(.system(size: 11.5, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
 
                         ProgressView(value: progress, total: 1.0)
                             .progressViewStyle(.linear)
                             .padding(.horizontal, 20)
 
                         Text(tr("HyperMac sẽ tự động thay thế và khởi động lại ngay sau khi tải xong.", "HyperMac will automatically replace the old version and restart once complete."))
-                            .font(.system(size: 8.5))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 10)
@@ -2925,10 +2934,10 @@ struct UpdateModalView: View {
                             .controlSize(.regular)
 
                         Text(tr("Đang cài đặt & chuẩn bị khởi động lại...", "Installing & preparing to restart..."))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
 
                         Text(tr("Ứng dụng sẽ tự động mở lại trong giây lát.", "The application will reopen automatically in a moment."))
-                            .font(.system(size: 8.5))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 120)
@@ -2936,14 +2945,14 @@ struct UpdateModalView: View {
                 case .failed(let errorMsg):
                     VStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 28))
+                            .font(.system(size: FS.hero))
                             .foregroundStyle(.orange)
 
                         Text(tr("Không thể cập nhật tự động", "Failed to update automatically"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: FS.body, weight: .semibold))
 
                         Text(errorMsg)
-                            .font(.system(size: 8.5))
+                            .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 10)
@@ -2953,7 +2962,7 @@ struct UpdateModalView: View {
                                 updateManager.checkForUpdates(silent: false)
                             } label: {
                                 Text(tr("Thử lại", "Try Again"))
-                                    .font(.system(size: 9.5, weight: .medium))
+                                    .font(.system(size: FS.caption, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
                                     .background(Capsule().fill(Color.primary.opacity(0.08)))
@@ -2964,10 +2973,10 @@ struct UpdateModalView: View {
                                 updateManager.openReleasePage()
                             } label: {
                                 Text(tr("Mở GitHub Releases", "Open GitHub Releases"))
-                                    .font(.system(size: 9.5, weight: .medium))
+                                    .font(.system(size: FS.caption, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.10)))
                                     .foregroundStyle(Color.accentColor)
                             }
                             .buttonStyle(.plain)
@@ -2981,7 +2990,7 @@ struct UpdateModalView: View {
                 // Preferences Row: Auto check on launch
                 HStack {
                     Text(tr("Tự động kiểm tra bản mới khi mở HyperMac", "Automatically check for updates on startup"))
-                        .font(.system(size: 8.5))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
 
                     Spacer()
@@ -2997,12 +3006,12 @@ struct UpdateModalView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: Rad.md)
                     .fill(Color(NSColor.windowBackgroundColor))
                     .shadow(color: Color.black.opacity(0.25), radius: 16, x: 0, y: 6)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: Rad.md)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .padding(.horizontal, 20)
@@ -3048,14 +3057,14 @@ struct DonateModalView: View {
                 HStack {
                     HStack(spacing: 5) {
                         Image(systemName: "heart.circle.fill")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.pink)
+                            .font(.system(size: FS.value, weight: .bold))
+                            .foregroundStyle(.secondary)
 
                         VStack(alignment: .leading, spacing: 0) {
                             Text(tr("Ủng hộ tác giả (Donate)", "Support Author (Donate)"))
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: FS.body, weight: .semibold))
                             Text(tr("Tiếp thêm động lực phát triển HyperMac", "Fuel HyperMac's continuous development"))
-                                .font(.system(size: 8))
+                                .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -3066,7 +3075,7 @@ struct DonateModalView: View {
                         updateManager.showDonateModal = false
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.system(size: FS.title))
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -3085,15 +3094,15 @@ struct DonateModalView: View {
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
                                     .frame(maxWidth: 205, maxHeight: 255)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: Rad.md, style: .continuous))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .stroke(Color.pink.opacity(0.3), lineWidth: 1.2)
+                                        RoundedRectangle(cornerRadius: Rad.md, style: .continuous)
+                                            .stroke(Color.accentColor.opacity(0.3), lineWidth: 1.2)
                                     )
                                     .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
 
                                 Text(tr("Quét mã bằng mọi app ngân hàng", "Scan QR with any banking app"))
-                                    .font(.system(size: 9.5, weight: .medium))
+                                    .font(.system(size: FS.caption, weight: .medium))
                                     .foregroundStyle(.secondary)
                             }
                             .padding(.top, 1)
@@ -3105,7 +3114,7 @@ struct DonateModalView: View {
                                 "Thật sự cảm ơn bạn đã nhấn vào nút này, từ tận đáy lòng, mình luôn trân trọng số tiền mọi người ủng hộ kể cả ít hay nhiều, điều đó cho mình một động lực rất lớn để tiếp tục phát triển phần mềm này.",
                                 "Thank you so much for clicking this button. From the bottom of my heart, I truly appreciate any contribution, big or small. It gives me great motivation to keep maintaining and improving this app."
                             ))
-                                .font(.system(size: 10.5))
+                                .font(.system(size: FS.label))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -3114,7 +3123,7 @@ struct DonateModalView: View {
                                 "Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.",
                                 "I sincerely thank each and every one of you for your support 😊😊😊."
                             ))
-                                .font(.system(size: 10.5, weight: .semibold))
+                                .font(.system(size: FS.label, weight: .semibold))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -3123,7 +3132,7 @@ struct DonateModalView: View {
                                 "Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️",
                                 "If possible, please send me a quick message on Facebook so I can thank you personally ❤️"
                             ))
-                                .font(.system(size: 10.5))
+                                .font(.system(size: FS.label))
                                 .lineSpacing(2.5)
                                 .foregroundStyle(.primary.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -3131,12 +3140,12 @@ struct DonateModalView: View {
                         .padding(9)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.pink.opacity(0.07))
+                            RoundedRectangle(cornerRadius: Rad.md, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.07))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.pink.opacity(0.2), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: Rad.md, style: .continuous)
+                                .stroke(Color.accentColor.opacity(0.10), lineWidth: 1)
                         )
 
                         // Facebook Link Button
@@ -3147,9 +3156,9 @@ struct DonateModalView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .font(.system(size: 10))
+                                    .font(.system(size: FS.label))
                                 Text(tr("Nhắn tin qua Facebook cho tác giả ↗", "Message author on Facebook ↗"))
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: FS.label, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -3164,12 +3173,12 @@ struct DonateModalView: View {
             }
             .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: Rad.md)
                     .fill(Color(NSColor.windowBackgroundColor))
                     .shadow(color: Color.black.opacity(0.28), radius: 16, x: 0, y: 6)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: Rad.md)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .padding(.horizontal, 16)

@@ -232,7 +232,7 @@ public class SystemCleanerManager: ObservableObject {
                 title: "Bộ nhớ đệm ứng dụng & web",
                 subtitle: "Cache Chrome, Safari, Spotify, Zalo, Adobe...",
                 icon: "globe.americas.fill",
-                iconColor: .cyan,
+                iconColor: .secondary,
                 sizeBytes: 0,
                 fileCount: 0,
                 isSelected: true,
@@ -243,7 +243,7 @@ public class SystemCleanerManager: ObservableObject {
                 title: "Nhật ký & Báo cáo lỗi",
                 subtitle: "Các tệp .log, .crash tích tụ lâu ngày",
                 icon: "doc.text.fill",
-                iconColor: .orange,
+                iconColor: .secondary,
                 sizeBytes: 0,
                 fileCount: 0,
                 isSelected: true,
@@ -254,7 +254,7 @@ public class SystemCleanerManager: ObservableObject {
                 title: "Thùng rác hệ thống (Trash)",
                 subtitle: "Các tệp đang nằm chờ dọn dẹp trong Thùng rác",
                 icon: "trash.fill",
-                iconColor: .red,
+                iconColor: .secondary,
                 sizeBytes: 0,
                 fileCount: 0,
                 isSelected: true,
@@ -265,7 +265,7 @@ public class SystemCleanerManager: ObservableObject {
                 title: "Dữ liệu rác lập trình viên (Xcode)",
                 subtitle: "DerivedData và bộ nhớ build tạm",
                 icon: "hammer.fill",
-                iconColor: .indigo,
+                iconColor: .secondary,
                 sizeBytes: 0,
                 fileCount: 0,
                 isSelected: true,
@@ -648,7 +648,7 @@ public class SystemCleanerManager: ObservableObject {
                     self.selectedApp = nil
                 } else {
                     let freedStr = Self.formatBytes(leftoversFreed)
-                    self.uninstallMessage = tr("⚠️ Không thể xóa file .app (yêu cầu quyền quản trị macOS). Đã dọn sạch \(freedStr) tệp rác liên quan.", "⚠️ Could not delete .app bundle (admin privileges required). Cleaned \(freedStr) leftover files.")
+                    self.uninstallMessage = tr("Không thể xóa file .app (yêu cầu quyền quản trị macOS). Đã dọn sạch \(freedStr) tệp rác liên quan.", "Could not delete .app bundle (admin privileges required). Cleaned \(freedStr) leftover files.")
                 }
                 appLog("✨ AppUninstaller: Uninstalled \(app.name), appDeleted=\(appDeleted)")
             }

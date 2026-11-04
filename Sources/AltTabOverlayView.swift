@@ -51,28 +51,28 @@ public struct AltTabOverlayView: View {
         HStack(spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "command")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.cyan)
+                    .font(.system(size: FS.body, weight: .semibold))
+                    .foregroundStyle(.secondary)
                 Text("HYPERMAC")
-                    .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                    .font(.system(size: FS.label, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
             }
 
             if let item = selectedItem {
                 Text("•")
-                    .font(.system(size: 9.5))
+                    .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary.opacity(0.6))
 
                 Text(item.appName)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundStyle(Color.cyan)
+                    .font(.system(size: FS.label, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
 
                 if item.title != item.appName && !item.title.isEmpty {
                     Text("—")
-                        .font(.system(size: 9.5))
+                        .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary.opacity(0.6))
                     Text(item.title)
-                        .font(.system(size: 10, weight: .regular))
+                        .font(.system(size: FS.label, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -84,9 +84,9 @@ public struct AltTabOverlayView: View {
             if windowManager.showOnlyCurrentScreenWindows {
                 HStack(spacing: 3.5) {
                     Image(systemName: "display")
-                        .font(.system(size: 8))
+                        .font(.system(size: FS.caption))
                     Text(tr("Màn hình này", "This Display"))
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
@@ -96,11 +96,11 @@ public struct AltTabOverlayView: View {
 
             if !windowManager.windows.isEmpty {
                 Text("\(windowManager.selectedIndex + 1) / \(windowManager.windows.count)")
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .font(.system(size: FS.caption, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.cyan.opacity(0.15)))
-                    .foregroundStyle(Color.cyan)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.10)))
+                    .foregroundStyle(Color.accentColor)
             }
         }
         .padding(.horizontal, 20)
@@ -189,12 +189,12 @@ struct AltTabWindowTile: View {
         Button(action: onSelect) {
             ZStack {
                 // Background Tile
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? Color.cyan.opacity(0.18) : Color.black.opacity(0.40))
+                RoundedRectangle(cornerRadius: Rad.lg, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.black.opacity(0.40))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: Rad.lg, style: .continuous)
                             .stroke(
-                                isSelected ? Color.cyan : Color.white.opacity(0.10),
+                                isSelected ? Color.accentColor : Color.white.opacity(0.10),
                                 lineWidth: isSelected ? 2.5 : 1
                             )
                     )
@@ -211,7 +211,7 @@ struct AltTabWindowTile: View {
                 }
             }
             .frame(width: 260, height: 188)
-            .shadow(color: isSelected ? Color.cyan.opacity(0.40) : Color.clear, radius: 8, y: 2)
+            .shadow(color: isSelected ? Color.accentColor.opacity(0.40) : Color.clear, radius: 8, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -222,17 +222,17 @@ struct AltTabWindowTile: View {
                 HStack(spacing: 3) {
                     Circle().fill(Color.orange).frame(width: 5.5, height: 5.5)
                     Text(tr("Thu nhỏ", "Minimized"))
-                        .font(.system(size: 7.5, weight: .bold))
+                        .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(Color.orange)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Capsule().fill(Color.orange.opacity(0.18)))
+                .background(Capsule().fill(Color.orange.opacity(0.10)))
             } else {
                 HStack(spacing: 4) {
                     Circle().fill(Color.red.opacity(0.75)).frame(width: 5.5, height: 5.5)
-                    Circle().fill(Color.yellow.opacity(0.75)).frame(width: 5.5, height: 5.5)
-                    Circle().fill(Color.green.opacity(0.75)).frame(width: 5.5, height: 5.5)
+                    Circle().fill(Color.orange.opacity(0.75)).frame(width: 5.5, height: 5.5)
+                    Circle().fill(Tone.good.opacity(0.75)).frame(width: 5.5, height: 5.5)
                 }
             }
 
@@ -240,7 +240,7 @@ struct AltTabWindowTile: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: FS.caption, weight: .semibold))
                     .foregroundStyle(Color.secondary.opacity(0.8))
                     .frame(width: 17, height: 17)
                     .background(Circle().fill(Color.white.opacity(0.08)))
@@ -260,9 +260,9 @@ struct AltTabWindowTile: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 242, maxHeight: 114)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Rad.sm, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
                             .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
 
@@ -305,14 +305,14 @@ struct AltTabWindowTile: View {
             let hasDistinctTitle = (item.title != item.appName) && !item.title.isEmpty
 
             Text(hasDistinctTitle ? item.title : item.appName)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(isSelected ? Color.cyan : .primary)
+                .font(.system(size: FS.label, weight: .semibold))
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             if hasDistinctTitle {
                 Text(item.appName)
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: FS.caption, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -333,10 +333,10 @@ struct HintChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 9))
+                .font(.system(size: FS.caption))
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: FS.label, weight: .medium))
                 .foregroundStyle(.secondary)
         }
     }

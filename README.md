@@ -222,6 +222,9 @@ chmod +x build.sh
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
+### [Chưa phát hành]
+- **🌀 Điều khiển tốc độ quạt (Apple Silicon có quạt, ví dụ MacBook Pro):** thẻ Quạt trong tab *Nhiệt độ & Cảm biến* với **System / Medium / High** và thanh trượt tự chọn `RPM (%)`, hiển thị RPM thực tế. Tự trả quạt về hệ thống khi thoát app, trước khi ngủ, khi khởi động và khi nhiệt độ >= 90°C. Cần cài lại helper một lần (hỏi mật khẩu quản trị). Máy không có quạt (MacBook Air) sẽ ẩn thẻ này.
+
 ### [v1.8.2] — 2026-11-02
 - **🌐 Hỗ trợ đa ngôn ngữ Tiếng Việt & Tiếng Anh (i18n Localization):**
   - Bổ sung nút chuyển đổi ngôn ngữ nhanh **`vi` / `en`** trực tiếp tại thanh tiêu đề (bên phải badge phiên bản).

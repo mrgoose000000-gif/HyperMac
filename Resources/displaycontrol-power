@@ -140,20 +140,44 @@ case "$1" in
         echo "TARGET:" $("$SMC" -k "F${ID}Tg" -r 2>/dev/null || true)
         echo "MODE:" $("$SMC" -k "F${ID}Md" -r 2>/dev/null || true)
         ;;
+    version)
+        echo "HELPER_VERSION:2"
+        ;;
     fan-set)
         ID="${2:-0}"
         RPM="$3"
-        "$SMC" -k Ftst -w 01 2>/dev/null || true
-        "$SMC" -k "F${ID}Md" -w 01 2>/dev/null || true
-        "$SMC" -k "F${ID}Tg" -w "$RPM" 2>/dev/null || true
+        # Chỉ nhận số nguyên hợp lệ; chặn mọi đối số lạ (helper chạy bằng root).
+        case "$ID" in [0-3]) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
+        case "$RPM" in ''|*[!0-9]*) echo "ERROR: invalid rpm"; exit 2 ;; esac
+        FMIN=$("$SMC" -k "F${ID}Mn" -r 2>/dev/null | awk '{print int($4)}')
+        FMAX=$("$SMC" -k "F${ID}Mx" -r 2>/dev/null | awk '{print int($4)}')
+        if [ -z "$FMIN" ] || [ -z "$FMAX" ] || [ "$FMAX" -le 0 ]; then
+            echo "ERROR: fan range unavailable"; exit 3
+        fi
+        if [ "$RPM" -lt "$FMIN" ] || [ "$RPM" -gt "$FMAX" ]; then
+            echo "ERROR: rpm out of range ($FMIN-$FMAX)"; exit 2
+        fi
+        # float32 little-endian hex (vd 3000 -> 00803b45)
+        HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$RPM")
+        if check_key_exists "Ftst"; then
+            "$SMC" -k Ftst -w 01 >/dev/null 2>&1 || true
+        fi
+        "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
+        "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
+        echo "FAN_SET_OK"
         ;;
     fan-auto)
         ID="${2:-0}"
-        "$SMC" -k "F${ID}Md" -w 00 2>/dev/null || true
-        "$SMC" -k Ftst -w 00 2>/dev/null || true
+        case "$ID" in [0-3]) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
+        "$SMC" -k "F${ID}Md" -w 00 >/dev/null 2>&1 || true
+        "$SMC" -k "F${ID}Tg" -w 00000000 >/dev/null 2>&1 || true
+        if check_key_exists "Ftst"; then
+            "$SMC" -k Ftst -w 00 >/dev/null 2>&1 || true
+        fi
+        echo "FAN_AUTO_OK"
         ;;
     *)
-        echo "Usage: $0 {status|charge-off [limit]|charge-on|fan-count|fan-info|fan-set|fan-auto}"
+        echo "Usage: $0 {status|charge-off [limit]|charge-on|version|fan-count|fan-info|fan-set <id> <rpm>|fan-auto <id>}"
         exit 1
         ;;
 esac

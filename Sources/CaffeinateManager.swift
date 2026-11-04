@@ -132,7 +132,7 @@ public class CaffeinateManager: ObservableObject {
 
     private func updateRemainingFormatted() {
         if selectedDuration == .indefinite {
-            remainingFormatted = "Vô hạn"
+            remainingFormatted = "∞"
             return
         }
         let hours = remainingSeconds / 3600
