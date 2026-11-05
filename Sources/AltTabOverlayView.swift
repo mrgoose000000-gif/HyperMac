@@ -48,7 +48,7 @@ public struct AltTabOverlayView: View {
     // MARK: - Header Bar
 
     private var headerBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             HStack(spacing: 5) {
                 Image(systemName: "command")
                     .font(.system(size: 11, weight: .bold))
@@ -57,29 +57,36 @@ public struct AltTabOverlayView: View {
                     .font(.system(size: 10.5, weight: .heavy, design: .rounded))
                     .foregroundStyle(.primary)
             }
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
 
             if let item = selectedItem {
                 Text("•")
                     .font(.system(size: 9.5))
                     .foregroundStyle(.secondary.opacity(0.6))
+                    .fixedSize()
 
                 Text(item.appName)
                     .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Color.cyan)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
                 if item.title != item.appName && !item.title.isEmpty {
                     Text("—")
                         .font(.system(size: 9.5))
                         .foregroundStyle(.secondary.opacity(0.6))
+                        .fixedSize()
                     Text(item.title)
                         .font(.system(size: 10, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .layoutPriority(0)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 6)
 
             if windowManager.showOnlyCurrentScreenWindows {
                 HStack(spacing: 3.5) {
@@ -92,26 +99,30 @@ public struct AltTabOverlayView: View {
                 .padding(.vertical, 2.5)
                 .background(Capsule().fill(Color.secondary.opacity(0.14)))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             }
 
             if !windowManager.windows.isEmpty {
                 Text("\(windowManager.selectedIndex + 1) / \(windowManager.windows.count)")
                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.cyan.opacity(0.15)))
                     .foregroundStyle(Color.cyan)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 18)
         .padding(.top, 4)
     }
 
     // MARK: - Cards Grid (Multi-Row Window Switcher)
 
     private var cardsGrid: some View {
-        let (columns, _) = WindowManager.computeGrid(windowCount: windowManager.windows.count)
-        let colCount = max(1, columns)
+        let layout = windowManager.currentLayout
+        let colCount = max(1, layout.columns)
         let allItems = Array(windowManager.windows.enumerated())
         let rows = stride(from: 0, to: allItems.count, by: colCount).map {
             Array(allItems[$0..<min($0 + colCount, allItems.count)])
@@ -119,13 +130,15 @@ public struct AltTabOverlayView: View {
 
         return ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 12) {
+                VStack(spacing: layout.rowSpacing) {
                     ForEach(0..<rows.count, id: \.self) { rowIndex in
-                        HStack(spacing: 12) {
+                        HStack(spacing: layout.colSpacing) {
                             ForEach(rows[rowIndex], id: \.element.id) { index, item in
                                 AltTabWindowTile(
                                     item: item,
                                     index: index,
+                                    cardWidth: layout.cardWidth,
+                                    cardHeight: layout.cardHeight,
                                     isSelected: windowManager.selectedIndex == index,
                                     onSelect: {
                                         windowManager.selectedIndex = index
@@ -143,7 +156,7 @@ public struct AltTabOverlayView: View {
                             if rows[rowIndex].count < colCount {
                                 ForEach(0..<(colCount - rows[rowIndex].count), id: \.self) { _ in
                                     Color.clear
-                                        .frame(width: 260, height: 188)
+                                        .frame(width: layout.cardWidth, height: layout.cardHeight)
                                 }
                             }
                         }
@@ -163,9 +176,9 @@ public struct AltTabOverlayView: View {
     // MARK: - Footer Hints Bar
 
     private var footerHintsBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: windowManager.currentLayout.isPortrait ? 8 : 12) {
             HintChip(icon: "command", text: tr("⌘⇥ / ⇧⇥ Di chuyển", "⌘⇥ / ⇧⇥ Navigate"))
-            HintChip(icon: "arrow.up.and.down.and.arrow.left.and.right", text: tr("↑↓←→ Lưới hàng", "↑↓←→ Grid"))
+            HintChip(icon: "arrow.up.and.down.and.arrow.left.and.right", text: tr("↑↓←→ Lưới", "↑↓←→ Grid"))
             HintChip(icon: "xmark.circle", text: tr("W Đóng", "W Close"))
             HintChip(icon: "power", text: tr("Q Thoát app", "Q Quit App"))
             HintChip(icon: "escape", text: tr("⎋ Hủy", "⎋ Cancel"))
@@ -181,6 +194,8 @@ public struct AltTabOverlayView: View {
 struct AltTabWindowTile: View {
     let item: WindowItem
     let index: Int
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
     let isSelected: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
@@ -210,29 +225,29 @@ struct AltTabWindowTile: View {
                     tileBottomLabel
                 }
             }
-            .frame(width: 260, height: 188)
+            .frame(width: cardWidth, height: cardHeight)
             .shadow(color: isSelected ? Color.cyan.opacity(0.40) : Color.clear, radius: 8, y: 2)
         }
         .buttonStyle(.plain)
     }
 
     private var tileTopBar: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             if item.isMinimized {
                 HStack(spacing: 3) {
-                    Circle().fill(Color.orange).frame(width: 5.5, height: 5.5)
+                    Circle().fill(Color.orange).frame(width: 5, height: 5)
                     Text(tr("Thu nhỏ", "Minimized"))
-                        .font(.system(size: 7.5, weight: .bold))
+                        .font(.system(size: 7, weight: .bold))
                         .foregroundStyle(Color.orange)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1.5)
                 .background(Capsule().fill(Color.orange.opacity(0.18)))
             } else {
-                HStack(spacing: 4) {
-                    Circle().fill(Color.red.opacity(0.75)).frame(width: 5.5, height: 5.5)
-                    Circle().fill(Color.yellow.opacity(0.75)).frame(width: 5.5, height: 5.5)
-                    Circle().fill(Color.green.opacity(0.75)).frame(width: 5.5, height: 5.5)
+                HStack(spacing: 3.5) {
+                    Circle().fill(Color.red.opacity(0.75)).frame(width: 5, height: 5)
+                    Circle().fill(Color.yellow.opacity(0.75)).frame(width: 5, height: 5)
+                    Circle().fill(Color.green.opacity(0.75)).frame(width: 5, height: 5)
                 }
             }
 
@@ -240,16 +255,16 @@ struct AltTabWindowTile: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 7.5, weight: .bold))
                     .foregroundStyle(Color.secondary.opacity(0.8))
-                    .frame(width: 17, height: 17)
+                    .frame(width: 16, height: 16)
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
             .buttonStyle(.plain)
             .help(tr("Đóng cửa sổ (W)", "Close window (W)"))
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
     }
 
     private var tileCenterContent: some View {
@@ -259,7 +274,7 @@ struct AltTabWindowTile: View {
                 Image(nsImage: thumb)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 242, maxHeight: 114)
+                    .frame(maxWidth: max(60, cardWidth - 18), maxHeight: max(40, cardHeight - 64))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -274,53 +289,54 @@ struct AltTabWindowTile: View {
                             .resizable()
                             .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 22, height: 22)
+                            .frame(width: max(16, min(22, cardWidth * 0.09)), height: max(16, min(22, cardWidth * 0.09)))
                             .background(Circle().fill(Color.black.opacity(0.75)))
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
-                            .padding(6)
+                            .padding(max(4, cardWidth * 0.025))
                         Spacer()
                     }
                 }
             } else {
                 // Clean Genuine AltTab App Icon Mode (No bogus wallpaper!)
+                let iconSize = max(36.0, min(64.0, cardHeight * 0.36))
                 VStack(spacing: 4) {
                     Image(nsImage: item.icon)
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 64, height: 64)
+                        .frame(width: iconSize, height: iconSize)
                         .shadow(color: Color.black.opacity(0.3), radius: 5, y: 2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: 118)
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 6)
     }
 
     private var tileBottomLabel: some View {
-        VStack(spacing: 1.5) {
+        VStack(spacing: 1) {
             // Clean single title: If title equals app name, show app name only!
             let hasDistinctTitle = (item.title != item.appName) && !item.title.isEmpty
 
             Text(hasDistinctTitle ? item.title : item.appName)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: max(8.5, min(10.0, cardWidth * 0.038)), weight: .bold))
                 .foregroundStyle(isSelected ? Color.cyan : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             if hasDistinctTitle {
                 Text(item.appName)
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: max(7.5, min(8.5, cardWidth * 0.032)), weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .padding(.bottom, 7)
+        .padding(.horizontal, 6)
+        .padding(.top, 2)
+        .padding(.bottom, 6)
     }
 }
 

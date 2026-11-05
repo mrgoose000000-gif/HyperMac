@@ -99,6 +99,34 @@ public struct WindowItem: Identifiable, Equatable {
     }
 }
 
+// MARK: - AltTab Adaptive Layout Model
+
+public struct AltTabLayout: Equatable, Sendable {
+    public var columns: Int
+    public var totalRows: Int
+    public var visibleRows: Int
+    public var cardWidth: CGFloat
+    public var cardHeight: CGFloat
+    public var colSpacing: CGFloat
+    public var rowSpacing: CGFloat
+    public var panelWidth: CGFloat
+    public var panelHeight: CGFloat
+    public var isPortrait: Bool
+
+    public static let standard = AltTabLayout(
+        columns: 3,
+        totalRows: 2,
+        visibleRows: 2,
+        cardWidth: 260,
+        cardHeight: 188,
+        colSpacing: 12,
+        rowSpacing: 12,
+        panelWidth: 840,
+        panelHeight: 480,
+        isPortrait: false
+    )
+}
+
 // MARK: - Window Manager
 
 @MainActor
@@ -108,6 +136,7 @@ public class WindowManager: ObservableObject {
     @Published public var windows: [WindowItem] = []
     @Published public var selectedIndex: Int = 0
     @Published public var isVisible: Bool = false
+    @Published public var currentLayout: AltTabLayout = .standard
     @Published public var hasScreenRecording: Bool = false
     @Published public var isAltTabEnabled: Bool = true {
         didSet {
@@ -398,7 +427,7 @@ public class WindowManager: ObservableObject {
 
     public func selectUp() {
         guard !windows.isEmpty else { return }
-        let (columns, _) = Self.computeGrid(windowCount: windows.count)
+        let columns = max(1, currentLayout.columns)
         if selectedIndex - columns >= 0 {
             selectedIndex -= columns
         } else {
@@ -411,7 +440,7 @@ public class WindowManager: ObservableObject {
 
     public func selectDown() {
         guard !windows.isEmpty else { return }
-        let (columns, _) = Self.computeGrid(windowCount: windows.count)
+        let columns = max(1, currentLayout.columns)
         if selectedIndex + columns < windows.count {
             selectedIndex += columns
         } else {
@@ -565,51 +594,135 @@ public class WindowManager: ObservableObject {
     // MARK: - Multi-row Grid Geometry Calculation
 
     public static func computeGrid(windowCount: Int) -> (columns: Int, rows: Int) {
-        if windowCount <= 4 {
-            return (max(1, windowCount), 1)
-        } else if windowCount <= 6 {
-            return (3, 2)
-        } else if windowCount <= 8 {
-            return (4, 2)
-        } else if windowCount <= 12 {
-            return (4, 3)
-        } else if windowCount <= 15 {
-            return (5, 3)
+        let mouseLoc = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSPointInRect(mouseLoc, $0.frame) }) ?? NSScreen.main ?? NSScreen.screens.first
+        let frame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let layout = computeLayout(windowCount: windowCount, screenRect: frame)
+        return (layout.columns, layout.totalRows)
+    }
+
+    public static func computeLayout(windowCount: Int, screenRect: NSRect) -> AltTabLayout {
+        let count = max(1, windowCount)
+        let safeW = screenRect.width > 0 ? screenRect.width : 1440
+        let safeH = screenRect.height > 0 ? screenRect.height : 900
+        let isPortrait = safeW < safeH
+
+        let hPadding: CGFloat = 36 // 18pt each side
+        let vPadding: CGFloat = 92 // Header ~44 + Footer ~36 + Vertical padding ~12
+        let colSpacing: CGFloat = 12
+        let rowSpacing: CGFloat = 12
+        let cardRatio: CGFloat = 260.0 / 188.0 // 1.383
+
+        // Usable bounding box with safe margins to never touch/overflow screen edges
+        let maxUsableWidth = max(280, safeW - (isPortrait ? 32 : 48))
+        let maxUsableHeight = max(320, safeH - (isPortrait ? 48 : 64))
+
+        // 1. Determine optimal columns & total rows
+        var cols: Int
+        if isPortrait {
+            // PORTRAIT ORIENTATION (Vertical Monitor)
+            // Stacks vertically to take full advantage of height without horizontal squeezing
+            if count <= 1 {
+                cols = 1
+            } else if count <= 2 {
+                cols = maxUsableWidth >= 560 ? 2 : 1
+            } else if count <= 8 {
+                cols = 2
+            } else if count <= 15 {
+                cols = maxUsableWidth >= 800 ? 3 : 2
+            } else {
+                cols = maxUsableWidth >= 850 ? 3 : 2
+            }
         } else {
-            let cols = 5
-            let rows = Int(ceil(Double(windowCount) / Double(cols)))
-            return (cols, rows)
+            // LANDSCAPE ORIENTATION (Horizontal Monitor / Standard Laptop)
+            if count <= 4 {
+                cols = count
+            } else if count <= 6 {
+                cols = 3
+            } else if count <= 8 {
+                cols = 4
+            } else if count <= 12 {
+                cols = 4
+            } else if count <= 15 {
+                cols = 5
+            } else {
+                cols = 5
+            }
         }
+
+        let totalRows = max(1, Int(ceil(Double(count) / Double(cols))))
+
+        // 2. Determine max visible rows before scrolling starts
+        let maxCardW: CGFloat = 260.0
+        let maxCardH: CGFloat = 188.0
+        let minCardW: CGFloat = 150.0
+
+        let maxAllowedVisibleRows: Int
+        if isPortrait {
+            // In portrait, we have plenty of vertical room (can show up to 4 or 5 rows)
+            let possibleRows = Int((maxUsableHeight - vPadding) / (maxCardH + rowSpacing))
+            maxAllowedVisibleRows = max(2, min(5, possibleRows))
+        } else {
+            // In landscape, height is tighter (show at most 3 rows without scrolling)
+            let possibleRows = Int((maxUsableHeight - vPadding) / (maxCardH + rowSpacing))
+            maxAllowedVisibleRows = max(1, min(3, possibleRows))
+        }
+        let visibleRows = min(totalRows, max(1, maxAllowedVisibleRows))
+
+        // 3. Dynamic card scaling: compute max cardWidth that satisfies both width & height constraints
+        let availableGridW = maxUsableWidth - hPadding - CGFloat(max(0, cols - 1)) * colSpacing
+        let maxCardWByScreenW = availableGridW / CGFloat(cols)
+
+        let availableGridH = maxUsableHeight - vPadding - CGFloat(max(0, visibleRows - 1)) * rowSpacing
+        let maxCardHByScreenH = availableGridH / CGFloat(visibleRows)
+        let maxCardWByScreenH = maxCardHByScreenH * cardRatio
+
+        var cardWidth = min(maxCardW, min(maxCardWByScreenW, maxCardWByScreenH))
+        cardWidth = max(minCardW, cardWidth)
+        let cardHeight = round(cardWidth / cardRatio)
+
+        // 4. Panel dimensions (with comfortable minimum width so footer shortcuts and title never squish)
+        let minPanelW: CGFloat = isPortrait ? 420.0 : 440.0
+        let gridWidth = CGFloat(cols) * cardWidth + CGFloat(max(0, cols - 1)) * colSpacing
+        let panelWidth = min(safeW - 20, max(minPanelW, gridWidth + hPadding))
+
+        let gridHeight = CGFloat(visibleRows) * cardHeight + CGFloat(max(0, visibleRows - 1)) * rowSpacing
+        let panelHeight = min(safeH - 24, gridHeight + vPadding)
+
+        return AltTabLayout(
+            columns: cols,
+            totalRows: totalRows,
+            visibleRows: visibleRows,
+            cardWidth: cardWidth,
+            cardHeight: cardHeight,
+            colSpacing: colSpacing,
+            rowSpacing: rowSpacing,
+            panelWidth: panelWidth,
+            panelHeight: panelHeight,
+            isPortrait: isPortrait
+        )
     }
 
     // MARK: - Multi-row AltTab Overlay HUD Presentation
 
     private func showOverlay() {
-        let (columns, totalRows) = Self.computeGrid(windowCount: windows.count)
-        let cardWidth: CGFloat = 260
-        let cardHeight: CGFloat = 188
-        let colSpacing: CGFloat = 12
-        let rowSpacing: CGFloat = 12
-        let horizontalPadding: CGFloat = 40
-        let headerFooterPadding: CGFloat = 86
+        let mouseLoc = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSPointInRect(mouseLoc, $0.frame) }) ?? NSScreen.main ?? NSScreen.screens[0]
+        let screenVisibleFrame = screen.visibleFrame
 
-        // Max visible rows without scrolling = 3 (fits comfortably on all Mac screens)
-        let visibleRows = min(totalRows, 3)
+        let layout = Self.computeLayout(windowCount: windows.count, screenRect: screenVisibleFrame)
+        self.currentLayout = layout
 
-        let gridWidth = CGFloat(columns) * cardWidth + CGFloat(max(0, columns - 1)) * colSpacing
-        let gridHeight = CGFloat(visibleRows) * cardHeight + CGFloat(max(0, visibleRows - 1)) * rowSpacing
-
-        let calculatedWidth = gridWidth + horizontalPadding
-        let calculatedHeight = gridHeight + headerFooterPadding
+        let totalWidth = layout.panelWidth
+        let totalHeight = layout.panelHeight
 
         if overlayPanel == nil {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: calculatedWidth, height: calculatedHeight),
+                contentRect: NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
-            // ScreenSaver level ensures it floats above all regular and fullscreen windows!
             panel.level = .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
             panel.isFloatingPanel = true
@@ -623,21 +736,13 @@ public class WindowManager: ObservableObject {
             )
             self.overlayPanel = panel
         }
-        // Reuse the existing hosting controller: recreating it on every press
-        // caused flicker, reset the scroll position and wasted RAM.
 
         guard let panel = overlayPanel else { return }
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
 
-        // Center on screen where mouse currently resides
-        let mouseLoc = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { NSPointInRect(mouseLoc, $0.frame) }) ?? NSScreen.main ?? NSScreen.screens[0]
-        let screenRect = screen.frame
-
-        let totalWidth = min(calculatedWidth, screenRect.width - 60)
-        let totalHeight = min(calculatedHeight, screenRect.height - 80)
-        let posX = screenRect.origin.x + (screenRect.width - totalWidth) / 2
-        let posY = screenRect.origin.y + (screenRect.height - totalHeight) / 2
+        // Center on the visible frame of the active screen
+        let posX = screenVisibleFrame.origin.x + (screenVisibleFrame.width - totalWidth) / 2
+        let posY = screenVisibleFrame.origin.y + (screenVisibleFrame.height - totalHeight) / 2
 
         panel.setFrame(NSRect(x: posX, y: posY, width: totalWidth, height: totalHeight), display: true)
         panel.makeKeyAndOrderFront(nil)
