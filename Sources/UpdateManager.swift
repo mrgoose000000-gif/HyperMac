@@ -123,7 +123,18 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
 
     // MARK: - Check For Updates
 
+    /// Cho phép người dùng kiểm tra và tải bản cập nhật tự động từ GitHub.
+    nonisolated public static let updatesDisabled = false
+
     public func checkForUpdates(silent: Bool = false) {
+        if Self.updatesDisabled {
+            if !silent {
+                self.showUpdateModal = true
+                self.state = .failed(tr("Kiểm tra cập nhật đã bị tắt trong bản build này.",
+                                        "Update check is disabled in this build."))
+            }
+            return
+        }
         if !silent {
             self.showUpdateModal = true
         }
@@ -272,6 +283,7 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
     // MARK: - Download & Automatic Installation
 
     public func startUpdate() {
+        if Self.updatesDisabled { return }
         guard let url = downloadUrl else {
             // If no direct binary asset attached, open GitHub release page
             if let html = htmlUrl ?? URL(string: "https://github.com/mrgoose000000-gif/HyperMac/releases") {

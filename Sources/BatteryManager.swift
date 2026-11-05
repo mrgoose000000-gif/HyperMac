@@ -298,7 +298,7 @@ public class BatteryManager: ObservableObject {
 
             if isSmartAlertsEnabled {
                 sendNotification(
-                    title: "🛡️ Sleep Guard: Báo cáo khi mở máy",
+                    title: "Sleep Guard: Báo cáo khi mở máy",
                     body: "Máy đã nghỉ \(hours)h\(mins)m. \(drainText). Chế độ nguồn AC tiếp tục được bảo vệ!"
                 )
             }
@@ -417,7 +417,7 @@ public class BatteryManager: ObservableObject {
             if lastExtDisplayAlertDate == nil || now.timeIntervalSince(lastExtDisplayAlertDate!) > 900 { // 15 mins
                 lastExtDisplayAlertDate = now
                 sendNotification(
-                    title: "⚠️ Đang dùng màn ngoài nhưng chưa cắm sạc!",
+                    title: "Đang dùng màn ngoài nhưng chưa cắm sạc!",
                     body: "Màn hình ngoài đang làm GPU xả pin rất nặng và nóng máy. Hãy cắm sạc để máy chạy điện trực tiếp và bảo vệ pin!"
                 )
             }
@@ -439,7 +439,7 @@ public class BatteryManager: ObservableObject {
                 if lastLowBatteryAlertLevel != 20 {
                     lastLowBatteryAlertLevel = 20
                     sendNotification(
-                        title: "⚠️ Pin yếu (20%) - Hãy cắm sạc!",
+                        title: "Pin yếu (20%) - Hãy cắm sạc!",
                         body: "Để tránh hiện tượng tụt áp sâu (Deep Discharge) làm chai pin, hãy cắm sạc ngay bây giờ."
                     )
                 }
@@ -455,7 +455,7 @@ public class BatteryManager: ObservableObject {
             if !hasAlertedBypassThisSession {
                 hasAlertedBypassThisSession = true
                 sendNotification(
-                    title: "🛡️ Đã khóa \(chargeLimit)% - Chuyển sang nguồn AC trực tiếp",
+                    title: "Đã khóa \(chargeLimit)% - Chuyển sang nguồn AC trực tiếp",
                     body: "Pin đã được ngắt sạc an toàn. MacBook đang dùng điện trực tiếp từ củ sạc để chống chai pin tối đa!"
                 )
             }
@@ -477,7 +477,7 @@ public class BatteryManager: ObservableObject {
 
         let tempStr = String(format: "%.1f°C", temperature)
         sendNotification(
-            title: "⚠️ Cảnh báo nhiệt độ pin (\(tempStr))",
+            title: "Cảnh báo nhiệt độ pin (\(tempStr))",
             body: "Nhiệt độ pin MacBook đã lên tới \(tempStr)! Hãy kê thoáng máy hoặc mở phần Giám sát năng lượng để đóng băng các tác vụ nặng."
         )
     }
@@ -527,7 +527,7 @@ public class BatteryManager: ObservableObject {
                     calibrationMessage = tr("Bước 2/3: Sạc đầy 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
                     setChargingInhibited(false)
                     sendNotification(
-                        title: tr("⚡️ Hiệu chuẩn pin: Đã đạt 20%", "⚡️ Calibration: Reached 20%"),
+                        title: tr("Hiệu chuẩn pin: Đã đạt 20%", "Calibration: Reached 20%"),
                         body: isPluggedIn
                             ? tr("Đang sạc liên tục lên 100% để cân bằng điện áp các cell pin.", "Charging continuously to 100% to balance cell voltages.")
                             : tr("Hãy cắm sạc để HyperMac sạc cân bằng cell lên 100% và tự động khóa lại ở 80%.", "Please plug in charger to allow cell balancing up to 100%.")
@@ -548,7 +548,7 @@ public class BatteryManager: ObservableObject {
                     calibrationMessage = tr("Bước 3/3: Giữ 100% trong 15 phút để ổn định hóa chất cell...", "Step 3/3: Holding 100% for 15 min to stabilize chemistry...")
                     setChargingInhibited(false)
                     sendNotification(
-                        title: tr("🔋 Hiệu chuẩn pin: Đạt 100%", "🔋 Calibration: Reached 100%"),
+                        title: tr("Hiệu chuẩn pin: Đạt 100%", "Calibration: Reached 100%"),
                         body: tr("Đang giữ 100% trong 15 phút để các cell pin cân bằng hoàn toàn.", "Holding 100% for 15 minutes to equalize all battery cells.")
                     )
                     restingTimer?.invalidate()
@@ -585,7 +585,7 @@ public class BatteryManager: ObservableObject {
                 isTopUpActive = false
                 statusMessage = tr("Đã sạc đầy 100%", "Fully charged 100%")
             } else {
-                statusMessage = tr("⚡️ Đang sạc đầy tạm thời (\(currentLevel)%)", "⚡️ Temporary top-up (\(currentLevel)%)")
+                statusMessage = tr("Đang sạc đầy tạm thời (\(currentLevel)%)", "Temporary top-up (\(currentLevel)%)")
             }
             return
         }
@@ -593,15 +593,15 @@ public class BatteryManager: ObservableObject {
         if isProtectionEnabled {
             if currentLevel >= chargeLimit {
                 setChargingInhibited(true)
-                statusMessage = tr("🛡️ Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)", "🛡️ Direct AC Power (Locked at \(chargeLimit)% to protect battery)")
+                statusMessage = tr("Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)", "Direct AC Power (Locked at \(chargeLimit)% to protect battery)")
             } else if currentLevel <= max(10, chargeLimit - 3) {
                 setChargingInhibited(false)
-                statusMessage = tr("⚡️ Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)", "⚡️ Recharging up to \(chargeLimit)% (\(currentLevel)%)")
+                statusMessage = tr("Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)", "Recharging up to \(chargeLimit)% (\(currentLevel)%)")
             } else {
                 if isBypassActive {
-                    statusMessage = tr("🛡️ Nguồn AC trực tiếp (\(currentLevel)%)", "🛡️ Direct AC Power (\(currentLevel)%)")
+                    statusMessage = tr("Nguồn AC trực tiếp (\(currentLevel)%)", "Direct AC Power (\(currentLevel)%)")
                 } else {
-                    statusMessage = tr("⚡️ Đang sạc (\(currentLevel)%)", "⚡️ Charging (\(currentLevel)%)")
+                    statusMessage = tr("Đang sạc (\(currentLevel)%)", "Charging (\(currentLevel)%)")
                 }
             }
         } else {
@@ -649,7 +649,7 @@ public class BatteryManager: ObservableObject {
                 calibrationMessage = tr("Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
                 setChargingInhibited(false)
                 sendNotification(
-                    title: tr("⚡️ Bắt đầu hiệu chuẩn pin tự động", "⚡️ Automatic Battery Calibration Started"),
+                    title: tr("Bắt đầu hiệu chuẩn pin tự động", "Automatic Battery Calibration Started"),
                     body: tr("Pin đang ở mức \(currentLevel)%. HyperMac đang sạc lên 100% để cân bằng cell và sẽ tự động khóa lại ở 80%.", "Battery is at \(currentLevel)%. HyperMac is charging to 100% and will lock back to 80%.")
                 )
             } else if calibrationState == .idle {
@@ -670,7 +670,7 @@ public class BatteryManager: ObservableObject {
             calibrationMessage = tr("Bước 2/3: Đang sạc lên 100% để cân bằng cell (Hiện tại: \(currentLevel)%)", "Step 2/3: Charging to 100% for cell balancing (Currently: \(currentLevel)%)")
             setChargingInhibited(false)
             sendNotification(
-                title: tr("⚡️ Hiệu chuẩn pin: Bắt đầu sạc cân bằng cell", "⚡️ Battery Calibration: Cell Balancing Started"),
+                title: tr("Hiệu chuẩn pin: Bắt đầu sạc cân bằng cell", "Battery Calibration: Cell Balancing Started"),
                 body: tr("Pin đang ở mức \(currentLevel)%. Đang nạp đầy 100% để cân bằng vi sai điện áp các cell.", "Battery is at \(currentLevel)%. Charging to 100% to equalize cell voltages.")
             )
             return

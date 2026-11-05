@@ -23,19 +23,19 @@ public struct FinderCutToastView: View {
                     .frame(width: 28, height: 28)
 
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: FS.title, weight: .semibold))
                     .foregroundStyle(iconColor)
             }
 
             VStack(alignment: .leading, spacing: 1.5) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: FS.body, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 if let sub = subtitle {
                     Text(sub)
-                        .font(.system(size: 8.5, weight: .medium))
+                        .font(.system(size: FS.caption, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -47,10 +47,10 @@ public struct FinderCutToastView: View {
         .padding(.vertical, 8)
         .frame(minWidth: 220, maxWidth: 360, minHeight: 46)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: Rad.lg, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Rad.lg, style: .continuous)
                         .stroke(Color.primary.opacity(0.12), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
@@ -193,7 +193,7 @@ public class FinderCutPasteManager: ObservableObject {
 
                 self.showToast(
                     icon: "scissors",
-                    iconColor: .cyan,
+                    iconColor: .secondary,
                     title: title,
                     subtitle: tr("Bấm ⌘V để di chuyển • Esc để huỷ", "Press ⌘V to move • Esc to cancel")
                 )
@@ -246,7 +246,7 @@ public class FinderCutPasteManager: ObservableObject {
 
         showToast(
             icon: "shippingbox.fill",
-            iconColor: .green,
+            iconColor: .secondary,
             title: title,
             subtitle: tr("Đã hoàn tất di chuyển vào thư mục hiện tại", "Successfully moved to current folder")
         )
@@ -267,7 +267,7 @@ public class FinderCutPasteManager: ObservableObject {
         if !quiet {
             showToast(
                 icon: "xmark.circle.fill",
-                iconColor: .orange,
+                iconColor: .secondary,
                 title: tr("Đã huỷ lệnh cắt", "Cut Cancelled"),
                 subtitle: tr("Tệp vẫn giữ nguyên vị trí cũ", "Files remained in original location")
             )

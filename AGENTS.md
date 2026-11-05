@@ -8,7 +8,7 @@
 - Thư mục làm việc: `/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl`.
 - Bundle ID: `com.opensource.hypermac`, tên app: `HyperMac`, chạy ẩn Dock (`LSUIElement`).
 - Tính năng: chia cửa sổ (Rectangle), AltTab, lịch sử Clipboard, khóa sạc 80%, chỉnh sáng màn ngoài, chống sleep, đo nhiệt độ.
-- **Fan Control đã bị gỡ bỏ hoàn toàn từ v1.5.2.** Không thêm lại logic ghi SMC/điều khiển quạt trừ khi người dùng yêu cầu rõ ràng.
+- **Fan Control:** đã gỡ ở v1.5.2, được người dùng yêu cầu thêm lại (bản đơn giản kiểu iStat Menus: System / Medium / High + thanh trượt %). Xem mục 9. Không mở rộng thêm (rules editor, curve…) trừ khi người dùng yêu cầu.
 
 ## 2. Build & kiểm tra
 
@@ -45,6 +45,8 @@ swift build -c release
 | `Sources/ClipboardOverlayView.swift` | UI bảng Clipboard HUD |
 | `Sources/AltTabOverlayView.swift` | UI HUD AltTab |
 | `Sources/ThermalManager.swift` | Đọc nhiệt độ HID/PMU + trạng thái thermal (KHÔNG điều khiển quạt) |
+| `Sources/FanManager.swift` | Điều khiển quạt: đọc RPM qua `smc`, ghi qua helper, an toàn 90°C / thoát / ngủ |
+| `Sources/FanControlCardView.swift` | Thẻ Quạt trong tab Nhiệt độ & Cảm biến (ẩn nếu máy không có quạt) |
 | `Sources/DiskSpeedManager.swift` | Đo tốc độ đọc/ghi ổ vật lý (IOKit), interface LAN cho NAS, I/O theo tiến trình |
 | `Sources/BatteryManager.swift` | Khóa sạc 80%, helper SMC |
 | `Sources/DisplayManager.swift` | Độ sáng, DDC/CI, màn hình ảo |
@@ -56,6 +58,7 @@ swift build -c release
 ## 4. Quy ước
 
 - UI và log dùng **tiếng Việt**; tên biến/hàm dùng tiếng Anh.
+- **Style UI:** dùng token trong `Sources/Theme.swift`: cỡ chữ `FS.caption(10) / label(11) / body(12) / title(13) / subhead(14) / value(16) / display(22)…`, bo góc `Rad.sm(6) / md(10) / lg(14)`. Không dùng số cỡ chữ lẻ (7.5, 8.5…) và không chữ < 10pt. Đậm (`.bold`) chỉ cho số lớn (>= `FS.value`); còn lại dùng `.semibold`/`.medium`.
 - `@MainActor` cho các manager; cập nhật state UI phải trên main thread.
 - Tránh chạy `Process`/`shell()` nặng trên main thread (gây khựng popover).
 - Lưu cài đặt qua `UserDefaults` với key có tiền tố rõ ràng (`clipboard_*`, `fan_*` cũ đã bỏ, `show_menubar_thermal`…).
@@ -331,15 +334,46 @@ Khuyến nghị (chưa bắt buộc, làm khi cần siết):
 
 ## 8. Ghi chú kiểm thử
 
-- Máy test hiện tại: `Mac14,2` (MacBook Air M2, fanless), macOS 26.6.
-- `Resources/smc -f` trả `Total fans in system: 0` — bình thường với máy không quạt.
+- Máy test: `MacBookPro17,1` (MacBook Pro M1, 1 quạt 1199–7199 RPM), macOS 26. (Máy cũ `Mac14,2` MacBook Air M2 không có quạt: `smc -f` trả `Total fans in system: 0`, thẻ Quạt tự ẩn.)
 - Kiểm tra nhanh sau khi sửa:
   1. `⌘ + Tab` phải hiện HUD gần như tức thì (< ~100ms), thumbnail xuất hiện sau.
   2. `⌘ + ⇧ + C` mở Clipboard; thử `1–9`, `↑↓`, `↵`, `⌥P`, `⌥⌫`, `⎋`.
   3. Settings → Clipboard: chọn 500/∞, đổi "Tự động xoá", bấm "Dọn ngay".
-  4. Tab nhiệt độ: không còn bảng quạt; chỉ có nhiệt độ, cảm biến, pill Menu Bar.
+  4. Tab nhiệt độ: thẻ Quạt (System / Medium / High / thanh trượt) + nhiệt độ, cảm biến, pill Menu Bar. Xem mục 9.5 để kiểm thử quạt.
   5. Ô **Chép file** (tab Pin & Phần cứng): chạy `dd if=/dev/zero of=/tmp/dstest.bin bs=1m count=600`
      → số `↑` phải nhảy lên hàng trăm MB/s và tên ổ là `Macintosh HD` / `SSD nội bộ`;
      chép thẻ nhớ → ổ rời phải thấy tên volume của cả hai ổ trong tooltip.
   6. NAS: mount SMB rồi chép file; chip mạng hiện `LAN enX` với tốc độ tương đương
      lưu lượng thực (đối chiếu `netstat -ibn` trước/sau khi chép).
+
+## 9. Điều khiển quạt (thêm lại, bản đơn giản kiểu iStat Menus)
+
+
+### 9.1. Tính năng
+- Thẻ **Quạt** trong tab "Nhiệt độ & Cảm biến": nút **System** (macOS tự điều khiển, mặc định), **Medium** (50% max RPM), **High** (80%), và **thanh trượt** tự chọn từ min RPM đến 100% (hiện `RPM (%)`). Ở chế độ System thanh trượt bám theo RPM thực tế.
+- Không có rules editor, curve hay watchdog chống crash (quyết định của người dùng cho v1).
+
+### 9.2. Cơ chế SMC (đã kiểm chứng trên M1, macOS 26)
+- Ghi: `F0Md=01` (manual) rồi `F0Tg=<float32 little-endian>` (3000 RPM = `00803b45`). Không cần mở khoá `Ftst` (key trả "no data" trên M1); helper vẫn ghi `Ftst` nếu key tồn tại (M3/M4+ có thể cần, chưa kiểm thử).
+- Trả về auto: `F0Md=00`, `F0Tg=00000000`.
+- Đọc lại ngay sau khi ghi có thể ra giá trị cũ; `FanManager` chờ ~1.5s rồi kiểm chứng `F0Tg`, nếu lệch thì tự trả về System và báo lỗi.
+- Đọc (không cần root): `Resources/smc -k F0Ac|F0Tg|F0Md|F0Mn|F0Mx|FNum -r` (định dạng `F0Ac  [flt ]  2985 (bytes ...)`, giá trị là trường thứ 4 khi tách theo khoảng trắng).
+
+### 9.3. Helper đặc quyền
+- `Resources/displaycontrol-power` (cài vào `/usr/local/bin`, sudoers NOPASSWD sẵn có) có thêm: `version` (in `HELPER_VERSION:2`), `fan-set <id 0-3> <rpm>` (chỉ nhận số nguyên trong khoảng min..max đọc từ SMC), `fan-auto <id>`.
+- `FanManager` yêu cầu helper phiên bản >= 2; bản helper cũ → thẻ Quạt hiện nút cài lại (`BatteryManager.installHelper`, hỏi mật khẩu 1 lần).
+- **Cài helper từ thư mục dưới `~/Documents`** bằng `osascript ... with administrator privileges` sẽ lỗi `Operation not permitted` (root bị TCC chặn). Sao chép 3 file (`install-helper.sh`, `smc`, `displaycontrol-power`) ra `/private/tmp/...` rồi cài từ đó. App đã cài trong `/Applications` thì không gặp lỗi này.
+
+### 9.4. An toàn
+- Về System: khi thoát app (`applicationWillTerminate`), trước khi ngủ, khi khởi động app, khi chọn System.
+- CPU peak / GPU / hotspot >= 90°C → ép về System; chỉ cho điều khiển lại khi < 80°C.
+- Nếu app crash/force-quit khi đang Manual, quạt giữ tốc độ cuối cho tới khi mở lại HyperMac (tự reset về auto) hoặc khởi động lại máy.
+- Không chạy cùng app điều khiển quạt khác (hai bên tranh `F0Tg`).
+
+### 9.5. Kiểm thử
+- Bấm High → `Resources/smc -k F0Tg -r` ≈ 5759, `F0Ac` tiến dần tới đó; Medium ≈ 3600; kéo thanh trượt 74% ≈ 5336; System → `F0Md` = 0, RPM giảm về 0.
+- Thoát app khi đang Manual → quạt phải về auto.
+- Đường 90°C chưa có hook giả nhiệt độ (chưa kiểm thử tự động).
+
+### 9.6. Bản build cục bộ: tắt cập nhật tự động
+- `UpdateManager.updatesDisabled = true`: không kiểm tra/tải cập nhật (không có kết nối mạng nào của app). Lý do: updater không kiểm chữ ký, URL tải lấy từ `version.json`, file tạm ở `/tmp`. Đặt `false` để bật lại — quyết định của người dùng khi commit/phát hành.

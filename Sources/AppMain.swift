@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         pop.delegate = self
         pop.contentViewController = NSHostingController(
             rootView: MainView(displayManager: DisplayManager.shared)
+                .background(Color(nsColor: .windowBackgroundColor))
         )
         self.popover = pop
 
@@ -73,6 +74,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         _ = FinderCutPasteManager.shared
         _ = SystemCleanerManager.shared
         _ = PermissionsManager.shared
+        _ = FanManager.shared
 
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)
@@ -91,6 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         VirtualDisplayManager.shared.destroyVirtualDisplay()
+        FanManager.shared.restoreSystemSync()
     }
 
     /// Cửa sổ xem trước UI khi đặt `HYPERMAC_PREVIEW=1` (dùng để chụp/kiểm tra layout).

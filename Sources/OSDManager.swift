@@ -10,11 +10,11 @@ public struct OSDView: View {
     public var body: some View {
         VStack(spacing: 12) {
             Image(systemName: value > 0.01 ? "sun.max.fill" : "sun.min")
-                .font(.system(size: 36, weight: .medium))
+                .font(.system(size: FS.mega, weight: .medium))
                 .foregroundStyle(.primary)
 
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: FS.body, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
