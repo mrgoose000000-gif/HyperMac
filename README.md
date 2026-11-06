@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.8.2-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.0-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.8.2)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.0)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -222,8 +222,15 @@ chmod +x build.sh
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
-### [Chưa phát hành]
-- **🌀 Điều khiển tốc độ quạt (Apple Silicon có quạt, ví dụ MacBook Pro):** thẻ Quạt trong tab *Nhiệt độ & Cảm biến* với **System / Medium / High** và thanh trượt tự chọn `RPM (%)`, hiển thị RPM thực tế. Tự trả quạt về hệ thống khi thoát app, trước khi ngủ, khi khởi động và khi nhiệt độ >= 90°C. Cần cài lại helper một lần (hỏi mật khẩu quản trị). Máy không có quạt (MacBook Air) sẽ ẩn thẻ này.
+### [v1.9.0] — 2026-11-06
+- **🛡️ Fix khóa sạc 80% trên MacBook Pro Apple Silicon:** Tích hợp Apple Native PowerUI MCL và bộ key SMC firmware mới (`bfF0`/`bfD0`/`bfE0`), đảm bảo khóa sạc 80% chuẩn xác không bị nhảy lên 100%.
+- **🖥️ Fix AltTab màn hình dọc:** Tự động co giãn 2 cột theo tỉ lệ màn hình, không còn bị cắt mép phải hay tràn badge tiêu đề.
+- **🌀 Điều khiển quạt tản nhiệt:** Thẻ chỉnh quạt dành cho MacBook Pro (`System` / `Medium` / `High` / Slider `RPM`) với cơ chế bảo vệ nhiệt độ thông minh.
+- **🎨 Giao diện mới:** Áp dụng `Theme.swift` tối giản, thanh lịch, chuẩn macOS hiện đại.
+- **🌐 Đa ngôn ngữ:** Chuyển đổi nhanh Tiếng Việt (`vi`) / Tiếng Anh (`en`) toàn diện trên mọi màn hình.
+- **📋 Tùy chọn phím tắt Clipboard:** Linh hoạt chuyển đổi giữa `⌘ + ⇧ + C` hoặc `⌘ + ⇧ + V`.
+- **☀️ Phím F1/F2 linh hoạt:** Khi tắt tính năng chỉnh sáng theo trỏ chuột, F1/F2 tự động trả về mặc định điều khiển màn hình của hệ điều hành macOS.
+- **📸 Tính năng Screenshot (Chụp màn hình LightShot):** Chụp màn hình chuyên nghiệp với phím tắt `⌘ + ⇧ + 1` (hoặc `F4`), hỗ trợ công cụ vẽ chú thích (bút vẽ, mũi tên, hình chữ nhật, bút dạ quang, bảng màu), `⌘C` sao chép nhanh, `⌘S` lưu vào thư mục Downloads.
 
 ### [v1.8.2] — 2026-11-02
 - **🌐 Hỗ trợ đa ngôn ngữ Tiếng Việt & Tiếng Anh (i18n Localization):**

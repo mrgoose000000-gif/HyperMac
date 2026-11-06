@@ -44,34 +44,42 @@ call_powerui() {
 import Foundation
 
 guard let b = Bundle(path: "/System/Library/PrivateFrameworks/PowerUI.framework"), b.load(),
-      let c = (NSClassFromString("PowerUISmartChargeClient") as? NSObject.Type)?.init(),
-      let client = c.perform(NSSelectorFromString("initWithClientName:"), with: "HyperMac")?.takeUnretainedValue() as? NSObject else {
+      let cls = NSClassFromString("PowerUISmartChargeClient") as? NSObject.Type else {
     exit(1)
 }
+let selInit = NSSelectorFromString("initWithClientName:")
+let selAlloc = NSSelectorFromString("alloc")
+guard cls.responds(to: selAlloc), cls.instancesRespond(to: selInit) else { exit(1) }
+typealias AllocFn = @convention(c) (AnyClass, Selector) -> AnyObject
+let uninit = unsafeBitCast(cls.method(for: selAlloc), to: AllocFn.self)(cls, selAlloc)
+typealias InitFn = @convention(c) (AnyObject, Selector, NSString) -> AnyObject
+guard let client = unsafeBitCast(cls.instanceMethod(for: selInit), to: InitFn.self)(uninit, selInit, "HyperMac" as NSString) as? NSObject else {
+    exit(1)
+}
+
 typealias BoolFn = @convention(c) (AnyObject, Selector) -> Bool
 let isSupp = unsafeBitCast(client.method(for: NSSelectorFromString("isMCLSupported")), to: BoolFn.self)(client, NSSelectorFromString("isMCLSupported"))
 guard isSupp else { exit(2) }
 
 let action = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "status"
 if action == "status" {
-    typealias BoolErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt64
-    var err: NSError? = nil
-    let enabled = unsafeBitCast(client.method(for: NSSelectorFromString("isMCLCurrentlyEnabled:")), to: BoolErrFn.self)(client, NSSelectorFromString("isMCLCurrentlyEnabled:"), &err)
-    typealias UcharErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt8
-    let limit = unsafeBitCast(client.method(for: NSSelectorFromString("getMCLLimitWithError:")), to: UcharErrFn.self)(client, NSSelectorFromString("getMCLLimitWithError:"), &err)
+    typealias BoolErrFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> UInt64
+    let enabled = unsafeBitCast(client.method(for: NSSelectorFromString("isMCLCurrentlyEnabled:")), to: BoolErrFn.self)(client, NSSelectorFromString("isMCLCurrentlyEnabled:"), nil)
+    typealias UcharErrFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> UInt8
+    let limit = unsafeBitCast(client.method(for: NSSelectorFromString("getMCLLimitWithError:")), to: UcharErrFn.self)(client, NSSelectorFromString("getMCLLimitWithError:"), nil)
     print("MCL_LIMIT:\(limit)")
     print("BYPASS:\(enabled != 0 ? 1 : 0)")
     exit(0)
 } else if action == "charge-off" {
-    let limit = UInt8(CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) ?? 80 : 80)
-    typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutablePointer<NSError?>?) -> Bool
-    var err: NSError? = nil
-    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("setMCLLimit:error:")), to: SetFn.self)(client, NSSelectorFromString("setMCLLimit:error:"), limit, &err)
+    let limitInt = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) ?? 80 : 80
+    guard limitInt >= 80 else { exit(3) } // Apple MCL only supports limits 80..100
+    let limit = UInt8(min(max(limitInt, 80), 100))
+    typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutableRawPointer?) -> Bool
+    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("setMCLLimit:error:")), to: SetFn.self)(client, NSSelectorFromString("setMCLLimit:error:"), limit, nil)
     if ok { print("CHARGE_OFF_OK"); exit(0) } else { exit(3) }
 } else if action == "charge-on" {
-    typealias DisableFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> Bool
-    var err: NSError? = nil
-    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("disableMCL:")), to: DisableFn.self)(client, NSSelectorFromString("disableMCL:"), &err)
+    typealias DisableFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> Bool
+    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("disableMCL:")), to: DisableFn.self)(client, NSSelectorFromString("disableMCL:"), nil)
     if ok { print("CHARGE_ON_OK"); exit(0) } else { exit(4) }
 }
 SWIFT_EOF
@@ -184,6 +192,8 @@ case "$1" in
         # Method 1: Apple Silicon bfF0
         if check_key_exists "bfF0"; then
             "$SMC" -k bfF0 -w 00 >/dev/null 2>&1 && HANDLED=1
+            if check_key_exists "bfD0"; then "$SMC" -k bfD0 -w 64000000 >/dev/null 2>&1 || true; fi
+            if check_key_exists "bfE0"; then "$SMC" -k bfE0 -w 64000000 >/dev/null 2>&1 || true; fi
         fi
 
         # Method 2: Apple Silicon CHTE

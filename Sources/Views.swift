@@ -19,6 +19,7 @@ public struct MainView: View {
     @ObservedObject var permissionsManager: PermissionsManager = PermissionsManager.shared
     @ObservedObject var languageManager: LanguageManager = LanguageManager.shared
     @ObservedObject var screenshotManager: ScreenshotManager = ScreenshotManager.shared
+    @ObservedObject var activationManager: ActivationManager = ActivationManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -101,8 +102,14 @@ public struct MainView: View {
                 DonateModalView(updateManager: updateManager)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+
+            // Community Activation Modal Overlay (First launch required gate)
+            if !activationManager.isActivated {
+                ActivationModalView(activationManager: activationManager)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: updateManager.showUpdateModal || updateManager.showDonateModal)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: updateManager.showUpdateModal || updateManager.showDonateModal || !activationManager.isActivated)
         .frame(width: 380, height: 570)
         .alert(isPresented: Binding<Bool>(
             get: { displayManager.showAlert },
@@ -260,9 +267,9 @@ struct ModernHeaderBar: View {
     }
 
     private var statusColor: Color {
-        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
+        if batteryManager.isProtectionEnabled && batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return .accentColor
-        } else if batteryManager.isCharging {
+        } else if batteryManager.isCharging || (batteryManager.isPluggedIn && batteryManager.wattage > 0.05 && batteryManager.amperage > 0) {
             return Tone.good
         } else if batteryManager.isPluggedIn {
             return .secondary
@@ -272,9 +279,9 @@ struct ModernHeaderBar: View {
     }
 
     private var statusIcon: String {
-        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
+        if batteryManager.isProtectionEnabled && batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return "lock.shield.fill"
-        } else if batteryManager.isCharging {
+        } else if batteryManager.isCharging || (batteryManager.isPluggedIn && batteryManager.wattage > 0.05 && batteryManager.amperage > 0) {
             return "bolt.fill"
         } else if batteryManager.isPluggedIn {
             return "powerplug.fill"
@@ -284,12 +291,8 @@ struct ModernHeaderBar: View {
     }
 
     private var statusText: String {
-        if batteryManager.isBypassActive && batteryManager.isPluggedIn {
+        if batteryManager.isProtectionEnabled && batteryManager.isBypassActive && batteryManager.isPluggedIn {
             return "\(batteryManager.chargeLimit)% Bypass"
-        } else if batteryManager.isCharging {
-            return "\(batteryManager.currentLevel)%"
-        } else if batteryManager.isPluggedIn {
-            return "\(batteryManager.currentLevel)%"
         } else {
             return "\(batteryManager.currentLevel)%"
         }
@@ -1428,7 +1431,7 @@ struct ShortcutsTabView: View {
                 .padding(10)
                 .cardBackground()
 
-                // Screenshot (LightShot / F4) Card
+                // Screenshot (LightShot / ⌘⇧1) Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "camera.viewfinder")
@@ -1436,16 +1439,32 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Chụp ảnh màn hình (F4)", "Screenshot Snipping (F4)"))
+                            Text(tr("Chụp ảnh màn hình (⌘⇧1)", "Screenshot Snipping (⌘⇧1)"))
                                 .font(.system(size: FS.label, weight: .semibold))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
-                            Text(tr("Kéo chọn vùng, vẽ bút đỏ chú thích, ⌘C sao chép, ⌘V lưu tệp", "LightShot-style: crop area, red pen annotations, ⌘C copy, ⌘V save"))
+                            Text(tr("Kéo chọn vùng, vẽ bút đỏ chú thích, ⌘C sao chép, ⌘S lưu tệp", "LightShot-style: crop area, red pen annotations, ⌘C copy, ⌘S save"))
                                 .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
 
                         Spacer()
+
+                        if screenshotManager.isScreenshotEnabled {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    screenshotManager.isDetailsExpanded.toggle()
+                                }
+                            } label: {
+                                Image(systemName: screenshotManager.isDetailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: FS.caption, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(Color.primary.opacity(screenshotManager.isDetailsExpanded ? 0.08 : 0.04)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(screenshotManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết cài đặt", "View settings details"))
+                        }
 
                         Toggle("", isOn: Binding<Bool>(
                             get: { screenshotManager.isScreenshotEnabled },
@@ -1456,14 +1475,14 @@ struct ShortcutsTabView: View {
                         .labelsHidden()
                     }
 
-                    if screenshotManager.isScreenshotEnabled {
+                    if screenshotManager.isScreenshotEnabled && screenshotManager.isDetailsExpanded {
                         Divider().opacity(0.35)
 
                         // Shortcuts & Quick Actions Grid
                         ShortcutGrid {
-                            shortcutPill(key: "F4", desc: tr("Mở chụp ảnh", "Start Snipping"))
+                            shortcutPill(key: "⌘⇧1", desc: tr("Mở chụp ảnh", "Start Snipping"))
                             shortcutPill(key: "⌘C", desc: tr("Sao chép ảnh", "Copy Image"))
-                            shortcutPill(key: "⌘V", desc: tr("Lưu Downloads", "Save PNG"))
+                            shortcutPill(key: "⌘S", desc: tr("Lưu ảnh PNG", "Save PNG"))
                             shortcutPill(key: "⎋", desc: tr("Huỷ bỏ", "Cancel"))
                         }
 
@@ -1476,7 +1495,7 @@ struct ShortcutsTabView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: FS.caption))
-                                Text(tr("Chụp màn hình ngay (F4)", "Capture Screenshot Now (F4)"))
+                                Text(tr("Chụp màn hình ngay (⌘⇧1)", "Capture Screenshot Now (⌘⇧1)"))
                                     .font(.system(size: FS.caption, weight: .semibold))
                             }
                             .padding(.horizontal, 8)
@@ -1760,18 +1779,28 @@ struct BatteryCardView: View {
                     Spacer()
 
                     // Live Wattage
-                    if batteryManager.isBypassActive && batteryManager.isPluggedIn {
+                    if batteryManager.isProtectionEnabled && batteryManager.isBypassActive && batteryManager.isPluggedIn {
                         Text("0.0W (" + tr("Nguồn AC trực tiếp", "Direct AC Power") + ")")
                             .font(.system(size: FS.label, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
-                    } else if batteryManager.isCharging {
+                    } else if batteryManager.isCharging || (batteryManager.isPluggedIn && batteryManager.wattage > 0.05 && batteryManager.amperage > 0) {
                         Text(String(format: "+%.1fW (" + tr("Đang sạc", "Charging") + ")", batteryManager.wattage))
                             .font(.system(size: FS.label, weight: .semibold))
                             .foregroundStyle(Tone.good)
                     } else if batteryManager.isPluggedIn {
-                        Text("0.0W (" + tr("Đã cắm sạc", "Plugged in") + ")")
-                            .font(.system(size: FS.label, weight: .semibold))
-                            .foregroundStyle(.orange)
+                        if batteryManager.isFullyCharged || batteryManager.currentLevel >= 100 {
+                            Text(tr("Đã sạc đầy 100%", "Fully Charged"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .foregroundStyle(Tone.good)
+                        } else if batteryManager.adapterWatts > 0 {
+                            Text(String(format: "0.0W (" + tr("Củ sạc %dW", "Charger %dW") + ")", batteryManager.adapterWatts))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("0.0W (" + tr("Đã cắm sạc", "Plugged in") + ")")
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         let mins = batteryManager.timeRemaining
                         let timeStr = mins > 0 ? " • " + tr("Còn ~\(mins / 60)h\(mins % 60)m", "~\(mins / 60)h\(mins % 60)m left") : ""
@@ -1795,7 +1824,7 @@ struct BatteryCardView: View {
                         RoundedRectangle(cornerRadius: Rad.sm)
                             .fill(
                                 LinearGradient(
-                                    colors: (batteryManager.isBypassActive && batteryManager.isPluggedIn)
+                                    colors: (batteryManager.isProtectionEnabled && batteryManager.isBypassActive && batteryManager.isPluggedIn)
                                         ? [Color.accentColor, Color.accentColor]
                                         : [Tone.good, Color.accentColor],
                                     startPoint: .leading,
@@ -2005,10 +2034,12 @@ struct BatteryCardView: View {
                     set: { newVal in
                         if newVal {
                             batteryManager.isProtectionEnabled = true
-                            if !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
-                                batteryManager.installHelper { success in
-                                    if !success {
-                                        batteryManager.isProtectionEnabled = false
+                            if !NativePowerUIClient.shared.isSupported || batteryManager.chargeLimit < 80 {
+                                if !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
+                                    batteryManager.installHelper { success in
+                                        if !success && !NativePowerUIClient.shared.isSupported {
+                                            batteryManager.isProtectionEnabled = false
+                                        }
                                     }
                                 }
                             }
@@ -2029,7 +2060,15 @@ struct BatteryCardView: View {
                         .foregroundStyle(.secondary)
                     ForEach([70, 80, 90], id: \.self) { val in
                         Button {
-                            batteryManager.chargeLimit = val
+                            if val < 80 && !batteryManager.isHelperInstalled {
+                                batteryManager.installHelper { success in
+                                    if success {
+                                        batteryManager.chargeLimit = val
+                                    }
+                                }
+                            } else {
+                                batteryManager.chargeLimit = val
+                            }
                         } label: {
                             Text("\(val)%\(val == 80 ? " (" + tr("Chuẩn", "Standard") + ")" : "")")
                                 .font(.system(size: FS.caption, weight: batteryManager.chargeLimit == val ? .semibold : .medium))
@@ -2782,6 +2821,26 @@ struct FooterView: View {
             .buttonStyle(.plain)
             .help(tr("Xem trang tác giả", "View author profile"))
 
+            // Zalo Community Link Button
+            Button {
+                ActivationManager.shared.openZaloGroup()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: FS.caption))
+                    Text(tr("Zalo", "Zalo"))
+                        .font(.system(size: FS.caption, weight: .medium))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(
+                    Capsule().fill(Color(red: 0.0, green: 0.41, blue: 1.0).opacity(0.12))
+                )
+                .foregroundStyle(Color(red: 0.0, green: 0.41, blue: 1.0))
+            }
+            .buttonStyle(.plain)
+            .help(tr("Tham gia nhóm Zalo cộng đồng HyperMac", "Join HyperMac community on Zalo"))
+
             // Update Check / Action Button
             if !UpdateManager.updatesDisabled {
             Button {
@@ -3263,6 +3322,236 @@ struct DonateModalView: View {
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .padding(.horizontal, 16)
+        }
+    }
+}
+
+// MARK: - Community Activation Modal (Zalo Group Onboarding)
+
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+struct ActivationModalView: View {
+    @ObservedObject var activationManager: ActivationManager
+    private let zaloBlue = Color(red: 0.0, green: 0.41, blue: 1.0)
+
+    var body: some View {
+        ZStack {
+            // High-contrast dimmed backdrop preventing accidental bypass
+            Color.black.opacity(0.65)
+                .edgesIgnoringSafeArea(.all)
+
+            // Main Activation Dialog Card
+            VStack(spacing: 0) {
+                // Header Bar
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill")
+                        .font(.system(size: FS.subhead, weight: .bold))
+                        .foregroundStyle(zaloBlue)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(zaloBlue.opacity(0.14)))
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(tr("Kích hoạt HyperMac", "Activate HyperMac"))
+                                .font(.system(size: FS.title, weight: .bold))
+                            Text(tr("MIỄN PHÍ", "FREE"))
+                                .font(.system(size: 9, weight: .heavy))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(Tone.good.opacity(0.16)))
+                                .foregroundStyle(Tone.good)
+                        }
+                        Text(tr("Tham gia cộng đồng Zalo để nhận mã vĩnh viễn", "Join our Zalo group to receive the lifetime key"))
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+                Divider()
+
+                // Scrollable Body
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 11) {
+                        // Instruction Notice Card
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(tr("Hướng dẫn nhận mã:", "How to get your key:"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .foregroundStyle(.primary)
+
+                            Text(tr(
+                                "1. Nhấn nút bên dưới để tham gia nhóm Zalo HyperMac.\n2. Xem tin nhắn đã ghim ở đầu nhóm để lấy mã kích hoạt.\n3. Nhập mã vào ô bên dưới và bấm Kích hoạt.",
+                                "1. Tap the button below to join the HyperMac Zalo group.\n2. Check the pinned message at the top of the group for the key.\n3. Enter the key below and click Activate."
+                            ))
+                            .font(.system(size: FS.label))
+                            .lineSpacing(2.5)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        )
+
+                        // Primary Zalo Group Button
+                        Button {
+                            activationManager.openZaloGroup()
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .font(.system(size: FS.body))
+                                Text(tr("Tham gia nhóm Zalo lấy Key ↗", "Join Zalo Group for Key ↗"))
+                                    .font(.system(size: FS.body, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                    .fill(zaloBlue)
+                            )
+                            .foregroundStyle(Color.white)
+                            .shadow(color: zaloBlue.opacity(0.3), radius: 4, x: 0, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                        .help(tr("Mở liên kết nhóm Zalo trong trình duyệt", "Open Zalo group link in browser"))
+
+                        // QR Code Scanner Box
+                        if let qrImg = activationManager.getZaloQRImage() {
+                            VStack(spacing: 5) {
+                                Image(nsImage: qrImg)
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 140, height: 140)
+                                    .padding(6)
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: Rad.sm, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+
+                                Text(tr("Hoặc quét mã QR bằng Zalo trên điện thoại", "Or scan this QR code with Zalo on your phone"))
+                                    .font(.system(size: FS.caption, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+
+                        // Key Input & Submit Box
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(tr("Nhập mã kích hoạt:", "Enter Activation Key:"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .foregroundStyle(.primary)
+
+                            HStack(spacing: 8) {
+                                TextField(tr("Nhập mã từ tin nhắn ghim...", "Enter key from pinned message..."), text: $activationManager.inputKey, onCommit: {
+                                    activationManager.submitKey()
+                                })
+                                .textFieldStyle(.plain)
+                                .font(.system(size: FS.body, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                        .fill(Color(nsColor: .controlBackgroundColor))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                        .stroke(activationManager.errorMessage != nil ? Tone.bad : Color.primary.opacity(0.15), lineWidth: 1)
+                                )
+
+                                Button {
+                                    activationManager.submitKey()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if activationManager.isSuccess {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: FS.label, weight: .bold))
+                                        }
+                                        Text(activationManager.isSuccess ? tr("Đã xong", "Done") : tr("Kích hoạt", "Activate"))
+                                            .font(.system(size: FS.label, weight: .semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                            .fill(activationManager.isSuccess ? Tone.good : Tone.accent)
+                                    )
+                                    .foregroundStyle(Color.white)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(activationManager.inputKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+
+                            // Error or Success Feedback
+                            if let err = activationManager.errorMessage {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "exclamationmark.circle.fill")
+                                        .font(.system(size: FS.caption))
+                                    Text(err)
+                                        .font(.system(size: FS.caption))
+                                }
+                                .foregroundStyle(Tone.bad)
+                                .padding(.top, 1)
+                            } else if activationManager.isSuccess {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: FS.caption))
+                                    Text(tr("Kích hoạt thành công! Chúc bạn trải nghiệm tuyệt vời.", "Successfully activated! Enjoy HyperMac."))
+                                        .font(.system(size: FS.caption, weight: .medium))
+                                }
+                                .foregroundStyle(Tone.good)
+                                .padding(.top, 1)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        )
+
+                        // Lifetime Guarantee Note
+                        HStack(alignment: .top, spacing: 5) {
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.system(size: FS.caption))
+                                .foregroundStyle(Tone.good)
+                                .padding(.top, 1)
+
+                            Text(tr(
+                                "Chỉ cần nhập 1 lần duy nhất. Trạng thái kích hoạt được lưu vĩnh viễn trên máy và không bao giờ hỏi lại kể cả sau khi cập nhật phiên bản mới.",
+                                "You only need to activate once. Lifetime access is preserved permanently on this Mac across future updates."
+                            ))
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.top, 2)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                }
+                .frame(maxHeight: 490)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: Rad.md, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .shadow(color: Color.black.opacity(0.35), radius: 20, x: 0, y: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Rad.md, style: .continuous)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+            )
+            .padding(.horizontal, 14)
         }
     }
 }

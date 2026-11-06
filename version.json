@@ -1,7 +1,7 @@
 {
-  "version": "1.8.2",
-  "name": "HyperMac v1.8.2 (Hỗ trợ Tiếng Anh toàn diện + Chuyển đổi ngôn ngữ + Donate tác giả)",
-  "notes": "✨ Tính năng mới & Cải tiến trong v1.8.2:\n- 🌐 Hỗ trợ đa ngôn ngữ Tiếng Việt & Tiếng Anh: Bổ sung nút chuyển đổi nhanh (vi / en) ngay cạnh logo HyperMac trên thanh tiêu đề, xác nhận trước khi đổi và lưu cài đặt vĩnh viễn.\n- 🇬🇧 Bản dịch Tiếng Anh chuẩn nghĩa toàn diện: Toàn bộ 4 tab chính, cài đặt phím tắt, menu dọn rác, overlay AltTab, Clipboard và thông báo pin SMC đều hỗ trợ tiếng Anh mượt mà.\n- 💖 Cửa sổ Donate ủng hộ tác giả: Tích hợp mã QR ngân hàng sắc nét, lời nhắn tri ân và liên kết Facebook trực tiếp.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.8.2/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.8.2"
+  "version": "1.9.0",
+  "name": "HyperMac v1.9.0 (Apple Silicon 80% PowerUI + AltTab Dọc + Điều khiển Quạt + Screenshot LightShot)",
+  "notes": "✨ Tính năng mới & Cải tiến trong phiên bản v1.9.0:\n- 🛡️ Khóa sạc 80% MacBook Pro Apple Silicon: Tích hợp Apple Native PowerUI MCL và bộ key SMC firmware mới (bfF0/bfD0/bfE0), đảm bảo khóa sạc 80% chuẩn xác không bị nhảy lên 100%.\n- 🖥️ Fix AltTab màn hình dọc: Tự động co giãn 2 cột theo tỉ lệ màn hình, không còn bị cắt mép phải hay tràn badge tiêu đề.\n- 🌀 Điều khiển quạt tản nhiệt: Thẻ chỉnh quạt dành cho MacBook Pro (System / Medium / High / Slider RPM) với cơ chế bảo vệ nhiệt độ thông minh.\n- 🎨 Giao diện mới: Áp dụng Theme.swift tối giản, thanh lịch, chuẩn macOS hiện đại.\n- 🌐 Đa ngôn ngữ: Chuyển đổi nhanh Tiếng Việt (vi) / Tiếng Anh (en) toàn diện trên mọi màn hình.\n- 📋 Tùy chọn phím tắt Clipboard: Cho phép chọn giữa ⌘⇧C hoặc ⌘⇧V.\n- ☀️ Phím F1/F2 linh hoạt: Khi tắt tính năng chỉnh sáng theo trỏ chuột, F1/F2 tự động trả về mặc định điều khiển của hệ điều hành macOS.\n- 📸 Công cụ chụp màn hình (Screenshot): Trải nghiệm như LightShot với phím tắt ⌘⇧1 (hoặc F4), vẽ chú thích, ⌘C để sao chép, ⌘S để lưu vào thư mục Downloads.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.0/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.0"
 }

@@ -13,24 +13,42 @@ public struct ScreenshotOverlayView: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                // 1. Base Frozen Screen Image
+                // 1. Base Frozen Screen Image (Spans entire multi-screen union)
                 if let nsImage = manager.screenNSImage {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geo.size.width, height: geo.size.height)
+                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
                         .allowsHitTesting(false)
                 }
 
                 // 2. Dark Translucent Veil with Cutout Hole for Selection
-                CutoutVeil(cutout: manager.hasSelection ? manager.selectionRect : .zero)
+                CutoutVeil(cutout: (manager.selectionRect.width > 0 && manager.selectionRect.height > 0) ? manager.selectionRect : .zero)
                     .fill(Color.black.opacity(0.48), style: FillStyle(eoFill: true))
                     .frame(width: geo.size.width, height: geo.size.height)
-                    // Initial area selection drag gesture
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    // Initial area selection drag gesture (also allows re-dragging when clicking outside)
                     .gesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .local)
+                        DragGesture(minimumDistance: 1, coordinateSpace: .named("canvasSpace"))
                             .onChanged { value in
-                                if !manager.hasSelection {
+                                if manager.isSpaceHeld && manager.selectionRect.width > 0 && manager.selectionRect.height > 0 {
+                                    if !manager.isDraggingSelection {
+                                        manager.isDraggingSelection = true
+                                        manager.dragStartRect = manager.selectionRect
+                                    }
+                                    let newX = max(0, min(geo.size.width - manager.dragStartRect.width, manager.dragStartRect.origin.x + value.translation.width))
+                                    let newY = max(0, min(geo.size.height - manager.dragStartRect.height, manager.dragStartRect.origin.y + value.translation.height))
+                                    manager.selectionRect.origin = CGPoint(x: newX, y: newY)
+                                    return
+                                }
+                                manager.isDraggingSelection = false
+                                if !manager.hasSelection || !manager.selectionRect.contains(value.startLocation) {
+                                    if manager.hasSelection {
+                                        manager.hasSelection = false
+                                        manager.strokes.removeAll()
+                                        manager.activeStroke = nil
+                                    }
                                     let minX = max(0, min(value.startLocation.x, value.location.x))
                                     let minY = max(0, min(value.startLocation.y, value.location.y))
                                     let w = min(geo.size.width - minX, abs(value.location.x - value.startLocation.x))
@@ -39,6 +57,7 @@ public struct ScreenshotOverlayView: View {
                                 }
                             }
                             .onEnded { value in
+                                manager.isDraggingSelection = false
                                 if !manager.hasSelection {
                                     if manager.selectionRect.width > 20 && manager.selectionRect.height > 20 {
                                         manager.hasSelection = true
@@ -53,11 +72,16 @@ public struct ScreenshotOverlayView: View {
                 // 3. Selection Box, Annotations Canvas & Toolbars
                 if manager.hasSelection && manager.selectionRect.width > 0 && manager.selectionRect.height > 0 {
                     selectionContent(in: geo)
+                } else if manager.selectionRect.width > 0 && manager.selectionRect.height > 0 {
+                    // Live dragging preview: Cutout hole + dashed border + dimension pill during active drag!
+                    liveDraggingPreview(for: manager.selectionRect)
                 } else {
                     // Initial helpful hint at top center
                     initialHintBar(in: geo)
                 }
             }
+            .coordinateSpace(name: "canvasSpace")
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .edgesIgnoringSafeArea(.all)
     }
@@ -69,16 +93,22 @@ public struct ScreenshotOverlayView: View {
             Image(systemName: "viewfinder")
                 .font(.system(size: FS.body, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
-            Text(tr("Kéo chuột để chọn vùng chụp ảnh • ⎋ Huỷ", "Click & drag to select capture area • ⎋ Cancel"))
-                .font(.system(size: FS.label, weight: .semibold))
-                .foregroundStyle(.primary)
+            if NSScreen.screens.count > 1 {
+                Text(tr("Kéo chọn vùng (⌘⇧1) • Đè Space di chuyển • ⇥ Đổi màn • ⎋ Huỷ", "Drag area (⌘⇧1) • Hold Space to move • ⇥ Switch screen • ⎋ Cancel"))
+                    .font(.system(size: FS.label, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            } else {
+                Text(tr("Kéo chọn vùng (⌘⇧1) • Đè Space di chuyển • ⎋ Huỷ", "Click & drag area (⌘⇧1) • Hold Space to move • ⎋ Cancel"))
+                    .font(.system(size: FS.label, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.75))
-                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .fill(Color.black.opacity(0.85))
+                .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
         )
         .shadow(color: Color.black.opacity(0.4), radius: 10, y: 4)
         .position(x: geo.size.width / 2, y: 50)
@@ -97,13 +127,14 @@ public struct ScreenshotOverlayView: View {
                 clipRect: sel
             )
             .frame(width: geo.size.width, height: geo.size.height)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
             .allowsHitTesting(false)
 
             // Selection Boundary Border
             Rectangle()
                 .stroke(Color.accentColor, lineWidth: 1.5)
                 .frame(width: sel.width, height: sel.height)
-                .offset(x: sel.origin.x, y: sel.origin.y)
+                .position(x: sel.midX, y: sel.midY)
                 .allowsHitTesting(false)
 
             // Dimension Badge Pill (Top-left above selection)
@@ -116,9 +147,9 @@ public struct ScreenshotOverlayView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .frame(width: max(0, sel.width), height: max(0, sel.height))
-                .offset(x: sel.origin.x, y: sel.origin.y)
+                .position(x: sel.midX, y: sel.midY)
                 .gesture(
-                    DragGesture(minimumDistance: 1, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 1, coordinateSpace: .named("canvasSpace"))
                         .onChanged { value in
                             handleInsideDragChange(value: value, in: geo)
                         }
@@ -135,10 +166,50 @@ public struct ScreenshotOverlayView: View {
         }
     }
 
+    // MARK: - Live Dragging Selection Preview
+
+    private func liveDraggingPreview(for sel: CGRect) -> some View {
+        ZStack(alignment: .topLeading) {
+            // Live dashed accent selection border
+            Rectangle()
+                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                .frame(width: max(0, sel.width), height: max(0, sel.height))
+                .position(x: sel.midX, y: sel.midY)
+                .allowsHitTesting(false)
+
+            // 4 Corner Viewfinder Accents
+            cornerViewfinderMarks(for: sel)
+
+            // Live Dimension badge (appears when box is large enough to read)
+            if sel.width >= 40 && sel.height >= 20 {
+                dimensionBadge(for: sel)
+            }
+        }
+    }
+
+    private func cornerViewfinderMarks(for sel: CGRect) -> some View {
+        let size: CGFloat = 8
+        return ZStack {
+            Rectangle().fill(Color.accentColor)
+                .frame(width: size, height: size)
+                .position(x: sel.minX, y: sel.minY)
+            Rectangle().fill(Color.accentColor)
+                .frame(width: size, height: size)
+                .position(x: sel.maxX, y: sel.minY)
+            Rectangle().fill(Color.accentColor)
+                .frame(width: size, height: size)
+                .position(x: sel.minX, y: sel.maxY)
+            Rectangle().fill(Color.accentColor)
+                .frame(width: size, height: size)
+                .position(x: sel.maxX, y: sel.maxY)
+        }
+        .allowsHitTesting(false)
+    }
+
     // MARK: - Dimension Badge
 
     private func dimensionBadge(for sel: CGRect) -> some View {
-        let badgeY = max(8, sel.origin.y - 26)
+        let badgeY = sel.origin.y > 28 ? (sel.origin.y - 14) : (sel.origin.y + 16)
         let retinaW = Int(round(sel.width * manager.scaleFactor))
         let retinaH = Int(round(sel.height * manager.scaleFactor))
 
@@ -157,7 +228,7 @@ public struct ScreenshotOverlayView: View {
                 .fill(Color.black.opacity(0.80))
                 .overlay(RoundedRectangle(cornerRadius: Rad.sm).stroke(Color.white.opacity(0.15), lineWidth: 0.5))
         )
-        .offset(x: sel.origin.x, y: badgeY)
+        .position(x: min(sel.minX + 85, sel.midX), y: badgeY)
         .allowsHitTesting(false)
     }
 
@@ -167,20 +238,20 @@ public struct ScreenshotOverlayView: View {
         HStack(spacing: 4) {
             Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: FS.caption - 1))
-            Text(tr("Di chuyển", "Move"))
+            Text(manager.isSpaceHeld ? tr("Đang di chuyển (Thả Space để vẽ)", "Moving (Release Space to draw)") : tr("Di chuyển (đè Space)", "Move (hold Space)"))
                 .font(.system(size: FS.caption, weight: .semibold))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 2.5)
         .background(
             Capsule()
-                .fill(manager.currentTool == .move ? Color.accentColor : Color.black.opacity(0.75))
+                .fill(manager.isSpaceHeld || manager.currentTool == .move ? Color.accentColor : Color.black.opacity(0.75))
                 .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
         )
         .foregroundStyle(.white)
         .position(x: sel.midX, y: max(14, sel.minY - 14))
         .gesture(
-            DragGesture(minimumDistance: 1)
+            DragGesture(minimumDistance: 1, coordinateSpace: .named("canvasSpace"))
                 .onChanged { val in
                     if !manager.isDraggingSelection {
                         manager.isDraggingSelection = true
@@ -196,13 +267,22 @@ public struct ScreenshotOverlayView: View {
         )
     }
 
-    // MARK: - Drag Inside Selection Logic
+    // MARK: - Drag Inside Selection Logic (Pixel-Accurate: No Coordinate Offset!)
 
     private func handleInsideDragChange(value: DragGesture.Value, in geo: GeometryProxy) {
-        let absLocation = CGPoint(
-            x: manager.selectionRect.origin.x + value.location.x,
-            y: manager.selectionRect.origin.y + value.location.y
-        )
+        // Holding Space OR using move tool -> Pan/Move selection box!
+        if manager.isSpaceHeld || manager.currentTool == .move {
+            if !manager.isDraggingSelection {
+                manager.isDraggingSelection = true
+                manager.dragStartRect = manager.selectionRect
+            }
+            let newX = max(0, min(geo.size.width - manager.dragStartRect.width, manager.dragStartRect.origin.x + value.translation.width))
+            let newY = max(0, min(geo.size.height - manager.dragStartRect.height, manager.dragStartRect.origin.y + value.translation.height))
+            manager.selectionRect.origin = CGPoint(x: newX, y: newY)
+            return
+        }
+
+        let currentPt = value.location
 
         switch manager.currentTool {
         case .move:
@@ -216,56 +296,40 @@ public struct ScreenshotOverlayView: View {
 
         case .pen:
             if manager.activeStroke == nil {
-                let startPt = CGPoint(
-                    x: manager.selectionRect.origin.x + value.startLocation.x,
-                    y: manager.selectionRect.origin.y + value.startLocation.y
-                )
                 manager.activeStroke = DrawnStroke(
                     tool: .pen,
-                    points: [startPt, absLocation],
+                    points: [value.startLocation, currentPt],
                     colorHex: manager.selectedColorHex,
                     lineWidth: 3.5
                 )
             } else {
-                manager.activeStroke?.points.append(absLocation)
+                manager.activeStroke?.points.append(currentPt)
             }
 
         case .marker:
             if manager.activeStroke == nil {
-                let startPt = CGPoint(
-                    x: manager.selectionRect.origin.x + value.startLocation.x,
-                    y: manager.selectionRect.origin.y + value.startLocation.y
-                )
                 manager.activeStroke = DrawnStroke(
                     tool: .marker,
-                    points: [startPt, absLocation],
+                    points: [value.startLocation, currentPt],
                     colorHex: manager.selectedColorHex,
                     lineWidth: 14.0
                 )
             } else {
-                manager.activeStroke?.points.append(absLocation)
+                manager.activeStroke?.points.append(currentPt)
             }
 
         case .arrow:
-            let startPt = CGPoint(
-                x: manager.selectionRect.origin.x + value.startLocation.x,
-                y: manager.selectionRect.origin.y + value.startLocation.y
-            )
             manager.activeStroke = DrawnStroke(
                 tool: .arrow,
-                points: [startPt, absLocation],
+                points: [value.startLocation, currentPt],
                 colorHex: manager.selectedColorHex,
                 lineWidth: 3.5
             )
 
         case .rect:
-            let startPt = CGPoint(
-                x: manager.selectionRect.origin.x + value.startLocation.x,
-                y: manager.selectionRect.origin.y + value.startLocation.y
-            )
             manager.activeStroke = DrawnStroke(
                 tool: .rect,
-                points: [startPt, absLocation],
+                points: [value.startLocation, currentPt],
                 colorHex: manager.selectedColorHex,
                 lineWidth: 3.0
             )
@@ -273,7 +337,7 @@ public struct ScreenshotOverlayView: View {
     }
 
     private func handleInsideDragEnd(value: DragGesture.Value, in geo: GeometryProxy) {
-        if manager.currentTool == .move {
+        if manager.isDraggingSelection || manager.currentTool == .move {
             manager.isDraggingSelection = false
         } else if let stroke = manager.activeStroke {
             manager.strokes.append(stroke)
@@ -306,7 +370,7 @@ public struct ScreenshotOverlayView: View {
             .shadow(color: Color.black.opacity(0.3), radius: 2)
             .position(point)
             .gesture(
-                DragGesture(minimumDistance: 1)
+                DragGesture(minimumDistance: 1, coordinateSpace: .named("canvasSpace"))
                     .onChanged { val in
                         if manager.activeHandle == nil {
                             manager.activeHandle = handle
@@ -385,7 +449,7 @@ public struct ScreenshotOverlayView: View {
                 .frame(width: sideBarW)
                 .offset(x: sideX, y: sideY)
 
-            // 2. Bottom Toolbar: Copy (⌘C), Save (⌘V), Close (⎋)
+            // 2. Bottom Toolbar: Copy (⌘C), Save (⌘S), Close (⎋)
             bottomActionBar
                 .offset(x: bottomX, y: bottomY)
 
@@ -529,7 +593,7 @@ public struct ScreenshotOverlayView: View {
         .shadow(color: Color.black.opacity(0.45), radius: 8)
     }
 
-    // MARK: - Bottom Action Toolbar (Copy ⌘C, Save ⌘V, Close ⎋)
+    // MARK: - Bottom Action Toolbar (Copy ⌘C, Save ⌘S, Close ⎋)
 
     private var bottomActionBar: some View {
         HStack(spacing: 6) {
@@ -554,14 +618,14 @@ public struct ScreenshotOverlayView: View {
             .buttonStyle(.plain)
             .help(tr("Sao chép ảnh chất lượng cao vào Clipboard (⌘C)", "Copy high-res image to clipboard (⌘C)"))
 
-            // 2. Save Button (⌘V / ⌘S -> Downloads/Screenshots)
+            // 2. Save Button (⌘S -> Downloads/Screenshots)
             Button {
                 manager.saveToDownloads()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.to.line.compact")
                         .font(.system(size: FS.caption))
-                    Text(tr("Lưu ảnh (⌘V)", "Save (⌘V)"))
+                    Text(tr("Lưu ảnh (⌘S)", "Save (⌘S)"))
                         .font(.system(size: FS.caption, weight: .semibold))
                 }
                 .padding(.horizontal, 10)
@@ -573,7 +637,7 @@ public struct ScreenshotOverlayView: View {
                 .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
-            .help(tr("Lưu ảnh vào thư mục Downloads/Screenshots (⌘V)", "Save image to Downloads/Screenshots (⌘V)"))
+            .help(tr("Lưu ảnh vào thư mục Downloads/Screenshots (⌘S)", "Save image to Downloads/Screenshots (⌘S)"))
 
             // 3. Cancel Button (⎋ Esc)
             Button {

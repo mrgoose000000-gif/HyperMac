@@ -69,6 +69,11 @@ public class ScreenshotManager: ObservableObject {
             gIsScreenshotEnabled = isScreenshotEnabled
         }
     }
+    @Published public var isDetailsExpanded: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isDetailsExpanded, forKey: "screenshot_details_expanded")
+        }
+    }
 
     // Active Capture State
     @Published public var isActive: Bool = false
@@ -93,6 +98,7 @@ public class ScreenshotManager: ObservableObject {
     @Published public var dragStartPoint: CGPoint = .zero
     @Published public var dragStartRect: CGRect = .zero
     @Published public var isDraggingSelection: Bool = false
+    @Published public var isSpaceHeld: Bool = false
 
     // Notifications / Toasts
     @Published public var toastMessage: String? = nil
@@ -117,6 +123,7 @@ public class ScreenshotManager: ObservableObject {
         } else {
             self.isScreenshotEnabled = true
         }
+        self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "screenshot_details_expanded")
         gIsScreenshotEnabled = self.isScreenshotEnabled
     }
 
@@ -135,7 +142,8 @@ public class ScreenshotManager: ObservableObject {
 
         // 1. Identify screen under mouse cursor
         let mouseLoc = NSEvent.mouseLocation
-        let targetScreen = NSScreen.screens.first { NSMouseInRect(mouseLoc, $0.frame, false) }
+        let targetScreen = NSScreen.screens.first { $0.frame.contains(mouseLoc) }
+            ?? NSScreen.screens.first { NSMouseInRect(mouseLoc, $0.frame, false) }
             ?? NSScreen.main
             ?? NSScreen.screens[0]
 
@@ -162,8 +170,9 @@ public class ScreenshotManager: ObservableObject {
         self.selectedColorHex = "#FF3B30"
         self.isColorPaletteExpanded = false
         self.toastMessage = nil
+        self.isSpaceHeld = false
 
-        // 3. Create or update full-screen borderless overlay panel
+        // 3. Create or update overlay panel on the target screen
         createOrUpdateOverlayPanel(on: targetScreen)
 
         self.isActive = true
@@ -175,7 +184,12 @@ public class ScreenshotManager: ObservableObject {
     private func captureScreenImage(screen: NSScreen) -> CGImage? {
         let primaryH = NSScreen.screens[0].frame.height
         let f = screen.frame
-        let cgRect = CGRect(x: f.origin.x, y: primaryH - (f.origin.y + f.height), width: f.width, height: f.height)
+        let cgRect = CGRect(
+            x: f.origin.x,
+            y: primaryH - (f.origin.y + f.height),
+            width: f.width,
+            height: f.height
+        )
 
         if let fn = cgCaptureSym, let unmanaged = fn(cgRect, 1, 0, 0) {
             return unmanaged.takeRetainedValue()
@@ -192,31 +206,57 @@ public class ScreenshotManager: ObservableObject {
         return nil
     }
 
+    // MARK: - Switch Screen (Tab Shortcut for Multi-Display setups)
+
+    public func switchScreen() {
+        guard NSScreen.screens.count > 1 else { return }
+        let screens = NSScreen.screens
+        guard let currentIndex = screens.firstIndex(where: { $0.frame == self.screenFrame }) else { return }
+        let nextIndex = (currentIndex + 1) % screens.count
+        let nextScreen = screens[nextIndex]
+
+        self.screenFrame = nextScreen.frame
+        guard let capturedImage = captureScreenImage(screen: nextScreen) else { return }
+        self.screenImage = capturedImage
+        self.scaleFactor = CGFloat(capturedImage.width) / nextScreen.frame.width
+        self.screenNSImage = NSImage(cgImage: capturedImage, size: nextScreen.frame.size)
+
+        self.selectionRect = .zero
+        self.hasSelection = false
+        self.strokes = []
+        self.activeStroke = nil
+
+        createOrUpdateOverlayPanel(on: nextScreen)
+    }
+
     // MARK: - Overlay Window Presentation
 
     private func createOrUpdateOverlayPanel(on screen: NSScreen) {
-        if overlayPanel == nil {
-            let panel = NSPanel(
-                contentRect: screen.frame,
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            panel.level = .screenSaver
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-            panel.isFloatingPanel = true
-            panel.isOpaque = false
-            panel.backgroundColor = .clear
-            panel.hasShadow = false
-            panel.isMovableByWindowBackground = false
-            panel.acceptsMouseMovedEvents = true
-
-            let hostingView = NSHostingView(rootView: ScreenshotOverlayView(manager: self))
-            panel.contentView = hostingView
-            self.overlayPanel = panel
+        if let existing = overlayPanel {
+            existing.orderOut(nil)
+            existing.contentView = nil
+            overlayPanel = nil
         }
 
-        guard let panel = overlayPanel else { return }
+        let panel = NSPanel(
+            contentRect: screen.frame,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.isFloatingPanel = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.isMovableByWindowBackground = false
+        panel.acceptsMouseMovedEvents = true
+
+        let hostingView = NSHostingView(rootView: ScreenshotOverlayView(manager: self))
+        panel.contentView = hostingView
+        self.overlayPanel = panel
+
         panel.setFrame(screen.frame, display: true)
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
@@ -226,7 +266,11 @@ public class ScreenshotManager: ObservableObject {
     // MARK: - Cancel Capture
 
     public func cancelCapture() {
-        overlayPanel?.orderOut(nil)
+        if let panel = overlayPanel {
+            panel.orderOut(nil)
+            panel.contentView = nil
+            overlayPanel = nil
+        }
         self.isActive = false
         gIsScreenshotActive = false
         self.screenImage = nil
@@ -235,6 +279,7 @@ public class ScreenshotManager: ObservableObject {
         self.activeStroke = nil
         self.selectionRect = .zero
         self.hasSelection = false
+        self.isSpaceHeld = false
     }
 
     // MARK: - Stroke Management

@@ -25,6 +25,7 @@ public var gClipboardShortcutKeycode: Int64 = 8
 public var gIsCursorBasedBrightnessEnabled: Bool = true
 public var gIsScreenshotEnabled: Bool = true
 public var gIsScreenshotActive: Bool = false
+public var gIsSpacePressed: Bool = false
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
 private var gLastSnapArrowKey: Int64 = 0
@@ -272,7 +273,24 @@ private func eventTapCallback(
         }
     }
 
-    // 5. Standard F1/F2 KeyDowns & Window Snapping
+    // 5. Spacebar tracking for Screenshot Mode (Holding Space to Move Selection)
+    if type == .keyDown || type == .keyUp {
+        let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+        if keycode == 49 { // Space
+            let isDown = (type == .keyDown)
+            if gIsSpacePressed != isDown {
+                gIsSpacePressed = isDown
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.isSpaceHeld = isDown
+                }
+            }
+            if gIsScreenshotActive {
+                return nil // Swallow Space in screenshot mode
+            }
+        }
+    }
+
+    // 6. Standard F1/F2 KeyDowns & Window Snapping
     if type == .keyDown {
         let keycode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
@@ -324,22 +342,39 @@ private func eventTapCallback(
                 return nil
             }
 
+            // Tab (keycode 48) -> Switch to next screen if multiple displays connected
+            if !hasCmd && !hasCtrl && !hasAlt && !hasShift && keycode == 48 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.switchScreen()
+                }
+                return nil
+            }
+
             // In screenshot mode, swallow all other bare typing to prevent accidental shortcuts
             return nil
         }
 
-        // F4 Shortcut (Keycode 118 or 131) -> Trigger Screenshot Overlay (LightShot-style)
+        // Screenshot Trigger: ⌘⇧1 (Command + Shift + 1, keycode 18) or bare F4 (keycode 118 or 131)
         if gIsScreenshotEnabled && !gIsScreenshotActive {
-            if keycode == 118 || keycode == 131 {
-                let hasCmd = flags.contains(.maskCommand)
-                let hasCtrl = flags.contains(.maskControl)
-                let hasAlt = flags.contains(.maskAlternate)
-                if !hasCmd && !hasCtrl && !hasAlt {
-                    DispatchQueue.main.async {
-                        ScreenshotManager.shared.startCapture()
-                    }
-                    return nil
+            let hasCmd = flags.contains(.maskCommand)
+            let hasCtrl = flags.contains(.maskControl)
+            let hasAlt = flags.contains(.maskAlternate)
+            let hasShift = flags.contains(.maskShift)
+
+            // Primary: ⌘⇧1 (HyperMac LightShot - Leaves ⌘⇧4 untouched for macOS default)
+            if hasCmd && hasShift && !hasCtrl && !hasAlt && keycode == 18 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.startCapture()
                 }
+                return nil
+            }
+
+            // Secondary: bare F4
+            if !hasCmd && !hasShift && !hasCtrl && !hasAlt && (keycode == 118 || keycode == 131) {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.startCapture()
+                }
+                return nil
             }
         }
 
@@ -615,9 +650,10 @@ public class KeyInterceptor {
 
         updateSettings()
 
-        // Listen for Media Keys, KeyDowns, FlagsChanged, and Mouse Left/Right
+        // Listen for Media Keys, KeyDowns, KeyUps, FlagsChanged, and Mouse Left/Right
         let mask: UInt64 = (1 << NX_SYSDEFINED) |
                            (1 << CGEventType.keyDown.rawValue) |
+                           (1 << CGEventType.keyUp.rawValue) |
                            (1 << CGEventType.flagsChanged.rawValue) |
                            (1 << CGEventType.leftMouseDown.rawValue) |
                            (1 << CGEventType.leftMouseUp.rawValue) |
