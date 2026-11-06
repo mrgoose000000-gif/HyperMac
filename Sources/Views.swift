@@ -2810,7 +2810,9 @@ struct FooterView: View {
                         .font(.system(size: FS.caption))
                     Text(tr("Tác giả", "Author"))
                         .font(.system(size: FS.caption, weight: .medium))
+                        .lineLimit(1)
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
                 .background(
@@ -2821,46 +2823,28 @@ struct FooterView: View {
             .buttonStyle(.plain)
             .help(tr("Xem trang tác giả", "View author profile"))
 
-            // Zalo Community Link Button
-            Button {
-                ActivationManager.shared.openZaloGroup()
-            } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: FS.caption))
-                    Text(tr("Zalo", "Zalo"))
-                        .font(.system(size: FS.caption, weight: .medium))
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2.5)
-                .background(
-                    Capsule().fill(Color(red: 0.0, green: 0.41, blue: 1.0).opacity(0.12))
-                )
-                .foregroundStyle(Color(red: 0.0, green: 0.41, blue: 1.0))
-            }
-            .buttonStyle(.plain)
-            .help(tr("Tham gia nhóm Zalo cộng đồng HyperMac", "Join HyperMac community on Zalo"))
-
             // Update Check / Action Button
             if !UpdateManager.updatesDisabled {
-            Button {
-                updateManager.checkForUpdates(silent: false)
-            } label: {
-                HStack(spacing: 3.5) {
-                    Image(systemName: updateManager.hasNewUpdate ? "sparkles" : "arrow.triangle.2.circlepath")
-                        .font(.system(size: FS.caption))
-                    Text(updateManager.hasNewUpdate ? tr("Có bản v\(updateManager.latestVersionString)", "New v\(updateManager.latestVersionString)") : tr("Kiểm tra cập nhật", "Check updates"))
-                        .font(.system(size: FS.caption, weight: updateManager.hasNewUpdate ? .semibold : .medium))
+                Button {
+                    updateManager.checkForUpdates(silent: false)
+                } label: {
+                    HStack(spacing: 3.5) {
+                        Image(systemName: updateManager.hasNewUpdate ? "sparkles" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: FS.caption))
+                        Text(updateManager.hasNewUpdate ? tr("Có bản v\(updateManager.latestVersionString)", "New v\(updateManager.latestVersionString)") : tr("Cập nhật", "Updates"))
+                            .font(.system(size: FS.caption, weight: updateManager.hasNewUpdate ? .semibold : .medium))
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(
+                        Capsule().fill(updateManager.hasNewUpdate ? Tone.good.opacity(0.12) : Color.primary.opacity(0.06))
+                    )
+                    .foregroundStyle(updateManager.hasNewUpdate ? Tone.good : Color.primary)
                 }
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2.5)
-                .background(
-                    Capsule().fill(updateManager.hasNewUpdate ? Tone.good.opacity(0.10) : Color.primary.opacity(0.06))
-                )
-                .foregroundStyle(updateManager.hasNewUpdate ? Tone.good : Color.primary)
-            }
-            .buttonStyle(.plain)
-            .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra phiên bản mới từ GitHub", "Check for newer version on GitHub"))
+                .buttonStyle(.plain)
+                .help(updateManager.hasNewUpdate ? tr("Đã có bản mới! Bấm để cập nhật", "New version available! Click to update") : tr("Kiểm tra phiên bản mới từ GitHub", "Check for newer version on GitHub"))
             }
 
             // Donate Button
@@ -2873,7 +2857,9 @@ struct FooterView: View {
                         .foregroundStyle(.secondary)
                     Text("Donate")
                         .font(.system(size: FS.caption, weight: .medium))
+                        .lineLimit(1)
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
                 .background(
