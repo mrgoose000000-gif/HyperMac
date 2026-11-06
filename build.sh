@@ -149,8 +149,21 @@ echo "📦 Packaging ${BUILD_DIR}/HyperMac.zip for distribution..."
 COPYFILE_DISABLE=1 ditto -c -k --norsrc --keepParent "${APP_DIR}" "${BUILD_DIR}/HyperMac.zip"
 echo "✅ Package created: ${BUILD_DIR}/HyperMac.zip"
 
+# ── Step 3.2: Create release DMG package ──
+echo "📀 Packaging ${BUILD_DIR}/HyperMac.dmg for distribution..."
+DMG_TEMP="${BUILD_DIR}/dmg_temp"
+rm -rf "${DMG_TEMP}" "${BUILD_DIR}/HyperMac.dmg"
+mkdir -p "${DMG_TEMP}"
+cp -R "${APP_DIR}" "${DMG_TEMP}/"
+ln -s /Applications "${DMG_TEMP}/Applications"
+hdiutil create -volname "HyperMac" -srcfolder "${DMG_TEMP}" -ov -format UDZO "${BUILD_DIR}/HyperMac.dmg" >/dev/null 2>&1 || true
+rm -rf "${DMG_TEMP}"
+if [ -f "${BUILD_DIR}/HyperMac.dmg" ]; then
+    echo "✅ Package created: ${BUILD_DIR}/HyperMac.dmg"
+fi
+
 if [ "$CI" = "true" ] || [ "$1" = "--no-run" ]; then
-    echo "📦 CI build completed. Artifact is ready at: ${BUILD_DIR}/HyperMac.zip"
+    echo "📦 CI build completed. Artifacts are ready at: ${BUILD_DIR}/HyperMac.zip & ${BUILD_DIR}/HyperMac.dmg"
     exit 0
 fi
 
