@@ -75,6 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         _ = SystemCleanerManager.shared
         _ = PermissionsManager.shared
         _ = FanManager.shared
+        _ = ScreenshotManager.shared
 
         // Register for display reconfiguration
         CGDisplayRegisterReconfigurationCallback(displayReconfigCallback, nil)

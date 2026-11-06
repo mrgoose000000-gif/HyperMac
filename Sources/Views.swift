@@ -18,6 +18,7 @@ public struct MainView: View {
     @ObservedObject var cleanerManager: SystemCleanerManager = SystemCleanerManager.shared
     @ObservedObject var permissionsManager: PermissionsManager = PermissionsManager.shared
     @ObservedObject var languageManager: LanguageManager = LanguageManager.shared
+    @ObservedObject var screenshotManager: ScreenshotManager = ScreenshotManager.shared
 
     public init(displayManager: DisplayManager) {
         self.displayManager = displayManager
@@ -923,6 +924,7 @@ struct ShortcutsTabView: View {
     @ObservedObject var caffeinateManager: CaffeinateManager = CaffeinateManager.shared
     @ObservedObject var launchAtLoginManager: LaunchAtLoginManager = LaunchAtLoginManager.shared
     @ObservedObject var finderCutPasteManager: FinderCutPasteManager = FinderCutPasteManager.shared
+    @ObservedObject var screenshotManager: ScreenshotManager = ScreenshotManager.shared
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -1416,6 +1418,69 @@ struct ShortcutsTabView: View {
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity)
+                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+                            .foregroundStyle(.primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(10)
+                .cardBackground()
+
+                // Screenshot (LightShot / F4) Card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: FS.body))
+                            .foregroundStyle(Color.accentColor)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(tr("Chụp ảnh màn hình (F4)", "Screenshot Snipping (F4)"))
+                                .font(.system(size: FS.label, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            Text(tr("Kéo chọn vùng, vẽ bút đỏ chú thích, ⌘C sao chép, ⌘V lưu tệp", "LightShot-style: crop area, red pen annotations, ⌘C copy, ⌘V save"))
+                                .font(.system(size: FS.caption))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding<Bool>(
+                            get: { screenshotManager.isScreenshotEnabled },
+                            set: { screenshotManager.isScreenshotEnabled = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                    }
+
+                    if screenshotManager.isScreenshotEnabled {
+                        Divider().opacity(0.35)
+
+                        // Shortcuts & Quick Actions Grid
+                        ShortcutGrid {
+                            shortcutPill(key: "F4", desc: tr("Mở chụp ảnh", "Start Snipping"))
+                            shortcutPill(key: "⌘C", desc: tr("Sao chép ảnh", "Copy Image"))
+                            shortcutPill(key: "⌘V", desc: tr("Lưu Downloads", "Save PNG"))
+                            shortcutPill(key: "⎋", desc: tr("Huỷ bỏ", "Cancel"))
+                        }
+
+                        // Capture Now Button
+                        Button {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                screenshotManager.startCapture()
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: FS.caption))
+                                Text(tr("Chụp màn hình ngay (F4)", "Capture Screenshot Now (F4)"))
+                                    .font(.system(size: FS.caption, weight: .semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
                             .frame(maxWidth: .infinity)
                             .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
                             .foregroundStyle(.primary)

@@ -23,6 +23,8 @@ public var gIsClipboardHUDVisible: Bool = false
 public var gIsClipboardSearchEmpty: Bool = true
 public var gClipboardShortcutKeycode: Int64 = 8
 public var gIsCursorBasedBrightnessEnabled: Bool = true
+public var gIsScreenshotEnabled: Bool = true
+public var gIsScreenshotActive: Bool = false
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
 private var gLastSnapArrowKey: Int64 = 0
@@ -274,6 +276,72 @@ private func eventTapCallback(
     if type == .keyDown {
         let keycode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
+
+        // Screenshot Active Hotkeys (LightShot Mode: Esc to cancel, ⌘C to copy, ⌘V/⌘S to save, ⌘Z to undo)
+        if gIsScreenshotActive {
+            let hasCmd = flags.contains(.maskCommand)
+            let hasCtrl = flags.contains(.maskControl)
+            let hasAlt = flags.contains(.maskAlternate)
+            let hasShift = flags.contains(.maskShift)
+
+            // Esc (keycode 53) -> Cancel capture
+            if keycode == 53 && !hasCmd && !hasCtrl && !hasAlt && !hasShift {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.cancelCapture()
+                }
+                return nil
+            }
+
+            // ⌘C (keycode 8) -> Copy high-res cropped screenshot to clipboard
+            if hasCmd && !hasCtrl && !hasAlt && !hasShift && keycode == 8 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.copyToClipboard()
+                }
+                return nil
+            }
+
+            // ⌘V (keycode 9) -> Save high-res screenshot to Downloads/Screenshots
+            if hasCmd && !hasCtrl && !hasAlt && !hasShift && keycode == 9 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.saveToDownloads()
+                }
+                return nil
+            }
+
+            // ⌘S (keycode 1) -> Save high-res screenshot to Downloads/Screenshots
+            if hasCmd && !hasCtrl && !hasAlt && !hasShift && keycode == 1 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.saveToDownloads()
+                }
+                return nil
+            }
+
+            // ⌘Z (keycode 6) -> Undo last stroke
+            if hasCmd && !hasCtrl && !hasAlt && !hasShift && keycode == 6 {
+                DispatchQueue.main.async {
+                    ScreenshotManager.shared.undoLastStroke()
+                }
+                return nil
+            }
+
+            // In screenshot mode, swallow all other bare typing to prevent accidental shortcuts
+            return nil
+        }
+
+        // F4 Shortcut (Keycode 118 or 131) -> Trigger Screenshot Overlay (LightShot-style)
+        if gIsScreenshotEnabled && !gIsScreenshotActive {
+            if keycode == 118 || keycode == 131 {
+                let hasCmd = flags.contains(.maskCommand)
+                let hasCtrl = flags.contains(.maskControl)
+                let hasAlt = flags.contains(.maskAlternate)
+                if !hasCmd && !hasCtrl && !hasAlt {
+                    DispatchQueue.main.async {
+                        ScreenshotManager.shared.startCapture()
+                    }
+                    return nil
+                }
+            }
+        }
 
         // F1/F2 Brightness
         if keycode == 145 || keycode == 120 || keycode == 144 || keycode == 122 {
@@ -539,6 +607,7 @@ public class KeyInterceptor {
         let shortcut = UserDefaults.standard.string(forKey: "clipboard_hud_shortcut") ?? "cmd_shift_c"
         gClipboardShortcutKeycode = (shortcut == "cmd_shift_v") ? 9 : 8
         gIsCursorBasedBrightnessEnabled = (UserDefaults.standard.object(forKey: "cursor_based_brightness") as? Bool) ?? true
+        gIsScreenshotEnabled = (UserDefaults.standard.object(forKey: "screenshot_enabled") as? Bool) ?? true
     }
 
     public func start() {
