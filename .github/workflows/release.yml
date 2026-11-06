@@ -17,7 +17,7 @@ permissions:
 jobs:
   build-and-release:
     name: Build & Release (Apple Silicon)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -154,7 +154,9 @@ jobs:
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: HyperMac ${{ steps.vars.outputs.tag }}
-          files: build/HyperMac.zip
+          files: |
+            build/HyperMac.zip
+            build/HyperMac.dmg
           draft: false
           # Tag có hậu tố (v1.6.0-rc1, v1.6.0-test) → release nháp thử nghiệm,
           # không bị UpdateManager coi là bản chính thức.
