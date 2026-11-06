@@ -34,9 +34,61 @@ check_key_exists() {
     fi
 }
 
+call_powerui() {
+    local cmd="$1"
+    local lim="${2:-80}"
+    if [ ! -x "/usr/bin/swift" ] || [ ! -d "/System/Library/PrivateFrameworks/PowerUI.framework" ]; then
+        return 1
+    fi
+    /usr/bin/swift - "$cmd" "$lim" << 'SWIFT_EOF' 2>/dev/null
+import Foundation
+
+guard let b = Bundle(path: "/System/Library/PrivateFrameworks/PowerUI.framework"), b.load(),
+      let c = (NSClassFromString("PowerUISmartChargeClient") as? NSObject.Type)?.init(),
+      let client = c.perform(NSSelectorFromString("initWithClientName:"), with: "HyperMac")?.takeUnretainedValue() as? NSObject else {
+    exit(1)
+}
+typealias BoolFn = @convention(c) (AnyObject, Selector) -> Bool
+let isSupp = unsafeBitCast(client.method(for: NSSelectorFromString("isMCLSupported")), to: BoolFn.self)(client, NSSelectorFromString("isMCLSupported"))
+guard isSupp else { exit(2) }
+
+let action = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "status"
+if action == "status" {
+    typealias BoolErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt64
+    var err: NSError? = nil
+    let enabled = unsafeBitCast(client.method(for: NSSelectorFromString("isMCLCurrentlyEnabled:")), to: BoolErrFn.self)(client, NSSelectorFromString("isMCLCurrentlyEnabled:"), &err)
+    typealias UcharErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt8
+    let limit = unsafeBitCast(client.method(for: NSSelectorFromString("getMCLLimitWithError:")), to: UcharErrFn.self)(client, NSSelectorFromString("getMCLLimitWithError:"), &err)
+    print("MCL_LIMIT:\(limit)")
+    print("BYPASS:\(enabled != 0 ? 1 : 0)")
+    exit(0)
+} else if action == "charge-off" {
+    let limit = UInt8(CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) ?? 80 : 80)
+    typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutablePointer<NSError?>?) -> Bool
+    var err: NSError? = nil
+    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("setMCLLimit:error:")), to: SetFn.self)(client, NSSelectorFromString("setMCLLimit:error:"), limit, &err)
+    if ok { print("CHARGE_OFF_OK"); exit(0) } else { exit(3) }
+} else if action == "charge-on" {
+    typealias DisableFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> Bool
+    var err: NSError? = nil
+    let ok = unsafeBitCast(client.method(for: NSSelectorFromString("disableMCL:")), to: DisableFn.self)(client, NSSelectorFromString("disableMCL:"), &err)
+    if ok { print("CHARGE_ON_OK"); exit(0) } else { exit(4) }
+}
+SWIFT_EOF
+}
+
 case "$1" in
     status)
-        if check_key_exists "CHTE"; then
+        if check_key_exists "bfF0"; then
+            OUT=$("$SMC" -k bfF0 -r 2>/dev/null || true)
+            echo "$OUT"
+            if echo "$OUT" | grep -q "02" || echo "$OUT" | grep -q "[ui8 ]  2" || echo "$OUT" | grep -q "[ui8 ]  1"; then
+                echo "BYPASS:1"
+            else
+                echo "BYPASS:0"
+            fi
+            exit 0
+        elif check_key_exists "CHTE"; then
             OUT=$("$SMC" -k CHTE -r 2>/dev/null || true)
             echo "$OUT"
             if echo "$OUT" | grep -q "01 00 00 00" || echo "$OUT" | grep -q "16777216"; then
@@ -64,21 +116,40 @@ case "$1" in
             fi
             exit 0
         else
-            echo "STATUS_UNKNOWN"
-            echo "BYPASS:0"
-            exit 0
+            MCL_OUT=$(call_powerui status 2>/dev/null || true)
+            if echo "$MCL_OUT" | grep -q "BYPASS:"; then
+                echo "$MCL_OUT"
+                exit 0
+            else
+                echo "STATUS_UNKNOWN"
+                echo "BYPASS:0"
+                exit 0
+            fi
         fi
         ;;
     charge-off)
         LIMIT="${2:-80}"
         HANDLED=0
 
-        # Method 1: Apple Silicon CHTE (M2, M3, M4, macOS 14.4+)
+        # Method 1: Apple Silicon bfF0 / bfD0 / bfE0 (Firmware Limit for M3, M4, macOS 15+ / newer firmware)
+        if check_key_exists "bfF0"; then
+            HEX_UPPER=$(printf "%02x000000" "$LIMIT" 2>/dev/null || echo "50000000")
+            LOWER=$((LIMIT > 4 ? LIMIT - 3 : LIMIT))
+            HEX_LOWER=$(printf "%02x000000" "$LOWER" 2>/dev/null || echo "4d000000")
+            "$SMC" -k bfF0 -w 00 >/dev/null 2>&1 || true
+            if check_key_exists "bfD0"; then "$SMC" -k bfD0 -w "$HEX_UPPER" >/dev/null 2>&1 || true; fi
+            if check_key_exists "bfE0"; then "$SMC" -k bfE0 -w "$HEX_LOWER" >/dev/null 2>&1 || true; fi
+            if "$SMC" -k bfF0 -w 02 >/dev/null 2>&1; then
+                HANDLED=1
+            fi
+        fi
+
+        # Method 2: Apple Silicon CHTE (M2, M3, M4, macOS 14.4+)
         if check_key_exists "CHTE"; then
             "$SMC" -k CHTE -w 01000000 >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 2: Apple Silicon CH0B / CH0C (M1, older macOS)
+        # Method 3: Apple Silicon CH0B / CH0C (M1, older macOS)
         if check_key_exists "CH0B"; then
             "$SMC" -k CH0B -w 02 >/dev/null 2>&1 && HANDLED=1
             if check_key_exists "CH0C"; then
@@ -86,10 +157,17 @@ case "$1" in
             fi
         fi
 
-        # Method 3: Intel BCLM (Battery Charge Limit Max)
+        # Method 4: Intel BCLM (Battery Charge Limit Max)
         if check_key_exists "BCLM"; then
             HEX_LIMIT=$(printf "%02x" "$LIMIT" 2>/dev/null || echo "50")
             "$SMC" -k BCLM -w "$HEX_LIMIT" >/dev/null 2>&1 && HANDLED=1
+        fi
+
+        # Method 5: Native PowerUI MCL via Swift fallback
+        if [ "$HANDLED" -eq 0 ]; then
+            if call_powerui "charge-off" "$LIMIT" >/dev/null 2>&1; then
+                HANDLED=1
+            fi
         fi
 
         if [ "$HANDLED" -eq 1 ]; then
@@ -103,12 +181,17 @@ case "$1" in
     charge-on)
         HANDLED=0
 
-        # Method 1: Apple Silicon CHTE
+        # Method 1: Apple Silicon bfF0
+        if check_key_exists "bfF0"; then
+            "$SMC" -k bfF0 -w 00 >/dev/null 2>&1 && HANDLED=1
+        fi
+
+        # Method 2: Apple Silicon CHTE
         if check_key_exists "CHTE"; then
             "$SMC" -k CHTE -w 00000000 >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 2: Apple Silicon CH0B / CH0C
+        # Method 3: Apple Silicon CH0B / CH0C
         if check_key_exists "CH0B"; then
             "$SMC" -k CH0B -w 00 >/dev/null 2>&1 && HANDLED=1
             if check_key_exists "CH0C"; then
@@ -116,9 +199,14 @@ case "$1" in
             fi
         fi
 
-        # Method 3: Intel BCLM (100% in hex is 64)
+        # Method 4: Intel BCLM (100% in hex is 64)
         if check_key_exists "BCLM"; then
             "$SMC" -k BCLM -w 64 >/dev/null 2>&1 && HANDLED=1
+        fi
+
+        # Method 5: Native PowerUI MCL via Swift fallback
+        if call_powerui "charge-on" >/dev/null 2>&1; then
+            HANDLED=1
         fi
 
         if [ "$HANDLED" -eq 1 ]; then

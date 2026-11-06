@@ -3,6 +3,88 @@ import IOKit
 import Combine
 import AppKit
 
+// MARK: - Native Apple Silicon PowerUI Client (macOS 15+ / Sequoia & Modern Firmware)
+
+@MainActor
+public final class NativePowerUIClient {
+    public static let shared = NativePowerUIClient()
+
+    private var clientInstance: NSObject?
+    public private(set) var isSupported: Bool = false
+
+    private init() {
+        guard let bundle = Bundle(path: "/System/Library/PrivateFrameworks/PowerUI.framework"), bundle.load() else {
+            return
+        }
+        guard let cls = NSClassFromString("PowerUISmartChargeClient") as? NSObject.Type else {
+            return
+        }
+        let selInit = NSSelectorFromString("initWithClientName:")
+        guard cls.instancesRespond(to: selInit),
+              let client = cls.init().perform(selInit, with: "HyperMac")?.takeUnretainedValue() as? NSObject else {
+            return
+        }
+        self.clientInstance = client
+
+        let selSupported = NSSelectorFromString("isMCLSupported")
+        if client.responds(to: selSupported) {
+            typealias BoolFn = @convention(c) (AnyObject, Selector) -> Bool
+            let fn = unsafeBitCast(client.method(for: selSupported), to: BoolFn.self)
+            self.isSupported = fn(client, selSupported)
+        }
+    }
+
+    public func setLimit(_ limit: Int) -> Bool {
+        guard isSupported, let client = clientInstance else { return false }
+        let selSet = NSSelectorFromString("setMCLLimit:error:")
+        guard client.responds(to: selSet) else { return false }
+        typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutablePointer<NSError?>?) -> Bool
+        var err: NSError? = nil
+        let ok = unsafeBitCast(client.method(for: selSet), to: SetFn.self)(client, selSet, UInt8(min(max(limit, 50), 100)), &err)
+        if !ok || err != nil {
+            appLog("⚠️ NativePowerUIClient: setMCLLimit(\(limit)) failed: \(String(describing: err))")
+            return false
+        }
+        appLog("🔋 NativePowerUIClient: setMCLLimit(\(limit)) succeeded")
+        return true
+    }
+
+    public func disable() -> Bool {
+        guard isSupported, let client = clientInstance else { return false }
+        let selDisable = NSSelectorFromString("disableMCL:")
+        guard client.responds(to: selDisable) else { return false }
+        typealias DisableFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> Bool
+        var err: NSError? = nil
+        let ok = unsafeBitCast(client.method(for: selDisable), to: DisableFn.self)(client, selDisable, &err)
+        if !ok || err != nil {
+            appLog("⚠️ NativePowerUIClient: disableMCL failed: \(String(describing: err))")
+            return false
+        }
+        appLog("🔋 NativePowerUIClient: disableMCL succeeded (charging restored)")
+        return true
+    }
+
+    public func isCurrentlyEnabled() -> Bool {
+        guard isSupported, let client = clientInstance else { return false }
+        let selEnabled = NSSelectorFromString("isMCLCurrentlyEnabled:")
+        guard client.responds(to: selEnabled) else { return false }
+        typealias BoolErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt64
+        var err: NSError? = nil
+        let res = unsafeBitCast(client.method(for: selEnabled), to: BoolErrFn.self)(client, selEnabled, &err)
+        return res != 0
+    }
+
+    public func currentLimit() -> Int {
+        guard isSupported, let client = clientInstance else { return 100 }
+        let selGet = NSSelectorFromString("getMCLLimitWithError:")
+        guard client.responds(to: selGet) else { return 100 }
+        typealias UcharErrFn = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> UInt8
+        var err: NSError? = nil
+        let limit = unsafeBitCast(client.method(for: selGet), to: UcharErrFn.self)(client, selGet, &err)
+        return Int(limit)
+    }
+}
+
 // MARK: - Battery Manager (Hardware Care & Longevity)
 
 @MainActor
@@ -492,6 +574,15 @@ public class BatteryManager: ObservableObject {
     }
 
     public func checkSMCBypassStatus() {
+        if NativePowerUIClient.shared.isSupported {
+            let enabled = NativePowerUIClient.shared.isCurrentlyEnabled()
+            let limit = NativePowerUIClient.shared.currentLimit()
+            if enabled && limit <= self.chargeLimit {
+                self.isBypassActive = self.isPluggedIn
+                return
+            }
+        }
+
         guard isHelperInstalled else { return }
         DispatchQueue.global(qos: .utility).async {
             let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
@@ -613,17 +704,30 @@ public class BatteryManager: ObservableObject {
     // MARK: - SMC Charging Inhibit Control
 
     public func setChargingInhibited(_ inhibit: Bool) {
-        guard isHelperInstalled else { return }
-        let cmd = inhibit
-            ? "sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)"
-            : "sudo -n /usr/local/bin/displaycontrol-power charge-on"
-        DispatchQueue.global(qos: .utility).async {
-            let (out, code) = shell(cmd)
-            DispatchQueue.main.async {
-                if code == 0 {
-                    self.isBypassActive = inhibit && self.isPluggedIn
-                } else {
-                    appLog("⚠️ setChargingInhibited(\(inhibit)) failed with code \(code): \(out)")
+        var nativeSuccess = false
+        if NativePowerUIClient.shared.isSupported {
+            if inhibit {
+                nativeSuccess = NativePowerUIClient.shared.setLimit(chargeLimit)
+            } else {
+                nativeSuccess = NativePowerUIClient.shared.disable()
+            }
+            if nativeSuccess {
+                self.isBypassActive = inhibit && self.isPluggedIn
+            }
+        }
+
+        if isHelperInstalled {
+            let cmd = inhibit
+                ? "sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)"
+                : "sudo -n /usr/local/bin/displaycontrol-power charge-on"
+            DispatchQueue.global(qos: .utility).async {
+                let (out, code) = shell(cmd)
+                DispatchQueue.main.async {
+                    if code == 0 {
+                        self.isBypassActive = inhibit && self.isPluggedIn
+                    } else if !nativeSuccess {
+                        appLog("⚠️ setChargingInhibited(\(inhibit)) failed with code \(code): \(out)")
+                    }
                 }
             }
         }
@@ -722,6 +826,15 @@ public class BatteryManager: ObservableObject {
     // MARK: - Helper Installation Check & Prompt
 
     public func checkHelperStatus() {
+        if NativePowerUIClient.shared.isSupported {
+            self.isHelperInstalled = true
+            if self.isProtectionEnabled {
+                self.checkSMCBypassStatus()
+                self.evaluatePowerManagement()
+            }
+            return
+        }
+
         let exists = FileManager.default.fileExists(atPath: "/usr/local/bin/displaycontrol-power")
         if !exists {
             self.isHelperInstalled = false
