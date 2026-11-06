@@ -65,13 +65,14 @@ public struct AltTabOverlayView: View {
                     .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary.opacity(0.6))
                     .fixedSize()
+                    .layoutPriority(1)
 
-                Text(item.appName)
                 Text(item.appName)
                     .font(.system(size: FS.label, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
 
                 if item.title != item.appName && !item.title.isEmpty {
                     Text("—")
@@ -102,6 +103,7 @@ public struct AltTabOverlayView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
 
             if !windowManager.windows.isEmpty {
@@ -113,6 +115,7 @@ public struct AltTabOverlayView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.accentColor.opacity(0.10)))
                     .foregroundStyle(Color.accentColor)
+                    .layoutPriority(2)
             }
         }
         .padding(.horizontal, 18)
@@ -348,14 +351,16 @@ struct HintChip: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3.5) {
             Image(systemName: icon)
                 .font(.system(size: FS.caption))
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: FS.label, weight: .medium))
+                .font(.system(size: FS.caption, weight: .medium))
                 .foregroundStyle(.secondary)
         }
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 

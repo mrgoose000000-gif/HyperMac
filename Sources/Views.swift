@@ -587,7 +587,7 @@ struct DisplaysTabView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(tr("F1 / F2 chỉnh màn hình theo con trỏ chuột", "F1 / F2 controls brightness at mouse cursor"))
                                 .font(.system(size: FS.label, weight: .medium))
-                            Text(tr("Tự nhận diện màn hình trong hoặc ngoài để tăng giảm độ sáng", "Auto-detect built-in or external display to adjust brightness"))
+                            Text(tr("Bật để chỉnh cả màn ngoài theo chuột; Tắt để dùng mặc định của macOS", "On: adjust display under cursor; Off: revert to native macOS controls"))
                                 .font(.system(size: FS.caption))
                                 .foregroundStyle(.secondary)
                         }
@@ -1278,14 +1278,30 @@ struct ShortcutsTabView: View {
 
                         // Shortcuts & Quick Actions
                         ShortcutGrid {
-                            shortcutPill(key: "⌘⇧C", desc: tr("Mở bảng HUD", "Open HUD"))
+                            shortcutPill(key: clipboardManager.hudShortcut.displayShort, desc: tr("Mở bảng HUD", "Open HUD"))
                             shortcutPill(key: "1..9", desc: tr("Dán tức thì", "Instant Paste"))
                             shortcutPill(key: "⌥P", desc: tr("Ghim", "Pin"))
                             shortcutPill(key: "⌥⌫", desc: tr("Xóa", "Delete"))
                         }
 
-                        // Storage limit + automatic cleanup options
+                        // Storage limit + automatic cleanup + HUD shortcut options
                         VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 4) {
+                                Text(tr("Phím mở:", "Open key:"))
+                                    .font(.system(size: FS.caption))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 80, alignment: .leading)
+
+                                optionChip("⌘⇧C", selected: clipboardManager.hudShortcut == .cmdShiftC) {
+                                    clipboardManager.hudShortcut = .cmdShiftC
+                                }
+                                optionChip("⌘⇧V", selected: clipboardManager.hudShortcut == .cmdShiftV) {
+                                    clipboardManager.hudShortcut = .cmdShiftV
+                                }
+
+                                Spacer()
+                            }
+
                             HStack(spacing: 4) {
                                 Text(tr("Giới hạn:", "Max items:"))
                                     .font(.system(size: FS.caption))
@@ -1395,7 +1411,7 @@ struct ShortcutsTabView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "macwindow")
                                     .font(.system(size: FS.caption))
-                                Text(tr("Mở bảng Clipboard HUD (⌘ + ⇧ + C)", "Open Clipboard HUD (⌘ + ⇧ + C)"))
+                                Text(tr("Mở bảng Clipboard HUD (\(clipboardManager.hudShortcut.displayTitle))", "Open Clipboard HUD (\(clipboardManager.hudShortcut.displayTitle))"))
                                     .font(.system(size: FS.caption, weight: .semibold))
                             }
                             .padding(.horizontal, 8)

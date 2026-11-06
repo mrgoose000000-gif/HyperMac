@@ -37,7 +37,12 @@ public class DisplayManager: ObservableObject {
 
     @Published public var monitors: [DisplayInfo] = []
     @Published public var selectedID: CGDirectDisplayID? = nil
-    @Published public var isCursorBased: Bool = true
+    @Published public var isCursorBased: Bool = true {
+        didSet {
+            UserDefaults.standard.set(isCursorBased, forKey: "cursor_based_brightness")
+            gIsCursorBasedBrightnessEnabled = isCursorBased
+        }
+    }
     @Published public var isMouseChordEnabled: Bool = true {
         didSet {
             gIsMouseChordEnabled = isMouseChordEnabled
@@ -71,6 +76,13 @@ public class DisplayManager: ObservableObject {
         if let savedChord = UserDefaults.standard.object(forKey: "mouse_chord_enabled") as? Bool {
             self.isMouseChordEnabled = savedChord
         }
+
+        if let savedCursor = UserDefaults.standard.object(forKey: "cursor_based_brightness") as? Bool {
+            self.isCursorBased = savedCursor
+        } else {
+            self.isCursorBased = true
+        }
+        gIsCursorBasedBrightnessEnabled = self.isCursorBased
 
         refreshDisplays()
 

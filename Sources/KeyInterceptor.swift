@@ -21,6 +21,8 @@ public var gIsAltTabVisible: Bool = false
 public var gIsClipboardEnabled: Bool = true
 public var gIsClipboardHUDVisible: Bool = false
 public var gIsClipboardSearchEmpty: Bool = true
+public var gClipboardShortcutKeycode: Int64 = 8
+public var gIsCursorBasedBrightnessEnabled: Bool = true
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
 private var gLastSnapArrowKey: Int64 = 0
@@ -254,6 +256,10 @@ private func eventTapCallback(
             let keyState = (((keyFlags & 0xFF00) >> 8)) == 0x0A
 
             if keyState && (keyCode == NX_KEYTYPE_BRIGHTNESS_UP || keyCode == NX_KEYTYPE_BRIGHTNESS_DOWN) {
+                // If cursor-based brightness is disabled, do NOT intercept! Pass through to macOS native.
+                if !gIsCursorBasedBrightnessEnabled {
+                    return Unmanaged.passRetained(event)
+                }
                 let isUp = (keyCode == NX_KEYTYPE_BRIGHTNESS_UP)
                 DispatchQueue.main.async {
                     _ = DisplayManager.shared.handleBrightnessKey(isUp: isUp)
@@ -271,6 +277,10 @@ private func eventTapCallback(
 
         // F1/F2 Brightness
         if keycode == 145 || keycode == 120 || keycode == 144 || keycode == 122 {
+            // If cursor-based brightness is disabled, do NOT intercept! Pass through to macOS native.
+            if !gIsCursorBasedBrightnessEnabled {
+                return Unmanaged.passRetained(event)
+            }
             let isUp = (keycode == 145 || keycode == 120)
             DispatchQueue.main.async {
                 _ = DisplayManager.shared.handleBrightnessKey(isUp: isUp)
@@ -330,9 +340,9 @@ private func eventTapCallback(
             }
         }
 
-        // Command + Shift + C -> Toggle Clipboard Manager HUD (Maccy Replacement)
+        // Command + Shift + (C or V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
         let isCmdShift = flags.contains(.maskCommand) && flags.contains(.maskShift) && !flags.contains(.maskControl)
-        if gIsClipboardEnabled && isCmdShift && keycode == 8 {
+        if gIsClipboardEnabled && isCmdShift && keycode == gClipboardShortcutKeycode {
             DispatchQueue.main.async {
                 ClipboardManager.shared.toggleHUD()
             }
@@ -526,6 +536,9 @@ public class KeyInterceptor {
         gIsAltTabEnabled = (UserDefaults.standard.object(forKey: "alttab_enabled") as? Bool) ?? true
         gIsClipboardEnabled = (UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") as? Bool) ?? true
         gIsFinderCutPasteEnabled = (UserDefaults.standard.object(forKey: "finder_cut_paste_enabled") as? Bool) ?? true
+        let shortcut = UserDefaults.standard.string(forKey: "clipboard_hud_shortcut") ?? "cmd_shift_c"
+        gClipboardShortcutKeycode = (shortcut == "cmd_shift_v") ? 9 : 8
+        gIsCursorBasedBrightnessEnabled = (UserDefaults.standard.object(forKey: "cursor_based_brightness") as? Bool) ?? true
     }
 
     public func start() {

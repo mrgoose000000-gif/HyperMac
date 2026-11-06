@@ -75,6 +75,34 @@ public struct ClipItem: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Clipboard HUD Shortcut Selection
+
+public enum ClipboardHUDShortcut: String, CaseIterable, Codable, Sendable {
+    case cmdShiftC = "cmd_shift_c"
+    case cmdShiftV = "cmd_shift_v"
+
+    public var displayShort: String {
+        switch self {
+        case .cmdShiftC: return "⌘⇧C"
+        case .cmdShiftV: return "⌘⇧V"
+        }
+    }
+
+    public var displayTitle: String {
+        switch self {
+        case .cmdShiftC: return "⌘ + ⇧ + C"
+        case .cmdShiftV: return "⌘ + ⇧ + V"
+        }
+    }
+
+    public var keyCode: Int64 {
+        switch self {
+        case .cmdShiftC: return 8  // kVK_ANSI_C
+        case .cmdShiftV: return 9  // kVK_ANSI_V
+        }
+    }
+}
+
 // MARK: - Clipboard Manager (Maccy Replacement Engine)
 
 @MainActor
@@ -111,6 +139,13 @@ public class ClipboardManager: ObservableObject {
     public var hasUnlimitedHistory: Bool { maxItemsCount <= 0 }
     @Published public var ignoreConcealedTypes: Bool = true {
         didSet { UserDefaults.standard.set(ignoreConcealedTypes, forKey: "clipboard_ignore_concealed") }
+    }
+    @Published public var hudShortcut: ClipboardHUDShortcut = .cmdShiftC {
+        didSet {
+            UserDefaults.standard.set(hudShortcut.rawValue, forKey: "clipboard_hud_shortcut")
+            gClipboardShortcutKeycode = hudShortcut.keyCode
+            shortcutText = hudShortcut.displayTitle
+        }
     }
     @Published public var shortcutText: String = "⌘ + ⇧ + C"
     @Published public var isHUDVisible: Bool = false
@@ -158,6 +193,14 @@ public class ClipboardManager: ObservableObject {
         if UserDefaults.standard.object(forKey: "clipboard_ignore_concealed") != nil {
             self.ignoreConcealedTypes = UserDefaults.standard.bool(forKey: "clipboard_ignore_concealed")
         }
+        if let savedShortcut = UserDefaults.standard.string(forKey: "clipboard_hud_shortcut"),
+           let shortcut = ClipboardHUDShortcut(rawValue: savedShortcut) {
+            self.hudShortcut = shortcut
+        } else {
+            self.hudShortcut = .cmdShiftC
+        }
+        gClipboardShortcutKeycode = self.hudShortcut.keyCode
+        self.shortcutText = self.hudShortcut.displayTitle
         self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "clipboard_details_expanded")
 
         // Load stored items
