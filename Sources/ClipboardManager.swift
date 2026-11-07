@@ -47,12 +47,45 @@ public struct ClipItem: Identifiable, Codable, Equatable, Sendable {
     public var plainText: String?
     public var rtfData: Data?
     public var imageData: Data?
+    public var imageFileName: String?
     public var fileURLs: [String]?
     public var colorHex: String?
     public var sourceAppName: String?
     public var sourceBundleID: String?
     public let timestamp: Date
     public var isPinned: Bool
+
+    public init(
+        id: UUID = UUID(),
+        type: ClipType,
+        title: String,
+        detail: String,
+        plainText: String? = nil,
+        rtfData: Data? = nil,
+        imageData: Data? = nil,
+        imageFileName: String? = nil,
+        fileURLs: [String]? = nil,
+        colorHex: String? = nil,
+        sourceAppName: String? = nil,
+        sourceBundleID: String? = nil,
+        timestamp: Date = Date(),
+        isPinned: Bool = false
+    ) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.detail = detail
+        self.plainText = plainText
+        self.rtfData = rtfData
+        self.imageData = imageData
+        self.imageFileName = imageFileName
+        self.fileURLs = fileURLs
+        self.colorHex = colorHex
+        self.sourceAppName = sourceAppName
+        self.sourceBundleID = sourceBundleID
+        self.timestamp = timestamp
+        self.isPinned = isPinned
+    }
 
     public static func == (lhs: ClipItem, rhs: ClipItem) -> Bool {
         lhs.id == rhs.id && lhs.isPinned == rhs.isPinned && lhs.title == rhs.title
@@ -168,13 +201,16 @@ public class ClipboardManager: ObservableObject {
     private var previousApp: NSRunningApplication?
     private var hudPanel: NSPanel?
     private let storageURL: URL
+    public let imagesDirURL: URL
 
     private init() {
-        // Resolve storage path: ~/Library/Application Support/HyperMac/clipboard.json
+        // Resolve storage paths: ~/Library/Application Support/HyperMac/
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let hypermacDir = appSupport.appendingPathComponent("HyperMac", isDirectory: true)
         try? FileManager.default.createDirectory(at: hypermacDir, withIntermediateDirectories: true)
         self.storageURL = hypermacDir.appendingPathComponent("clipboard.json")
+        self.imagesDirURL = hypermacDir.appendingPathComponent("ClipboardImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: self.imagesDirURL, withIntermediateDirectories: true)
 
         // Load Settings
         if UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") != nil {
@@ -324,20 +360,42 @@ public class ClipboardManager: ObservableObject {
         if let image = NSImage(pasteboard: pb) {
             let size = image.size
             if size.width > 2 && size.height > 2 {
-                let thumbnail = image.resized(maxDimension: 200)
+                let clipID = UUID()
+                let fileName = "\(clipID.uuidString).png"
+                let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
+
+                // 1. Extract lossless/high-fidelity original image data
+                var originalData: Data? = pb.data(forType: .png)
+                if originalData == nil, let tiff = pb.data(forType: .tiff) ?? image.tiffRepresentation,
+                   let rep = NSBitmapImageRep(data: tiff) {
+                    originalData = rep.representation(using: .png, properties: [:])
+                }
+                if originalData == nil {
+                    originalData = image.tiffRepresentation
+                }
+
+                // Save full-resolution original to disk
+                if let origData = originalData {
+                    try? origData.write(to: fileURL, options: .atomic)
+                }
+
+                // 2. Generate crisp Retina-quality thumbnail (max 400px) for smooth HUD preview
+                let thumbnail = image.resized(maxDimension: 400)
                 let tiffData = thumbnail?.tiffRepresentation
                 let bitmap = tiffData.flatMap { NSBitmapImageRep(data: $0) }
-                let jpgData = bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.65])
+                let thumbData = bitmap?.representation(using: .png, properties: [:])
+                    ?? bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
 
                 let title = "Ảnh (\(Int(size.width)) × \(Int(size.height))px)"
                 let detail = "Định dạng ảnh clipboard"
 
                 appendClip(ClipItem(
-                    id: UUID(),
+                    id: clipID,
                     type: .image,
                     title: title,
                     detail: detail,
-                    imageData: jpgData,
+                    imageData: thumbData,
+                    imageFileName: fileName,
                     sourceAppName: appName,
                     sourceBundleID: bundleID,
                     timestamp: Date(),
@@ -423,7 +481,9 @@ public class ClipboardManager: ObservableObject {
                 return p1 == p2
             }
             if $0.type == .image && item.type == .image {
-                return $0.imageData == item.imageData
+                if let f1 = $0.imageFileName, let f2 = item.imageFileName, f1 == f2 { return true }
+                if let d1 = $0.imageData, let d2 = item.imageData, d1 == d2 { return true }
+                return false
             }
             if let f1 = $0.fileURLs, let f2 = item.fileURLs {
                 return f1 == f2
@@ -431,6 +491,9 @@ public class ClipboardManager: ObservableObject {
             return false
         }) {
             let existing = items.remove(at: index)
+            if let oldFile = existing.imageFileName, oldFile != item.imageFileName {
+                deleteFileNamed(oldFile)
+            }
             var updated = item
             updated.isPinned = existing.isPinned // Preserve pin state
             insertSorted(updated)
@@ -461,6 +524,12 @@ public class ClipboardManager: ObservableObject {
         let allowedNonPinned = maxItemsCount <= 0
             ? nonPinned.count
             : max(0, maxItemsCount - pinned.count)
+        if allowedNonPinned < nonPinned.count {
+            let excess = nonPinned.dropFirst(allowedNonPinned)
+            for item in excess {
+                deleteAssociatedImage(for: item)
+            }
+        }
         let trimmedNonPinned = Array(nonPinned.prefix(allowedNonPinned))
         self.items = pinned + trimmedNonPinned
         clampSelection()
@@ -477,6 +546,7 @@ public class ClipboardManager: ObservableObject {
     }
 
     public func deleteItem(_ item: ClipItem) {
+        deleteAssociatedImage(for: item)
         items.removeAll(where: { $0.id == item.id })
         saveItemsToDisk()
         if selectedIndex >= filteredItems.count {
@@ -486,9 +556,58 @@ public class ClipboardManager: ObservableObject {
 
     public func clearAllHistory() {
         // Keep pinned items, delete others
+        let unpinned = items.filter { !$0.isPinned }
+        for item in unpinned {
+            deleteAssociatedImage(for: item)
+        }
         items = items.filter { $0.isPinned }
         saveItemsToDisk()
         selectedIndex = 0
+    }
+
+    // MARK: - Reorder Pinned Items
+
+    public enum MoveDirection {
+        case up
+        case down
+    }
+
+    public func canMoveUp(id: UUID) -> Bool {
+        guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isPinned else { return false }
+        return idx > 0 && items[idx - 1].isPinned
+    }
+
+    public func canMoveDown(id: UUID) -> Bool {
+        guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isPinned else { return false }
+        return idx < items.count - 1 && items[idx + 1].isPinned
+    }
+
+    public func movePinnedItem(id: UUID, direction: MoveDirection) {
+        guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isPinned else { return }
+
+        switch direction {
+        case .up:
+            if idx > 0 && items[idx - 1].isPinned {
+                items.swapAt(idx, idx - 1)
+                saveItemsToDisk()
+                if let newFilteredIdx = filteredItems.firstIndex(where: { $0.id == id }) {
+                    selectedIndex = newFilteredIdx
+                }
+            }
+        case .down:
+            if idx < items.count - 1 && items[idx + 1].isPinned {
+                items.swapAt(idx, idx + 1)
+                saveItemsToDisk()
+                if let newFilteredIdx = filteredItems.firstIndex(where: { $0.id == id }) {
+                    selectedIndex = newFilteredIdx
+                }
+            }
+        }
+    }
+
+    public func moveSelectedPinned(direction: MoveDirection) {
+        guard let item = selectedItem, item.isPinned else { return }
+        movePinnedItem(id: item.id, direction: direction)
     }
 
     // MARK: - Selection & Keyboard Navigation
@@ -585,7 +704,11 @@ public class ClipboardManager: ObservableObject {
         guard !pendingClearAllConfirm else {
             pendingClearAllConfirm = false
             pendingClearAllToken &+= 1
-            let removed = items.filter { !$0.isPinned }.count
+            let unpinned = items.filter { !$0.isPinned }
+            for item in unpinned {
+                deleteAssociatedImage(for: item)
+            }
+            let removed = unpinned.count
             items = items.filter { $0.isPinned }
             saveItemsToDisk()
             clampSelection()
@@ -623,6 +746,10 @@ public class ClipboardManager: ObservableObject {
     private func removeItems(olderThan days: Int) -> Int {
         guard days > 0 else { return 0 }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let expired = items.filter { !$0.isPinned && $0.timestamp < cutoff }
+        for item in expired {
+            deleteAssociatedImage(for: item)
+        }
         let before = items.count
         items.removeAll { !$0.isPinned && $0.timestamp < cutoff }
         return before - items.count
@@ -641,8 +768,22 @@ public class ClipboardManager: ObservableObject {
         if let text = item.plainText {
             pb.setString(text, forType: .string)
         }
-        if let imgData = item.imageData, let img = NSImage(data: imgData) {
-            pb.writeObjects([img])
+        if item.type == .image {
+            var fullImage: NSImage?
+            if let fileName = item.imageFileName {
+                let fileURL = imagesDirURL.appendingPathComponent(fileName)
+                if FileManager.default.fileExists(atPath: fileURL.path),
+                   let data = try? Data(contentsOf: fileURL) {
+                    fullImage = NSImage(data: data)
+                    pb.setData(data, forType: .png)
+                }
+            }
+            if fullImage == nil, let imgData = item.imageData, let img = NSImage(data: imgData) {
+                fullImage = img
+            }
+            if let img = fullImage {
+                pb.writeObjects([img])
+            }
         }
         if let paths = item.fileURLs {
             let urls = paths.map { NSURL(fileURLWithPath: $0) }
@@ -679,6 +820,34 @@ public class ClipboardManager: ObservableObject {
                 up.flags = .maskCommand
                 up.post(tap: .cghidEventTap)
             }
+        }
+    }
+
+    // MARK: - Image File Management
+
+    public func imageURL(for item: ClipItem) -> URL? {
+        guard item.type == .image else { return nil }
+        if let fileName = item.imageFileName {
+            let url = imagesDirURL.appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        let fallback = imagesDirURL.appendingPathComponent("\(item.id.uuidString).png")
+        if FileManager.default.fileExists(atPath: fallback.path) { return fallback }
+        return nil
+    }
+
+    public func deleteAssociatedImage(for item: ClipItem) {
+        guard item.type == .image else { return }
+        if let fileName = item.imageFileName {
+            deleteFileNamed(fileName)
+        }
+        deleteFileNamed("\(item.id.uuidString).png")
+    }
+
+    private func deleteFileNamed(_ fileName: String) {
+        let fileURL = imagesDirURL.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            try? FileManager.default.removeItem(at: fileURL)
         }
     }
 
@@ -781,16 +950,18 @@ public class ClipboardManager: ObservableObject {
             let data = try Data(contentsOf: storageURL)
             var loaded = try JSONDecoder().decode([ClipItem].self, from: data)
 
-            // Compress existing large image clips to save disk & RAM footprint
+            // Migrate legacy image items to disk storage
             var modified = false
             for i in 0..<loaded.count {
-                if loaded[i].type == .image, let imgData = loaded[i].imageData, imgData.count > 40_000 {
-                    if let nsImg = NSImage(data: imgData),
-                       let down = nsImg.resized(maxDimension: 200),
-                       let tiff = down.tiffRepresentation,
-                       let rep = NSBitmapImageRep(data: tiff),
-                       let compressed = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.65]) {
-                        loaded[i].imageData = compressed
+                if loaded[i].type == .image {
+                    let fileName = loaded[i].imageFileName ?? "\(loaded[i].id.uuidString).png"
+                    let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
+
+                    if !FileManager.default.fileExists(atPath: fileURL.path), let imgData = loaded[i].imageData {
+                        try? imgData.write(to: fileURL, options: .atomic)
+                    }
+                    if loaded[i].imageFileName == nil {
+                        loaded[i].imageFileName = fileName
                         modified = true
                     }
                 }
@@ -799,8 +970,26 @@ public class ClipboardManager: ObservableObject {
             if modified {
                 saveItemsToDisk()
             }
+            cleanupOrphanImages(validItems: loaded)
         } catch {
             appLog("Failed to load clipboard items: \(error.localizedDescription)")
+        }
+    }
+
+    private func cleanupOrphanImages(validItems: [ClipItem]) {
+        DispatchQueue.global(qos: .utility).async {
+            guard let files = try? FileManager.default.contentsOfDirectory(atPath: self.imagesDirURL.path) else { return }
+            var validFileNames = Set<String>()
+            for item in validItems where item.type == .image {
+                if let f = item.imageFileName { validFileNames.insert(f) }
+                validFileNames.insert("\(item.id.uuidString).png")
+            }
+            for file in files {
+                if !validFileNames.contains(file) && (file.hasSuffix(".png") || file.hasSuffix(".jpg") || file.hasSuffix(".tiff")) {
+                    let fileURL = self.imagesDirURL.appendingPathComponent(file)
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            }
         }
     }
 

@@ -2831,7 +2831,8 @@ struct FooterView: View {
                     HStack(spacing: 3.5) {
                         Image(systemName: updateManager.hasNewUpdate ? "sparkles" : "arrow.triangle.2.circlepath")
                             .font(.system(size: FS.caption))
-                        Text(updateManager.hasNewUpdate ? tr("Có bản v\(updateManager.latestVersionString)", "New v\(updateManager.latestVersionString)") : tr("Cập nhật", "Updates"))
+                        let cleanVer = updateManager.latestVersionString.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+                        Text(updateManager.hasNewUpdate ? tr("Có bản v\(cleanVer)", "New v\(cleanVer)") : tr("Cập nhật", "Updates"))
                             .font(.system(size: FS.caption, weight: updateManager.hasNewUpdate ? .semibold : .medium))
                             .lineLimit(1)
                     }

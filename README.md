@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.0-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.0)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.1)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,11 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.1] — 2026-11-07
+- **📋 Clipboard Lưu ảnh gốc Lossless:** Lưu trữ ảnh chất lượng cao riêng biệt trong thư mục `ClipboardImages`, dán ra giữ nguyên 100% độ sắc nét và nền trong suốt PNG/TIFF, tự động xóa tệp ảnh tương ứng khi xóa mục trên Clipboard.
+- **📌 Đổi thứ tự ghi chú ghim (⌘↑ / ⌘↓):** Cho phép hoán đổi vị trí ghi chú ghim nhanh chóng bằng phím tắt `⌘↑` / `⌘↓` hoặc nút bấm trực quan `▲` / `▼`, hiển thị rõ số phím tắt `1`–`9` kèm huy hiệu ghim cam để dán tức thì.
+- **🔄 Fix lỗi Auto-Updater & Asset Release:** Trình cập nhật tự động chỉ nhận file ZIP, loại trừ nhầm file DMG, sửa lỗi hiển thị thừa ký tự 'vv' (`Có bản v1.9.1`) và gỡ bỏ file DMG khỏi release.
 
 ### [v1.9.0] — 2026-11-06
 - **🛡️ Fix khóa sạc 80% trên MacBook Pro Apple Silicon:** Tích hợp Apple Native PowerUI MCL và bộ key SMC firmware mới (`bfF0`/`bfD0`/`bfE0`), đảm bảo khóa sạc 80% chuẩn xác không bị nhảy lên 100%.

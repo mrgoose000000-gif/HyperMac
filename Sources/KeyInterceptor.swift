@@ -457,6 +457,22 @@ private func eventTapCallback(
             let hasCommand = flags.contains(.maskCommand)
             let hasControl = flags.contains(.maskControl)
             let hasOption = flags.contains(.maskAlternate)
+            let hasShift = flags.contains(.maskShift)
+
+            // Command + Up/Down (⌘↑ / ⌘↓) -> Reorder selected pinned item
+            if hasCommand && !hasControl && !hasOption && !hasShift {
+                if keycode == 126 { // Up Arrow (⌘↑)
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.moveSelectedPinned(direction: .up)
+                    }
+                    return nil
+                } else if keycode == 125 { // Down Arrow (⌘↓)
+                    DispatchQueue.main.async {
+                        ClipboardManager.shared.moveSelectedPinned(direction: .down)
+                    }
+                    return nil
+                }
+            }
 
             // Let system-level shortcuts (⌘C, ⌘V, ⌘A...) pass through untouched.
             if !hasCommand && !hasControl {

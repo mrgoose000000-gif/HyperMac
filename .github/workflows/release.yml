@@ -154,9 +154,7 @@ jobs:
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: HyperMac ${{ steps.vars.outputs.tag }}
-          files: |
-            build/HyperMac.zip
-            build/HyperMac.dmg
+          files: build/HyperMac.zip
           draft: false
           # Tag có hậu tố (v1.6.0-rc1, v1.6.0-test) → release nháp thử nghiệm,
           # không bị UpdateManager coi là bản chính thức.

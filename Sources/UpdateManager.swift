@@ -67,7 +67,7 @@ struct VersionManifest: Decodable {
 public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     public static let shared = UpdateManager()
 
-    public static let currentVersion: String = "1.9.0"
+    public static let currentVersion: String = "1.9.1"
 
     @Published public var state: UpdateState = .idle
     @Published public var downloadProgress: Double = 0.0
@@ -164,9 +164,11 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
                         let notes = release.body ?? release.name ?? "Bản cập nhật mới dành cho HyperMac."
                         let releasePage = URL(string: release.htmlUrl)
 
-                        // Find zip asset
+                        // Find zip asset specifically (.zip only, reject .dmg or disk image)
                         let zipAsset = release.assets.first(where: {
-                            $0.name.lowercased().hasSuffix(".zip") || $0.name.lowercased().contains("hypermac")
+                            $0.name.lowercased().hasSuffix(".zip")
+                        }) ?? release.assets.first(where: {
+                            $0.name.lowercased().contains("hypermac") && !$0.name.lowercased().hasSuffix(".dmg")
                         })
                         let dlUrl = zipAsset.flatMap { URL(string: $0.browserDownloadUrl) }
 
@@ -256,15 +258,16 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
         htmlUrl: URL?,
         silent: Bool
     ) {
-        self.latestVersionString = latestVer
+        let cleanVer = latestVer.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        self.latestVersionString = cleanVer
         self.releaseNotes = notes
         self.downloadUrl = downloadUrl
         self.htmlUrl = htmlUrl
 
-        if Self.isVersion(latestVer, greaterThan: Self.currentVersion) {
+        if Self.isVersion(cleanVer, greaterThan: Self.currentVersion) {
             self.hasNewUpdate = true
             self.state = .updateAvailable(
-                version: latestVer,
+                version: cleanVer,
                 notes: notes,
                 downloadUrl: downloadUrl,
                 htmlUrl: htmlUrl

@@ -148,27 +148,45 @@ public struct ClipboardOverlayView: View {
             manager.pasteItem(item)
         } label: {
             HStack(alignment: .top, spacing: 8) {
-                // Quick Paste Number Badge (1..9) or Pin
-                ZStack {
-                    if item.isPinned {
+                // Quick Paste Number Badge (1..9) + Pin Indicator
+                ZStack(alignment: .topTrailing) {
+                    if let digit = shortcutDigit {
+                        Text(digit)
+                            .font(.system(size: FS.caption, weight: .bold, design: .rounded))
+                            .foregroundStyle(isSelected ? Color.white : (item.isPinned ? Color.orange : Color.secondary))
+                            .frame(width: 22, height: 22)
+                            .background(
+                                RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                    .fill(item.isPinned
+                                          ? Color.orange.opacity(isSelected ? 0.35 : 0.15)
+                                          : (isSelected ? Color.accentColor : Color.primary.opacity(0.06)))
+                            )
+                        if item.isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 7))
+                                .foregroundStyle(Color.orange)
+                                .offset(x: 3, y: -3)
+                        }
+                    } else if item.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: FS.caption))
                             .foregroundStyle(.orange)
-                    } else if let digit = shortcutDigit {
-                        Text(digit)
-                            .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
-                            .foregroundStyle(isSelected ? Color.white : .secondary)
+                            .frame(width: 22, height: 22)
+                            .background(
+                                RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                    .fill(Color.orange.opacity(isSelected ? 0.35 : 0.15))
+                            )
                     } else {
                         Image(systemName: item.type.icon)
                             .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .background(
+                                RoundedRectangle(cornerRadius: Rad.sm, style: .continuous)
+                                    .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.06))
+                            )
                     }
                 }
-                .frame(width: 18, height: 18)
-                .background(
-                    RoundedRectangle(cornerRadius: Rad.sm)
-                        .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.06))
-                )
                 .padding(.top, 2)
 
                 // Content Column
@@ -192,7 +210,35 @@ public struct ClipboardOverlayView: View {
 
                         // Action Buttons on Hover
                         if isHovered || isSelected {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 5) {
+                                if item.isPinned {
+                                    // Move Up (⌘↑)
+                                    if manager.canMoveUp(id: item.id) {
+                                        Button {
+                                            manager.movePinnedItem(id: item.id, direction: .up)
+                                        } label: {
+                                            Image(systemName: "arrow.up")
+                                                .font(.system(size: FS.caption, weight: .bold))
+                                                .foregroundStyle(Color.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(tr("Đổi lên số trước (⌘↑)", "Move up (⌘↑)"))
+                                    }
+
+                                    // Move Down (⌘↓)
+                                    if manager.canMoveDown(id: item.id) {
+                                        Button {
+                                            manager.movePinnedItem(id: item.id, direction: .down)
+                                        } label: {
+                                            Image(systemName: "arrow.down")
+                                                .font(.system(size: FS.caption, weight: .bold))
+                                                .foregroundStyle(Color.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(tr("Đổi xuống số sau (⌘↓)", "Move down (⌘↓)"))
+                                    }
+                                }
+
                                 // Toggle Pin
                                 Button {
                                     manager.togglePin(item)
@@ -221,7 +267,17 @@ public struct ClipboardOverlayView: View {
                     // Main Content Render by Type
                     switch item.type {
                     case .image:
-                        if let imgData = item.imageData, let nsImg = NSImage(data: imgData) {
+                        let previewImg: NSImage? = {
+                            if let data = item.imageData, let img = NSImage(data: data) {
+                                return img
+                            }
+                            if let url = manager.imageURL(for: item), let data = try? Data(contentsOf: url) {
+                                return NSImage(data: data)
+                            }
+                            return nil
+                        }()
+
+                        if let nsImg = previewImg {
                             HStack(spacing: 8) {
                                 Image(nsImage: nsImg)
                                     .resizable()
@@ -367,6 +423,7 @@ public struct ClipboardOverlayView: View {
             HStack(spacing: 8) {
                 legendItem(key: "↵", label: tr("Dán", "Paste"))
                 legendItem(key: "1-9", label: tr("Nhanh", "Quick"))
+                legendItem(key: "⌘↑↓", label: tr("Đổi vị trí", "Reorder"))
                 legendItem(key: "⌥P", label: tr("Ghim", "Pin"))
                 legendItem(key: "⌥⌫", label: tr("Xóa", "Delete"))
                 legendItem(key: "⎋", label: tr("Đóng", "Close"))
