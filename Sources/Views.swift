@@ -2970,20 +2970,21 @@ struct UpdateModalView: View {
                     .frame(maxWidth: .infinity, minHeight: 120)
 
                 case .updateAvailable(let ver, let notes, _, _):
+                    let displayVer = ver.hasPrefix("v") || ver.hasPrefix("V") ? ver : "v\(ver)"
                     VStack(spacing: 10) {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: FS.subhead))
                                 .foregroundStyle(.secondary)
 
-                            Text(tr("Đã có phiên bản mới: v\(ver)", "New version available: v\(ver)"))
+                            Text(tr("Đã có phiên bản mới: \(displayVer)", "New version available: \(displayVer)"))
                                 .font(.system(size: FS.body, weight: .semibold))
                                 .foregroundStyle(Color.accentColor)
                         }
 
                         // Release Notes Box
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(tr("Điểm mới trong bản v\(ver):", "What's new in v\(ver):"))
+                            Text(tr("Điểm mới trong bản \(displayVer):", "What's new in \(displayVer):"))
                                 .font(.system(size: FS.caption, weight: .semibold))
                                 .foregroundStyle(.secondary)
 

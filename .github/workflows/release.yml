@@ -140,7 +140,7 @@ jobs:
           codesign -dv --verbose=4 build/HyperMac.app 2>&1 | grep -F "Authority=HyperMac Self-Signed"
           codesign -d -r- build/HyperMac.app 2>&1 | tail -1
 
-      - name: Determine Release Tag
+      - name: Determine Release Tag and Notes
         id: vars
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -148,12 +148,14 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
+          python3 -c "import json; data = json.load(open('version.json')); print(data.get('notes', ''))" > release_notes.md 2>/dev/null || true
 
       - name: Create GitHub Release and Upload Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: HyperMac ${{ steps.vars.outputs.tag }}
+          body_path: release_notes.md
           files: build/HyperMac.zip
           draft: false
           # Tag có hậu tố (v1.6.0-rc1, v1.6.0-test) → release nháp thử nghiệm,
