@@ -70,6 +70,10 @@ private func triggerMissionControl() {
 }
 
 // MARK: - Event Tap Callback (Session level, zero main-sync)
+//
+// The tap only borrows `event` from WindowServer — always hand it back with
+// passUnretained. passRetained adds an extra retain that is never balanced, so
+// every key/mouse event (plus its HIDEvent) leaks and memory grows forever.
 
 private func eventTapCallback(
     proxy: CGEventTapProxy,
@@ -79,7 +83,7 @@ private func eventTapCallback(
 ) -> Unmanaged<CGEvent>? {
     // 0. Synthetic event bypass: allow HyperMac-synthesized events (e.g. Cmd+C, Opt+Cmd+V) to pass through without interception
     if gIsSynthesizingEvent {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     // 1. Safety handler for system tap disable
@@ -91,7 +95,7 @@ private func eventTapCallback(
                 KeyInterceptor.shared.stop()
             }
         }
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if type == .tapDisabledByTimeout {
@@ -99,7 +103,7 @@ private func eventTapCallback(
         if let tap = gCurrentTap {
             CGEvent.tapEnable(tap: tap, enable: true)
         }
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if type == .flagsChanged {
@@ -249,7 +253,7 @@ private func eventTapCallback(
     // 4. Media Keys (Brightness UP/DOWN F1/F2)
     if type.rawValue == NX_SYSDEFINED {
         guard let nsEvent = NSEvent(cgEvent: event) else {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         if nsEvent.subtype.rawValue == 8 {
@@ -261,7 +265,7 @@ private func eventTapCallback(
             if keyState && (keyCode == NX_KEYTYPE_BRIGHTNESS_UP || keyCode == NX_KEYTYPE_BRIGHTNESS_DOWN) {
                 // If cursor-based brightness is disabled, do NOT intercept! Pass through to macOS native.
                 if !gIsCursorBasedBrightnessEnabled {
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 }
                 let isUp = (keyCode == NX_KEYTYPE_BRIGHTNESS_UP)
                 DispatchQueue.main.async {
@@ -382,7 +386,7 @@ private func eventTapCallback(
         if keycode == 145 || keycode == 120 || keycode == 144 || keycode == 122 {
             // If cursor-based brightness is disabled, do NOT intercept! Pass through to macOS native.
             if !gIsCursorBasedBrightnessEnabled {
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
             let isUp = (keycode == 145 || keycode == 120)
             DispatchQueue.main.async {
@@ -632,7 +636,7 @@ private func eventTapCallback(
         }
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - KeyInterceptor Singleton
