@@ -626,6 +626,12 @@ private func eventTapCallback(
                 appLog("⌨️ Shortcut: Move Window to Previous Display")
                 DispatchQueue.main.async { WindowSnapManager.shared.moveActiveWindowToDisplay(isNext: false) }
                 return nil
+            case 11: // 'B' Key -> Toggle Menu Bar Hider (⌘⌥B)
+                if gIsMenuBarHiderEnabled {
+                    appLog("⌨️ Shortcut: Toggle Menu Bar Hider (⌘⌥B)")
+                    DispatchQueue.main.async { MenuBarHiderManager.shared.toggle() }
+                    return nil
+                }
             default:
                 break
             }

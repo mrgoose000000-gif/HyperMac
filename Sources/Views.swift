@@ -635,6 +635,137 @@ struct DisplaysTabView: View {
     }
 }
 
+// MARK: - Menu Bar Hider (Status Bar Icon Manager) Card View
+
+struct MenuBarHiderCardView: View {
+    @ObservedObject var manager: MenuBarHiderManager = MenuBarHiderManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "menubar.rectangle")
+                    .font(.system(size: FS.body, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text(tr("Gom gọn Menu Bar (Menu Bar Hider)", "Menu Bar Hider"))
+                            .font(.system(size: FS.label, weight: .semibold))
+                            .lineLimit(1)
+                        if manager.isEnabled {
+                            Text(manager.isCollapsed ? tr("Đang ẩn", "Collapsed") : tr("Đang mở", "Expanded"))
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(manager.isCollapsed ? Color.orange.opacity(0.18) : Color.green.opacity(0.18)))
+                                .foregroundStyle(manager.isCollapsed ? Color.orange : Color.green)
+                        }
+                    }
+                    Text(tr("Gom các icon trên thanh Menu Bar vào một ô nhỏ, mở rộng/thu gọn tức thì", "Collapse menu bar icons into a compact drawer, expand/collapse on demand"))
+                        .font(.system(size: FS.caption))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $manager.isEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+            }
+
+            if manager.isEnabled {
+                Divider().opacity(0.35)
+
+                VStack(spacing: 7) {
+                    // Quick Action & Shortcut Row
+                    HStack {
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                manager.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: manager.isCollapsed ? "chevron.left" : "chevron.right")
+                                    .font(.system(size: FS.caption, weight: .bold))
+                                Text(manager.isCollapsed ? tr("Bấm để mở rộng icon", "Click to expand icons") : tr("Bấm để thu gọn icon", "Click to collapse icons"))
+                                    .font(.system(size: FS.caption, weight: .medium))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4.5)
+                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.accentColor.opacity(0.12)))
+                            .foregroundStyle(Color.accentColor)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        // Shortcut Badge
+                        HStack(spacing: 3) {
+                            Text("⌘")
+                            Text("⌥")
+                            Text("B")
+                        }
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2.5)
+                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+                        .foregroundStyle(.secondary)
+                    }
+
+                    // Auto-collapse picker
+                    HStack(spacing: 6) {
+                        Image(systemName: "timer")
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                        Text(tr("Tự động thu gọn sau:", "Auto-collapse after:"))
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Picker("", selection: $manager.autoCollapseDuration) {
+                            Text(tr("Tắt (Thủ công)", "Off (Manual)")).tag(0)
+                            Text(tr("5 giây", "5 seconds")).tag(5)
+                            Text(tr("10 giây", "10 seconds")).tag(10)
+                            Text(tr("15 giây", "15 seconds")).tag(15)
+                        }
+                        .pickerStyle(.menu)
+                        .controlSize(.mini)
+                        .frame(width: 110)
+                    }
+
+                    // Guide box
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.orange)
+                            Text(tr("Cách sắp xếp icon theo ý muốn:", "How to arrange icons:"))
+                                .font(.system(size: FS.caption, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        }
+                        Text(tr("1. Giữ phím ⌘ (Command) và kéo các icon bạn muốn ẩn sang bên trái của Vách ngăn (|).", "1. Hold ⌘ (Command) and drag icons you want to hide to the left of the divider (|)."))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Text(tr("2. Các icon ở bên phải Vách ngăn sẽ luôn hiển thị.", "2. Icons to the right of the divider will always stay visible."))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Text(tr("3. Bấm nút < trên thanh menu hoặc bấm ⌘⌥B để ẩn/mở nhanh.", "3. Click < on the menu bar or press ⌘⌥B to quickly toggle."))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.035)))
+                }
+            }
+        }
+        .padding(10)
+        .cardBackground()
+    }
+}
+
 // MARK: - Caffeinate (Anti-Sleep) Card View
 
 struct CaffeinateCardView: View {
@@ -988,6 +1119,9 @@ struct ShortcutsTabView: View {
 
                 // Caffeinate (Anti-Sleep) Control Card
                 CaffeinateCardView(caffeinateManager: caffeinateManager)
+
+                // Menu Bar Hider (Gom gọn thanh Status Bar) Card
+                MenuBarHiderCardView()
 
                 // Finder Cut & Paste (Windows-style ⌘X ➔ ⌘V) Card
                 VStack(alignment: .leading, spacing: 8) {

@@ -76,6 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         _ = PermissionsManager.shared
         _ = FanManager.shared
         _ = ScreenshotManager.shared
+        _ = MenuBarHiderManager.shared
         _ = ActivationManager.shared
 
         // Tự động mở bảng kích hoạt nếu đây là lần đầu người dùng khởi động ứng dụng

@@ -7,9 +7,9 @@
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/❤️_Donate-Ủng_hộ-ff69b4.svg)](#-ủng-hộ-phát-triển-donate)
 
-> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4...)**. Ứng dụng gom trọn tính năng của **8 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
+> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4...)**. Ứng dụng gom trọn tính năng của **9 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
-> **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
+> **Bartender & Hidden Bar** (Gom gọn thanh Menu Bar) + **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
 
 ---
 
@@ -223,6 +223,7 @@ chmod +x build.sh
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
 ### [v1.9.2] — 2026-11-08
+- **🗄️ Gom gọn Menu Bar (Menu Bar Hider):** Gom toàn bộ các biểu tượng ứng dụng trên thanh trạng thái vào một ô nhỏ, mở rộng/thu gọn tức thì chỉ với 1 click hoặc phím tắt `⌘⌥B`, hỗ trợ tự động ẩn sau 5s/10s, 0% CPU & siêu nhẹ chuẩn native Swift!
 - **🪟 Chuẩn hóa thứ tự Alt+Tab:** Đồng bộ 100% theo Z-order thời gian thực từ macOS WindowServer. Chuyển đổi qua lại giữa 2 cửa sổ gần nhất chính xác tuyệt đối, không còn bị nhảy lệch thứ tự khi chuyển tab nhanh.
 - **🔋 Khắc phục triệt để lỗi hỏi mật khẩu liên tục khi Khóa sạc 80%:** Loại bỏ vòng lặp gọi chéo giữa trình quản lý Pin và Quạt tản nhiệt. Tích hợp Deep Probe nhận diện Helper v2 đã cài đặt để không bao giờ hỏi lại mật khẩu thừa.
 - **🛡️ Hệ thống Quét Quyền Thực Tế (Deep Probe):** Bổ sung nút 'Quét lại quyền' và kiểm tra quyền thật (Accessibility, Ghi màn hình, Helper điều khiển phần cứng), hiển thị banner cảnh báo nổi bật màu cam nếu quyền bị thiếu hoặc bị bỏ qua.
