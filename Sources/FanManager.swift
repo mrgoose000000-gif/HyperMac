@@ -99,6 +99,7 @@ public final class FanManager: ObservableObject {
     }
 
     public func installHelperIfNeeded() {
+        guard !isHelperReady else { return }
         BatteryManager.shared.installHelper { [weak self] _ in
             Task { @MainActor in self?.checkHelper() }
         }
@@ -178,7 +179,7 @@ public final class FanManager: ObservableObject {
         }
     }
 
-    private func checkHelper() {
+    public func checkHelper() {
         DispatchQueue.global(qos: .utility).async {
             let (out, code) = shell("sudo -n \(FanManager.helperPath) version 2>/dev/null")
             var ver = 0

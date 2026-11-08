@@ -50,6 +50,25 @@ public struct PermissionsCardView: View {
 
                     Spacer()
 
+                    // Re-scan Button
+                    Button {
+                        permissionsManager.runDeepProbe()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: FS.caption))
+                                .rotationEffect(.degrees(permissionsManager.isProbing ? 360 : 0))
+                                .animation(permissionsManager.isProbing ? Animation.linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: permissionsManager.isProbing)
+                            Text(permissionsManager.isProbing ? tr("Đang quét...", "Scanning...") : tr("Quét lại", "Re-scan"))
+                                .font(.system(size: FS.caption))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2.5)
+                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(permissionsManager.isProbing)
+
                     // Status Pill
                     HStack(spacing: 5) {
                         Circle()
@@ -78,6 +97,26 @@ public struct PermissionsCardView: View {
                 VStack(spacing: 8) {
                     Divider()
                         .padding(.horizontal, 4)
+
+                    // Warning Banner when any permission is missing or was skipped
+                    if !permissionsManager.allGranted {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: FS.body))
+                                .foregroundStyle(Tone.warn)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tr("Phát hiện quyền chưa được cấp hoặc bị Bỏ qua!", "Unauthenticated or skipped permissions detected!"))
+                                    .font(.system(size: FS.caption, weight: .bold))
+                                    .foregroundStyle(Tone.warn)
+                                Text(tr("Nếu bạn từng bấm 'Hủy' / 'Bỏ qua' ở hộp thoại Touch ID hoặc chưa gạt bật trong Cài đặt hệ thống, tính năng (Khóa sạc 80%, Quạt hoặc AltTab) sẽ không hoạt động. Hãy bấm nút cấp quyền bên dưới để kích hoạt.", "If you clicked 'Cancel' / 'Skip' on Touch ID or haven't enabled in System Settings, features (80% lock, Fan, AltTab) will not work. Please click grant buttons below."))
+                                    .font(.system(size: FS.caption))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Tone.warn.opacity(0.12)))
+                    }
 
                     // 1. Accessibility (Trợ năng) - Bắt buộc
                     permissionRow(
@@ -109,16 +148,21 @@ public struct PermissionsCardView: View {
                         }
                     )
 
-                    // 3. SMC Helper (Khóa sạc 80%) - Phần cứng
+                    // 3. SMC Helper (Khóa sạc 80% & Quạt) - Phần cứng
+                    let helperVer = BatteryManager.shared.helperVersion
+                    let helperActionTitle = (helperVer > 0 && helperVer < 2)
+                        ? tr("Cập nhật v2", "Update to v2")
+                        : tr("Cài đặt Helper", "Install Helper")
+
                     permissionRow(
-                        title: tr("3. Quản lý nguồn & Khóa sạc 80% (SMC)", "3. Power & Charge Limiter (SMC)"),
+                        title: tr("3. Quản lý nguồn SMC & Quạt (Khóa sạc 80%)", "3. Power & Fan SMC Control (80% Lock)"),
                         tag: tr("PHẦN CỨNG", "HARDWARE"),
                         tagColor: .secondary,
                         icon: "bolt.batteryblock.fill",
                         iconColor: .secondary,
                         isGranted: permissionsManager.hasSMCHelper,
-                        reason: tr("Giao tiếp trực tiếp với chip điều khiển nguồn SMC, tự động ngắt dòng điện khi pin đạt 80% để triệt tiêu nguy cơ chai pin, phồng pin.", "Communicates directly with SMC to stop charging at 80%, bypassing battery to prevent degradation."),
-                        actionTitle: tr("Cài đặt Helper", "Install Helper"),
+                        reason: tr("Giao tiếp trực tiếp với chip SMC để ngắt dòng sạc ở 80% (chạy điện trực tiếp AC) và điều khiển quạt tản nhiệt. Yêu cầu nhập Touch ID / mật khẩu máy 1 lần.", "Direct SMC hardware access to bypass charging at 80% and adjust fan speeds. Requires 1-time admin password / Touch ID."),
+                        actionTitle: helperActionTitle,
                         action: {
                             permissionsManager.installSMCHelper()
                         }
@@ -191,28 +235,38 @@ public struct PermissionsCardView: View {
                 if isGranted {
                     HStack(spacing: 5) {
                         Circle().fill(Tone.good).frame(width: 6, height: 6)
-                        Text(tr("Đã cấp", "Granted"))
+                        Text(tr("Đã cấp thật", "Verified"))
                             .font(.system(size: FS.caption, weight: .semibold))
                             .lineLimit(1)
                     }
                     .foregroundStyle(Tone.good)
                 } else {
-                    Button {
-                        action()
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text(actionTitle)
-                                .font(.system(size: FS.caption, weight: .semibold))
+                    VStack(alignment: .trailing, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Circle().fill(Tone.warn).frame(width: 5, height: 5)
+                            Text(tr("Chưa cấp / Bỏ qua", "Missing / Skipped"))
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Tone.warn)
                                 .lineLimit(1)
-                            Image(systemName: "arrow.up.forward.app")
-                                .font(.system(size: FS.caption))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.accentColor))
-                        .foregroundStyle(Color.white)
+
+                        Button {
+                            action()
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(actionTitle)
+                                    .font(.system(size: FS.caption, weight: .semibold))
+                                    .lineLimit(1)
+                                Image(systemName: "arrow.up.forward.app")
+                                    .font(.system(size: FS.caption))
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3.5)
+                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.accentColor))
+                            .foregroundStyle(Color.white)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .fixedSize()

@@ -155,9 +155,6 @@ public class WindowManager: ObservableObject {
         }
     }
 
-    // Persistent MRU stack in memory to guarantee true back-and-forth AltTab behavior
-    private var mruWindowIDs: [CGWindowID] = []
-
     public var isModifierHeld: Bool = false
     private var overlayPanel: NSPanel?
     private var isCommitInProgress: Bool = false
@@ -330,21 +327,8 @@ public class WindowManager: ObservableObject {
             }
         }
 
-        // 3. Apply true MRU Sorting from mruWindowIDs stack
-        if !mruWindowIDs.isEmpty {
-            items.sort { a, b in
-                guard let widA = a.windowID, let widB = b.windowID else { return false }
-                let idxA = mruWindowIDs.firstIndex(of: widA)
-                let idxB = mruWindowIDs.firstIndex(of: widB)
-                if let iA = idxA, let iB = idxB {
-                    return iA < iB
-                }
-                if idxA != nil { return true }
-                if idxB != nil { return false }
-                return false
-            }
-        }
-
+        // 3. True Screen Z-Order (Frontmost to Backmost)
+        // CGWindowListCopyWindowInfo naturally maintains the exact real-time Z-order from WindowServer.
         // Append minimized windows at the end
         items.append(contentsOf: minimizedItems)
 
@@ -470,12 +454,6 @@ public class WindowManager: ObservableObject {
         hideOverlay()
 
         if let target = targetItem {
-            // Push active window to the top of the MRU stack!
-            if let wid = target.windowID {
-                mruWindowIDs.removeAll(where: { $0 == wid })
-                mruWindowIDs.insert(wid, at: 0)
-            }
-            
             activateWindow(target)
         }
 
@@ -524,10 +502,6 @@ public class WindowManager: ObservableObject {
             AXUIElementPerformAction(closeBtn as! AXUIElement, kAXPressAction as CFString)
         }
 
-        if let wid = item.windowID {
-            mruWindowIDs.removeAll(where: { $0 == wid })
-        }
-
         windows.remove(at: selectedIndex)
         if windows.isEmpty {
             hideOverlay()
@@ -543,11 +517,6 @@ public class WindowManager: ObservableObject {
         let item = windows[selectedIndex]
         if let app = NSRunningApplication(processIdentifier: item.pid) {
             app.terminate()
-        }
-
-        let pidsToRemove = windows.filter { $0.pid == item.pid }.compactMap { $0.windowID }
-        for w in pidsToRemove {
-            mruWindowIDs.removeAll(where: { $0 == w })
         }
 
         windows.removeAll(where: { $0.pid == item.pid })

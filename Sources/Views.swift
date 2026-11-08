@@ -1986,10 +1986,13 @@ struct BatteryCardView: View {
                         .font(.system(size: FS.body))
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(tr("Cần cấp quyền SMC để khóa sạc", "SMC Helper required to limit charge"))
+                        let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < 2
+                        Text(isOldHelper
+                             ? tr("Cần cập nhật Helper SMC lên bản mới (v2)", "SMC Helper update required (v2)")
+                             : tr("Chưa cấp quyền SMC (hoặc bạn đã bấm Bỏ qua)", "SMC Helper not installed (or skipped)"))
                             .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.primary)
-                        Text(tr("Xác nhận Touch ID hoặc mật khẩu máy 1 lần", "Confirm with Touch ID or password once"))
+                        Text(tr("Cần xác nhận Touch ID / Mật khẩu máy để khóa sạc 80% & chỉnh quạt", "Confirm with Touch ID / password to lock 80% & control fans"))
                             .font(.system(size: FS.caption))
                             .foregroundStyle(.secondary)
                     }
@@ -2001,19 +2004,22 @@ struct BatteryCardView: View {
                             if batteryManager.isInstallingHelper {
                                 ProgressView().controlSize(.mini)
                             }
-                            Text(batteryManager.isInstallingHelper ? tr("Đang cài...", "Installing...") : tr("Cấp quyền ngay", "Grant Now"))
+                            let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < 2
+                            Text(batteryManager.isInstallingHelper
+                                 ? tr("Đang cài...", "Installing...")
+                                 : (isOldHelper ? tr("Cập nhật ngay", "Update Now") : tr("Cấp quyền ngay", "Grant Now")))
                                 .font(.system(size: FS.caption, weight: .semibold))
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3.5)
-                        .background(Color.orange.opacity(0.10))
+                        .background(Color.orange.opacity(0.12))
                         .foregroundStyle(.orange)
                         .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
                     .disabled(batteryManager.isInstallingHelper)
                 }
-                .padding(6)
+                .padding(7)
                 .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.orange.opacity(0.08)))
             }
 
@@ -2033,15 +2039,15 @@ struct BatteryCardView: View {
                     get: { batteryManager.isProtectionEnabled },
                     set: { newVal in
                         if newVal {
-                            batteryManager.isProtectionEnabled = true
-                            if !NativePowerUIClient.shared.isSupported || batteryManager.chargeLimit < 80 {
-                                if !batteryManager.isHelperInstalled && !batteryManager.isInstallingHelper {
-                                    batteryManager.installHelper { success in
-                                        if !success && !NativePowerUIClient.shared.isSupported {
-                                            batteryManager.isProtectionEnabled = false
-                                        }
+                            if !batteryManager.isHelperInstalled {
+                                batteryManager.isProtectionEnabled = true
+                                batteryManager.installHelper { success in
+                                    if !success {
+                                        batteryManager.isProtectionEnabled = false
                                     }
                                 }
+                            } else {
+                                batteryManager.isProtectionEnabled = true
                             }
                         } else {
                             batteryManager.isProtectionEnabled = false

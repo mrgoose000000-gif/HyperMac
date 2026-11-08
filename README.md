@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.1-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.2-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.1)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.2)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,11 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.2] — 2026-11-08
+- **🪟 Chuẩn hóa thứ tự Alt+Tab:** Đồng bộ 100% theo Z-order thời gian thực từ macOS WindowServer. Chuyển đổi qua lại giữa 2 cửa sổ gần nhất chính xác tuyệt đối, không còn bị nhảy lệch thứ tự khi chuyển tab nhanh.
+- **🔋 Khắc phục triệt để lỗi hỏi mật khẩu liên tục khi Khóa sạc 80%:** Loại bỏ vòng lặp gọi chéo giữa trình quản lý Pin và Quạt tản nhiệt. Tích hợp Deep Probe nhận diện Helper v2 đã cài đặt để không bao giờ hỏi lại mật khẩu thừa.
+- **🛡️ Hệ thống Quét Quyền Thực Tế (Deep Probe):** Bổ sung nút 'Quét lại quyền' và kiểm tra quyền thật (Accessibility, Ghi màn hình, Helper điều khiển phần cứng), hiển thị banner cảnh báo nổi bật màu cam nếu quyền bị thiếu hoặc bị bỏ qua.
 
 ### [v1.9.1] — 2026-11-07
 - **📋 Clipboard Lưu ảnh gốc Lossless:** Lưu trữ ảnh chất lượng cao riêng biệt trong thư mục `ClipboardImages`, dán ra giữ nguyên 100% độ sắc nét và nền trong suốt PNG/TIFF, tự động xóa tệp ảnh tương ứng khi xóa mục trên Clipboard.

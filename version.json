@@ -1,7 +1,7 @@
 {
-  "version": "1.9.1",
-  "name": "HyperMac v1.9.1 (Lossless Clipboard Images + Pinned Reorder ⌘↑↓ + Auto-Update Fix)",
-  "notes": "✨ Tính năng mới & Cải tiến trong phiên bản v1.9.1:\n- 📋 Clipboard Lưu ảnh gốc Lossless: Lưu trữ ảnh chất lượng cao riêng biệt trong thư mục ClipboardImages, dán ra giữ nguyên 100% độ sắc nét và nền trong suốt PNG/TIFF, tự động xóa tệp ảnh khi xóa mục trên Clipboard.\n- 📌 Đổi thứ tự ghi chú ghim (⌘↑ / ⌘↓): Cho phép hoán đổi vị trí ghi chú ghim nhanh chóng bằng phím tắt ⌘↑ / ⌘↓ hoặc nút bấm trực quan ▲ / ▼, hiển thị rõ số phím tắt 1-9 kèm huy hiệu ghim cam để dán tức thì.\n- 🔄 Fix lỗi Auto-Updater: Bộ lọc cập nhật ưu tiên tuyệt đối file ZIP, loại trừ nhầm file DMG và loại bỏ lỗi hiển thị thừa ký tự 'vv'.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.1/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.1"
+  "version": "1.9.2",
+  "name": "HyperMac v1.9.2 (Sửa lỗi Alt+Tab, Khắc phục vòng lặp hỏi mật khẩu Khóa sạc & Quét quyền thực tế)",
+  "notes": "✨ Tính năng mới & Sửa lỗi trong phiên bản v1.9.2:\n- 🪟 Chuẩn hóa thứ tự Alt+Tab: Đồng bộ 100% theo Z-order thời gian thực từ macOS WindowServer. Chuyển đổi qua lại giữa 2 cửa sổ gần nhất chính xác tuyệt đối, không còn bị nhảy lệch thứ tự khi chuyển tab nhanh.\n- 🔋 Khắc phục triệt để lỗi hỏi mật khẩu liên tục khi Khóa sạc 80%: Loại bỏ vòng lặp gọi chéo giữa trình quản lý Pin và Quạt tản nhiệt. Tích hợp Deep Probe nhận diện Helper v2 đã cài đặt để không bao giờ hỏi lại mật khẩu thừa.\n- 🛡️ Hệ thống Quét Quyền Thực Tế (Deep Probe): Bổ sung nút 'Quét lại quyền' và kiểm tra quyền thật (Accessibility, Ghi màn hình, Helper điều khiển phần cứng), hiển thị banner cảnh báo nổi bật màu cam nếu quyền bị thiếu hoặc bị bỏ qua.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.2/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.2"
 }

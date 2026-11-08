@@ -121,6 +121,7 @@ public class BatteryManager: ObservableObject {
     @Published public var timeRemaining: Int = 0         // in minutes
     @Published public var isBypassActive: Bool = false    // SMC CHTE = 1 (Running direct from AC)
     @Published public var isHelperInstalled: Bool = false
+    @Published public var helperVersion: Int = 0
     @Published public var isInstallingHelper: Bool = false
     @Published public var statusMessage: String = "Đang kiểm tra..."
     @Published public var lastUpdated: Date = Date()
@@ -871,24 +872,34 @@ public class BatteryManager: ObservableObject {
 
     // MARK: - Helper Installation Check & Prompt
 
-    public func checkHelperStatus() {
+    public func checkHelperStatus(completion: ((Bool) -> Void)? = nil) {
         let exists = FileManager.default.fileExists(atPath: "/usr/local/bin/displaycontrol-power")
-        if !exists {
+        guard exists else {
             self.isHelperInstalled = false
+            self.helperVersion = 0
             if self.isProtectionEnabled {
                 self.checkSMCBypassStatus()
                 self.evaluatePowerManagement()
             }
+            completion?(false)
             return
         }
         DispatchQueue.global(qos: .utility).async {
-            let (_, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
+            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            var ver = 0
+            if code == 0, let r = out.range(of: "HELPER_VERSION:") {
+                ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
+            }
+            // Real check: exit code 0 AND helper version >= 2 (supports bfF0 and fan)
+            let isRealReady = (code == 0 && ver >= 2)
             DispatchQueue.main.async {
-                self.isHelperInstalled = (code == 0)
+                self.helperVersion = ver
+                self.isHelperInstalled = isRealReady
                 if self.isProtectionEnabled {
                     self.checkSMCBypassStatus()
                     self.evaluatePowerManagement()
                 }
+                completion?(isRealReady)
             }
         }
     }
@@ -946,18 +957,24 @@ public class BatteryManager: ObservableObject {
                 }
             }
 
-            // Verify installation
-            let (_, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
-            let success = (code == 0)
+            // Verify installation with deep probe
+            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            var ver = 0
+            if code == 0, let r = out.range(of: "HELPER_VERSION:") {
+                ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
+            }
+            let success = (code == 0 && ver >= 2)
 
             DispatchQueue.main.async {
                 self.isInstallingHelper = false
+                self.helperVersion = ver
                 self.isHelperInstalled = success
                 if success {
                     self.isProtectionEnabled = true
                     self.checkSMCBypassStatus()
                     self.evaluatePowerManagement()
                 }
+                FanManager.shared.checkHelper()
                 completion?(success)
             }
         }

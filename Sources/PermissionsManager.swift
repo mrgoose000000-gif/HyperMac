@@ -30,6 +30,7 @@ public class PermissionsManager: ObservableObject {
     @Published public var hasBluetooth: Bool = false
 
     @Published public var isExpanded: Bool = false
+    @Published public var isProbing: Bool = false
 
     private var pollTimer: Timer?
     private var isFirstCheck = true
@@ -106,6 +107,19 @@ public class PermissionsManager: ObservableObject {
             isFirstCheck = false
             if requiredGranted {
                 self.isExpanded = false
+            }
+        }
+    }
+
+    // MARK: - Deep Probe (Kiểm tra thật sự toàn bộ quyền)
+
+    public func runDeepProbe() {
+        guard !isProbing else { return }
+        self.isProbing = true
+        BatteryManager.shared.checkHelperStatus { [weak self] _ in
+            self?.refreshStatus()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self?.isProbing = false
             }
         }
     }
