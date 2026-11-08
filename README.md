@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.3-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.4-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.3)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.4)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,11 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.4] — 2026-11-08
+- **🧠 Khắc phục triệt để lỗi Memory Leak CGEvent (PR #3 từ contributor thaupc):** Sửa lỗi retain không giải phóng trong Event Tap Callback của hệ thống khi lắng nghe phím tắt. Đổi toàn bộ sang `Unmanaged.passUnretained(event)`, giúp giải phóng ngay lập tức các sự kiện bàn phím/chuột.
+- **🚀 Tối ưu hoá bộ nhớ dài hạn:** Giữ mức tiêu hao RAM siêu nhẹ ổn định (~10–40MB) kể cả khi mở máy chạy liên tục nhiều tuần mà không bị phình bộ nhớ.
+- **🗄️ Kế thừa đầy đủ các nâng cấp Menu Bar Drawer và Notch Spacing Fix từ v1.9.3.**
 
 ### [v1.9.3] — 2026-11-08
 - **🗄️ Cải tiến Ngăn kéo Menu Bar (Menu Bar Drawer):** Tích hợp trực tiếp qua macOS Accessibility API (`AXUIElement`), cho phép mở menu thật của từng ứng dụng trên Menu Bar ngay cả khi bị màn hình tai thỏ (MacBook Notch) che khuất.
