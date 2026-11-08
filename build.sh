@@ -8,10 +8,12 @@ echo "╚═══════════════════════�
 echo ""
 
 # ── Step 0: Terminate existing instances ──
-echo "🛑 Stopping any running instances..."
-pkill -9 HyperMac 2>/dev/null || true
-pkill -9 DisplayControl 2>/dev/null || true
-sleep 0.5
+if [ "$CI" != "true" ] && [ "$1" != "--no-run" ]; then
+    echo "🛑 Stopping any running instances..."
+    pkill -9 HyperMac 2>/dev/null || true
+    pkill -9 DisplayControl 2>/dev/null || true
+    sleep 0.5
+fi
 
 # ── Step 1: Build (Default: Apple Silicon chip M / Optional: --universal) ──
 BUILD_UNIVERSAL=false
@@ -96,9 +98,9 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
-    <string>1.9.2</string>
+    <string>1.9.3</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.9.2</string>
+    <string>1.9.3</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>

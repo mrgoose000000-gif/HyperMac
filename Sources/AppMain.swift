@@ -18,6 +18,7 @@ private func displayReconfigCallback(
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
+    var mainMenuBarButton: NSStatusBarButton? { statusItem?.button }
     private var popover: NSPopover!
     private var previewWindow: NSWindow?
 
@@ -107,6 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        MenuBarHiderManager.shared.removeStatusItem()
         VirtualDisplayManager.shared.destroyVirtualDisplay()
         FanManager.shared.restoreSystemSync()
         // Phục hồi sạc bình thường của macOS khi thoát app để tránh kẹt ngắt sạc phần cứng SMC

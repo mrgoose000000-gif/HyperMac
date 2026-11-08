@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.2-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.3-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.2)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.3)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,12 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.3] — 2026-11-08
+- **🗄️ Cải tiến Ngăn kéo Menu Bar (Menu Bar Drawer):** Tích hợp trực tiếp qua macOS Accessibility API (`AXUIElement`), cho phép mở menu thật của từng ứng dụng trên Menu Bar ngay cả khi bị màn hình tai thỏ (MacBook Notch) che khuất.
+- **🎯 Quản lý & Đồng bộ danh sách icon:** Tự động phát hiện và đồng bộ thứ tự ứng dụng trên thanh trạng thái theo thời gian thực, ghi nhớ cấu hình ứng dụng ổn định qua Bundle Identifier.
+- **🔍 Tìm kiếm & Phím tắt nhanh ⌥⌘B:** Mở khay ứng dụng menu bar tức thì từ bất kỳ đâu bằng phím tắt `⌥⌘B` (Option + Command + B), hỗ trợ ô tìm kiếm lọc ứng dụng nhanh chóng.
+- **⚙️ Tối ưu hoá hiệu năng & Giao diện Native:** Giao diện bảng ứng dụng mượt mà chuẩn Apple Human Interface Guidelines, tiêu thụ 0% CPU khi chạy nền, bộ nhớ RAM siêu nhẹ ~45MB.
 
 ### [v1.9.2] — 2026-11-08
 - **🗄️ Gom gọn Menu Bar (Menu Bar Hider):** Gom toàn bộ các biểu tượng ứng dụng trên thanh trạng thái vào một ô nhỏ, mở rộng/thu gọn tức thì chỉ với 1 click hoặc phím tắt `⌘⌥B`, hỗ trợ tự động ẩn sau 5s/10s, 0% CPU & siêu nhẹ chuẩn native Swift!

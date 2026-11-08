@@ -1,7 +1,7 @@
 {
-  "version": "1.9.2",
-  "name": "HyperMac v1.9.2 (Gom gọn Menu Bar, Sửa lỗi Alt+Tab & Khắc phục Khóa sạc)",
-  "notes": "✨ Tính năng mới & Sửa lỗi trong phiên bản v1.9.2:\n- 🗄️ Gom gọn Menu Bar (Menu Bar Hider): Gom toàn bộ các biểu tượng ứng dụng trên thanh trạng thái vào một ô nhỏ, mở rộng/thu gọn tức thì bằng 1 click hoặc phím tắt ⌘⌥B, hỗ trợ tự động ẩn sau 5s/10s, 0% CPU & siêu nhẹ chuẩn native Swift!\n- 🪟 Chuẩn hóa thứ tự Alt+Tab: Đồng bộ 100% theo Z-order thời gian thực từ macOS WindowServer. Chuyển đổi qua lại giữa 2 cửa sổ gần nhất chính xác tuyệt đối, không còn bị nhảy lệch thứ tự khi chuyển tab nhanh.\n- 🔋 Khắc phục triệt để lỗi hỏi mật khẩu liên tục khi Khóa sạc 80%: Loại bỏ vòng lặp gọi chéo giữa trình quản lý Pin và Quạt tản nhiệt. Tích hợp Deep Probe nhận diện Helper v2 đã cài đặt để không bao giờ hỏi lại mật khẩu thừa.\n- 🛡️ Hệ thống Quét Quyền Thực Tế (Deep Probe): Bổ sung nút 'Quét lại quyền' và kiểm tra quyền thật (Accessibility, Ghi màn hình, Helper điều khiển phần cứng), hiển thị banner cảnh báo nổi bật màu cam nếu quyền bị thiếu hoặc bị bỏ qua.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.2/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.2"
+  "version": "1.9.3",
+  "name": "HyperMac v1.9.3 (Cải tiến Menu Bar Drawer qua AXUIElement & Tối ưu hoá hệ thống)",
+  "notes": "✨ Tính năng mới & Cải tiến trong phiên bản v1.9.3:\n- 🗄️ Cải tiến Ngăn kéo Menu Bar (Menu Bar Drawer): Tích hợp trực tiếp qua macOS Accessibility API (AXUIElement), mở menu thật của từng ứng dụng trên Menu Bar ngay cả khi bị màn hình tai thỏ (MacBook Notch) che khuất.\n- 🎯 Quản lý & Đồng bộ danh sách icon: Tự động phát hiện và đồng bộ thứ tự ứng dụng trên thanh trạng thái theo thời gian thực, ghi nhớ cấu hình ứng dụng ổn định qua Bundle Identifier.\n- 🔍 Tìm kiếm & Phím tắt nhanh ⌥⌘B: Mở khay ứng dụng menu bar tức thì từ bất kỳ đâu bằng phím tắt ⌥⌘B (Option + Command + B), hỗ trợ ô tìm kiếm lọc ứng dụng nhanh chóng.\n- ⚙️ Tối ưu hoá hiệu năng & Giao diện Native: Giao diện bảng ứng dụng mượt mà chuẩn Apple Human Interface Guidelines, tiêu thụ 0% CPU khi chạy nền, bộ nhớ RAM siêu nhẹ ~45MB.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.3/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.3"
 }

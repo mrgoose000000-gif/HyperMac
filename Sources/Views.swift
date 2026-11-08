@@ -637,114 +637,58 @@ struct DisplaysTabView: View {
 
 // MARK: - Menu Bar Drawer (Ngăn kéo gom ứng dụng Status Bar) Card View
 
+// Hallmark · native settings component · existing Theme tokens
 struct MenuBarHiderCardView: View {
-    @ObservedObject var manager: MenuBarHiderManager = MenuBarHiderManager.shared
+    @AppStorage("menubar_drawer_details_expanded") private var showDetails = false
+    @ObservedObject var manager = MenuBarHiderManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: FS.body, weight: .semibold))
+                Image(systemName: "menubar.rectangle")
                     .foregroundStyle(Color.accentColor)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 5) {
-                        Text(tr("Ngăn kéo Menu Bar (Menu Bar Drawer)", "Menu Bar Drawer"))
-                            .font(.system(size: FS.label, weight: .semibold))
-                            .lineLimit(1)
-                        if manager.isEnabled {
-                            Text(tr("\(manager.runningApps.count) apps", "\(manager.runningApps.count) apps"))
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1.5)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.18)))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    Text(tr("Gom toàn bộ icon ứng dụng vào một ô nhỏ, bấm để mở ra xem tất cả", "Collect all status bar apps into a compact drawer, click to open and view all"))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tr("Ngăn kéo Menu Bar", "Menu Bar Drawer"))
+                        .font(.system(size: FS.label, weight: .semibold))
+                    Text(tr("Truy cập các mục Menu Bar trong một bảng riêng.", "Access menu bar items in a separate panel."))
                         .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
-
                 Spacer()
-
-                Toggle("", isOn: $manager.isEnabled)
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { showDetails.toggle() }
+                } label: {
+                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
+                        .font(.system(size: FS.body, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                        .background(Circle().fill(Color.primary.opacity(0.04)))
+                }
+                .buttonStyle(.plain)
+                .help(showDetails ? tr("Ẩn chi tiết", "Hide details") : tr("Hiện chi tiết", "Show details"))
+                .accessibilityLabel(showDetails ? tr("Ẩn chi tiết", "Hide details") : tr("Hiện chi tiết", "Show details"))
+                Toggle(tr("Bật ngăn kéo", "Enable drawer"), isOn: $manager.isEnabled)
+                    .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.mini)
-                    .labelsHidden()
             }
-
-            if manager.isEnabled {
-                Divider().opacity(0.35)
-
-                VStack(spacing: 7) {
-                    // Quick Action & Shortcut Row
-                    HStack {
-                        Button {
-                            manager.toggle()
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "square.grid.2x2.fill")
-                                    .font(.system(size: FS.caption, weight: .bold))
-                                Text(tr("Mở Ngăn kéo xem ứng dụng", "Open Menu Bar Drawer"))
-                                    .font(.system(size: FS.caption, weight: .medium))
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4.5)
-                            .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.accentColor.opacity(0.12)))
-                            .foregroundStyle(Color.accentColor)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        // Shortcut Badge
-                        HStack(spacing: 3) {
-                            Text("⌘")
-                            Text("⌥")
-                            Text("B")
-                        }
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2.5)
-                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.06)))
+            if showDetails {
+                Divider()
+                HStack {
+                    Button { manager.toggle() } label: {
+                        Label(manager.isExpanded ? tr("Đóng ngăn kéo", "Close drawer") : tr("Mở ngăn kéo", "Open drawer"), systemImage: "tray")
+                    }
+                    .controlSize(.small)
+                    .disabled(!manager.isEnabled)
+                    Spacer()
+                    Text("⌘⌥B")
+                        .font(.system(size: FS.caption, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
-                    }
-
-                    // Notch Spacing Option Row
-                    HStack(spacing: 6) {
-                        Image(systemName: "laptopcomputer.and.ipad")
-                            .font(.system(size: FS.caption))
-                            .foregroundStyle(.secondary)
-                        Text(tr("Khoảng cách icon (Chống che bởi Tai thỏ):", "Icon Spacing (Notch Fix):"))
-                            .font(.system(size: FS.caption))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Picker("", selection: $manager.spacingMode) {
-                            ForEach(MenuBarSpacingMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .controlSize(.mini)
-                        .frame(width: 145)
-                    }
-
-                    // Helpful Hint
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.orange)
-                        Text(tr("Bấm vào ô vuông trên menu bar (hoặc bấm ⌘⌥B) để mở ngăn kéo xem mọi ứng dụng kể cả khi bị tai thỏ che.", "Click the grid icon on the menu bar (or press ⌘⌥B) to open the drawer and view all apps even if hidden by the notch."))
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.035)))
                 }
+                Text(tr("Nhấn ⌥⌘B để mở bảng ứng dụng Menu Bar. Bấm ứng dụng để mở menu thật; kéo ☰ để đổi thứ tự icon trên thanh bar.", "Press ⌥⌘B to open menu bar apps. Click an app for its real menu; drag ☰ to reorder icons on the menu bar."))
+                    .font(.system(size: FS.caption))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)
@@ -755,6 +699,7 @@ struct MenuBarHiderCardView: View {
 // MARK: - Caffeinate (Anti-Sleep) Card View
 
 struct CaffeinateCardView: View {
+    @AppStorage("caffeinate_details_expanded") private var showDetails = false
     @ObservedObject var caffeinateManager: CaffeinateManager
 
     var body: some View {
@@ -802,6 +747,18 @@ struct CaffeinateCardView: View {
 
                 Spacer()
 
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { showDetails.toggle() }
+                } label: {
+                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
+                        .font(.system(size: FS.body, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                        .background(Circle().fill(Color.primary.opacity(0.04)))
+                }
+                .buttonStyle(.plain)
+                .help(showDetails ? tr("Ẩn chi tiết", "Hide details") : tr("Hiện chi tiết", "Show details"))
+                .accessibilityLabel(showDetails ? tr("Ẩn chi tiết", "Hide details") : tr("Hiện chi tiết", "Show details"))
                 Toggle("", isOn: Binding<Bool>(
                     get: { caffeinateManager.isActive },
                     set: { _ in caffeinateManager.toggle() }
@@ -811,7 +768,8 @@ struct CaffeinateCardView: View {
                 .labelsHidden()
             }
 
-            // Duration Selection Pills
+            // Collapsing details leaves the active assertion and timer unchanged.
+            if showDetails {
             HStack(spacing: 6) {
                 ForEach(CaffeinateDuration.allCases) { duration in
                     Button {
@@ -836,6 +794,7 @@ struct CaffeinateCardView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
             }
         }
         .padding(10)
