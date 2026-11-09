@@ -7,9 +7,9 @@
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/❤️_Donate-Ủng_hộ-ff69b4.svg)](#-ủng-hộ-phát-triển-donate)
 
-> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4...)**. Ứng dụng gom trọn tính năng của **9 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
+> 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4, M5 — Air / Pro / Max / Ultra)**. Ứng dụng gom trọn tính năng của **9 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
 > 
-> **Bartender & Hidden Bar** (Gom gọn thanh Menu Bar) + **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Cảm biến** (Đo nhiệt độ 30+ cảm biến HID/PMU) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
+> **Bartender & Hidden Bar** (Gom gọn thanh Menu Bar) + **CleanMyMac & AppCleaner** (Dọn rác hệ thống & Gỡ app tận gốc) + **Rectangle** (Chia cửa sổ) + **AltTab** (Chuyển cửa sổ đa hàng) + **Finder Cut & Paste** (Cắt & Dán tệp Windows-style) + **Maccy** (Lịch sử Clipboard) + **AlDente Pro** (Khóa sạc 80% SMC) + **BetterDisplay** (Chỉnh sáng màn ngoài F1/F2) + **Nhiệt độ & Điều khiển quạt** (Đo nhiệt độ nhân CPU/GPU từ AppleSMC + cảm biến HID PMU & điều khiển đa quạt) + **Đo tốc độ chép file** (ổ vật lý & NAS qua LAN).
 
 ---
 
@@ -221,6 +221,24 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.5] — 2026-11-09
+- **🔋 Kiến trúc Khóa Sạc Kép (Dual-Layer Charge Lock) cho toàn bộ dòng Mac chip M1–M5 (Air / Pro / Max / Ultra) & macOS 14 / 15 / 26:**
+  - Khắc phục triệt để tình trạng khóa sạc ở 80% nhưng pin vẫn tiếp tục sạc lên trên một số dòng MacBook Pro chạy macOS 15+.
+  - Kết hợp đồng thời **Lớp 1 — Trần sạc Firmware (`NativePowerUIClient` / `CHLT` / `bfD0` / `BCLM`)** và **Lớp 2 — Công tắc ngắt dòng sạc tức thời (`CHTE` / `CH0B` / `bfF0` qua `displaycontrol-power`)**.
+  - Khi pin dưới ngưỡng (ví dụ 75%), máy vẫn sạc bình thường nhưng vẫn giữ nguyên trần chặn 80% trong SMC Firmware để nếu gập màn hình đi ngủ (*Clamshell Sleep*), mạch sạc phần cứng tự dừng đúng ở 80%.
+  - Lắng nghe sự kiện nguồn thời gian thực (`IOPSNotificationCreateRunLoopSource`) kết hợp chống *App Nap*, tự động khóa lại ngay lập tức khi rút/cắm cáp sạc MagSafe hoặc màn hình USB-C PD (tránh hiện tượng SMC tự reset các thanh ghi `CHTE`/`CH0B` khi đổi nguồn).
+  - Tự động nhận diện máy Mac để bàn (**Mac mini, Mac Studio, iMac, Mac Pro**) không có pin để ẩn gọn các cảnh báo không cần thiết.
+- **🌡️ Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC & Điều khiển đồng bộ đa quạt (PR #4 từ contributor [@dovantuit](https://github.com/dovantuit)):**
+  - Tích hợp `SMCTempReader` đọc trực tiếp các khóa cảm biến nhân `Tp*` (P-Core), `Te*` (E-Core), `Tf*` (nhân M3 series) và `Tg*` (GPU) từ `AppleSMC` — cho kết quả nhiệt độ nhân thực tế chuẩn xác 100% giống *Macs Fan Control* thay vì chỉ đọc nhiệt độ bề mặt PMU (~40°C).
+  - Hỗ trợ nhận diện tên dòng máy chính xác từ `IODeviceTree:/product` và bảng mã `hw.model` cho mọi thế hệ M1–M5.
+  - Nâng cấp `FanManager` đọc tốc độ quạt trực tiếp qua IOKit `AppleSMC` (0ms, không cần gọi tiến trình phụ) và điều khiển đồng bộ toàn bộ các quạt (`F0`, `F1`...) trên các dòng MacBook Pro 14"/16" và Mac Studio có 2 quạt tản nhiệt.
+- **🖱️ Khắc phục triệt để lỗi kẹt phím chuột khi mở Mission Control (Chuột Trái + Chuột Phải):**
+  - Khi bấm đồng thời Chuột Trái + Chuột Phải, sự kiện nhấn của phím đầu tiên đã lọt xuống ứng dụng đang mở trước đó vài mili-giây. Bản v1.9.5 tự động phát bù sự kiện nhả chuột (`postSyntheticMouseUp`) cho phím đầu tiên ngay trước khi kích hoạt Mission Control, kết hợp kiểm tra trạng thái nút vật lý (`CGEventSource.buttonState`) và chặn sự kiện kéo chuột thừa (`MouseDragged`), chấm dứt hoàn toàn hiện tượng kẹt chuột trái/phải sau khi mở Mission Control.
+- **🧠 Vá lỗ hổng rò rỉ bộ nhớ `IOHIDEvent` (Giảm ~28.7MB RAM rò rỉ):**
+  - Chuyển đổi toàn bộ con trỏ hàm C `IOHIDServiceClientCopyEvent` / `IOHIDEventSystemClientCopyServices` / `IOHIDServiceClientCopyProperty` trong `AppleSiliconHIDReader` sang `Unmanaged<...>.takeRetainedValue()`, giúp ARC tự động giải phóng gần 200.000 đối tượng `<HIDEvent>` sau mỗi chu kỳ quét nhiệt độ.
+- **🌐 Tự động Retry khi tải bản cập nhật gặp lỗi HTTP 502 / 503 / 504:**
+  - Khi máy chủ CDN của GitHub Releases phản hồi lỗi gateway tạm thời (`502`, `503`, `504`), trình cập nhật tự động thử lại tối đa 2 lần kèm cơ chế chống lưu đệm (*cache-busting*) trước khi thông báo lỗi.
 
 ### [v1.9.4] — 2026-11-08
 - **🧠 Khắc phục triệt để lỗi Memory Leak CGEvent (PR #3 từ contributor thaupc):** Sửa lỗi retain không giải phóng trong Event Tap Callback của hệ thống khi lắng nghe phím tắt. Đổi toàn bộ sang `Unmanaged.passUnretained(event)`, giúp giải phóng ngay lập tức các sự kiện bàn phím/chuột.
