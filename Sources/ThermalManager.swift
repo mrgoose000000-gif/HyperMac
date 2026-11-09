@@ -19,14 +19,19 @@ private typealias ServiceRef = OpaquePointer
 private typealias EventRef = OpaquePointer
 
 private typealias FnCreateWithType = @convention(c) (CFAllocator?, UInt32, CFDictionary?) -> ClientRef?
-private typealias FnCopyServices = @convention(c) (ClientRef) -> CFArray?
-private typealias FnCopyProperty = @convention(c) (ServiceRef, CFString) -> CFTypeRef?
-private typealias FnCopyEvent = @convention(c) (ServiceRef, Int64, Int32, Int64) -> EventRef?
+// The Copy functions return +1 references. Swift cannot infer that through a dlsym
+// function pointer, so they are typed Unmanaged and released with takeRetainedValue();
+// otherwise every 2.5s poll leaks one HIDEvent per sensor and RAM grows without bound.
+private typealias FnCopyServices = @convention(c) (ClientRef) -> Unmanaged<CFArray>?
+private typealias FnCopyProperty = @convention(c) (ServiceRef, CFString) -> Unmanaged<CFTypeRef>?
+private typealias FnCopyEvent = @convention(c) (ServiceRef, Int64, Int32, Int64) -> Unmanaged<CFTypeRef>?
 private typealias FnGetFloat = @convention(c) (EventRef, UInt32) -> Double
 
 private class AppleSiliconHIDReader {
     private var client: ClientRef?
     private var cachedServices: [ServiceRef] = []
+    // Owns the services in cachedServices, which are borrowed from this array.
+    private var servicesArray: CFArray?
     private var lastDiscoveryTime: TimeInterval = 0
 
     private var fnCreate: FnCreateWithType?
@@ -59,7 +64,8 @@ private class AppleSiliconHIDReader {
         // Refresh services every 60s
         if cachedServices.isEmpty || (now - lastDiscoveryTime > 60) {
             cachedServices.removeAll(keepingCapacity: true)
-            if let servCF = copyServ(c) {
+            servicesArray = copyServ(c)?.takeRetainedValue()
+            if let servCF = servicesArray {
                 let count = CFArrayGetCount(servCF)
                 for i in 0..<count {
                     let s = unsafeBitCast(CFArrayGetValueAtIndex(servCF, i), to: ServiceRef.self)
@@ -80,11 +86,14 @@ private class AppleSiliconHIDReader {
         let kIOHIDEventFieldTemperatureValue: UInt32 = (15 << 16) | 0
 
         for s in cachedServices {
-            guard let pRef = copyProp(s, "Product" as CFString),
+            guard let pRef = copyProp(s, "Product" as CFString)?.takeRetainedValue(),
                   let name = pRef as? String else { continue }
 
-            guard let evt = copyEvt(s, kIOHIDEventTypeTemperature, 0, 0) else { continue }
-            let temp = getFloat(evt, kIOHIDEventFieldTemperatureValue)
+            guard let evtObj = copyEvt(s, kIOHIDEventTypeTemperature, 0, 0)?.takeRetainedValue() else { continue }
+            // evtObj stays alive until the end of this iteration, then ARC releases it.
+            let temp = withExtendedLifetime(evtObj) {
+                getFloat(OpaquePointer(Unmanaged.passUnretained(evtObj).toOpaque()), kIOHIDEventFieldTemperatureValue)
+            }
             guard temp > 15.0 && temp < 125.0 else { continue }
 
             if name.hasPrefix("PMU tdie") || name.hasPrefix("PMU2 tdie") {
