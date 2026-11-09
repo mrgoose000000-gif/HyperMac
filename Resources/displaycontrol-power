@@ -76,6 +76,11 @@ if action == "status" {
     let limit = UInt8(min(max(limitInt, 80), 100))
     typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutableRawPointer?) -> Bool
     let ok = unsafeBitCast(client.method(for: NSSelectorFromString("setMCLLimit:error:")), to: SetFn.self)(client, NSSelectorFromString("setMCLLimit:error:"), limit, nil)
+    let selEnable = NSSelectorFromString("enableMCL:")
+    if client.responds(to: selEnable) {
+        typealias EnableFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> Bool
+        _ = unsafeBitCast(client.method(for: selEnable), to: EnableFn.self)(client, selEnable, nil)
+    }
     if ok { print("CHARGE_OFF_OK"); exit(0) } else { exit(3) }
 } else if action == "charge-on" {
     typealias DisableFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> Bool
@@ -87,41 +92,52 @@ SWIFT_EOF
 
 case "$1" in
     status)
-        if check_key_exists "bfF0"; then
-            OUT=$("$SMC" -k bfF0 -r 2>/dev/null || true)
-            echo "$OUT"
-            if echo "$OUT" | grep -q "02" || echo "$OUT" | grep -q "[ui8 ]  2" || echo "$OUT" | grep -q "[ui8 ]  1"; then
-                echo "BYPASS:1"
-            else
-                echo "BYPASS:0"
-            fi
-            exit 0
-        elif check_key_exists "CHTE"; then
+        BYPASSED=0
+        FOUND_KEY=0
+
+        if check_key_exists "CHTE"; then
+            FOUND_KEY=1
             OUT=$("$SMC" -k CHTE -r 2>/dev/null || true)
             echo "$OUT"
             if echo "$OUT" | grep -q "01 00 00 00" || echo "$OUT" | grep -q "16777216"; then
-                echo "BYPASS:1"
-            else
-                echo "BYPASS:0"
+                BYPASSED=1
             fi
-            exit 0
-        elif check_key_exists "CH0B"; then
+        fi
+
+        if check_key_exists "CH0B"; then
+            FOUND_KEY=1
             OUT=$("$SMC" -k CH0B -r 2>/dev/null || true)
             echo "$OUT"
             if echo "$OUT" | grep -q "02"; then
-                echo "BYPASS:1"
-            else
-                echo "BYPASS:0"
+                BYPASSED=1
             fi
-            exit 0
-        elif check_key_exists "BCLM"; then
+        fi
+
+        if check_key_exists "bfF0"; then
+            FOUND_KEY=1
+            OUT=$("$SMC" -k bfF0 -r 2>/dev/null || true)
+            echo "$OUT"
+            if echo "$OUT" | grep -q "02" || echo "$OUT" | grep -q "\[ui8 \]  2" || echo "$OUT" | grep -q "\[ui8 \]  1"; then
+                BYPASSED=1
+            fi
+        fi
+
+        if check_key_exists "BCLM"; then
+            FOUND_KEY=1
             OUT=$("$SMC" -k BCLM -r 2>/dev/null || true)
             echo "$OUT"
-            if echo "$OUT" | grep -qv "100" && echo "$OUT" | grep -qv "(bytes 64)"; then
-                echo "BYPASS:1"
-            else
-                echo "BYPASS:0"
+            if echo "$OUT" | grep -qv "100" && echo "$OUT" | grep -qv "(bytes 64)" && echo "$OUT" | grep -qv "(bytes 00)"; then
+                BYPASSED=1
             fi
+        fi
+
+        if check_key_exists "CHLT"; then
+            OUT=$("$SMC" -k CHLT -r 2>/dev/null || true)
+            echo "$OUT"
+        fi
+
+        if [ "$FOUND_KEY" -eq 1 ]; then
+            echo "BYPASS:$BYPASSED"
             exit 0
         else
             MCL_OUT=$(call_powerui status 2>/dev/null || true)
@@ -139,7 +155,7 @@ case "$1" in
         LIMIT="${2:-80}"
         HANDLED=0
 
-        # Method 1: Apple Silicon bfF0 / bfD0 / bfE0 (Firmware Limit for M3, M4, macOS 15+ / newer firmware)
+        # Method 1: Apple Silicon bfF0 / bfD0 / bfE0 (Firmware Limit for M3, M4, M5 / modern firmware)
         if check_key_exists "bfF0"; then
             HEX_UPPER=$(printf "%02x000000" "$LIMIT" 2>/dev/null || echo "50000000")
             LOWER=$((LIMIT > 4 ? LIMIT - 3 : LIMIT))
@@ -152,12 +168,12 @@ case "$1" in
             fi
         fi
 
-        # Method 2: Apple Silicon CHTE (M2, M3, M4, macOS 14.4+)
+        # Method 2: Apple Silicon CHTE (M1 updated firmware, M2, M3, M4, M5 Air/Pro/Max)
         if check_key_exists "CHTE"; then
             "$SMC" -k CHTE -w 01000000 >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 3: Apple Silicon CH0B / CH0C (M1, older macOS)
+        # Method 3: Apple Silicon CH0B / CH0C (M1, M1 Pro, M1 Max)
         if check_key_exists "CH0B"; then
             "$SMC" -k CH0B -w 02 >/dev/null 2>&1 && HANDLED=1
             if check_key_exists "CH0C"; then
@@ -165,13 +181,13 @@ case "$1" in
             fi
         fi
 
-        # Method 4: Intel BCLM (Battery Charge Limit Max)
+        # Method 4: Intel / Legacy BCLM (Battery Charge Limit Max)
         if check_key_exists "BCLM"; then
             HEX_LIMIT=$(printf "%02x" "$LIMIT" 2>/dev/null || echo "50")
             "$SMC" -k BCLM -w "$HEX_LIMIT" >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 5: Native PowerUI MCL via Swift fallback
+        # Method 5: Native PowerUI MCL via Swift fallback (if no SMC switch succeeded)
         if [ "$HANDLED" -eq 0 ]; then
             if call_powerui "charge-off" "$LIMIT" >/dev/null 2>&1; then
                 HANDLED=1
@@ -187,21 +203,31 @@ case "$1" in
         fi
         ;;
     charge-on)
+        CEILING_LIMIT="${2:-100}"
         HANDLED=0
 
-        # Method 1: Apple Silicon bfF0
+        # Method 1: Apple Silicon bfF0 / bfD0 / bfE0
         if check_key_exists "bfF0"; then
-            "$SMC" -k bfF0 -w 00 >/dev/null 2>&1 && HANDLED=1
-            if check_key_exists "bfD0"; then "$SMC" -k bfD0 -w 64000000 >/dev/null 2>&1 || true; fi
-            if check_key_exists "bfE0"; then "$SMC" -k bfE0 -w 64000000 >/dev/null 2>&1 || true; fi
+            if [ "$CEILING_LIMIT" -lt 100 ] 2>/dev/null; then
+                HEX_UPPER=$(printf "%02x000000" "$CEILING_LIMIT" 2>/dev/null || echo "50000000")
+                LOWER=$((CEILING_LIMIT > 4 ? CEILING_LIMIT - 3 : CEILING_LIMIT))
+                HEX_LOWER=$(printf "%02x000000" "$LOWER" 2>/dev/null || echo "4d000000")
+                if check_key_exists "bfD0"; then "$SMC" -k bfD0 -w "$HEX_UPPER" >/dev/null 2>&1 || true; fi
+                if check_key_exists "bfE0"; then "$SMC" -k bfE0 -w "$HEX_LOWER" >/dev/null 2>&1 || true; fi
+                "$SMC" -k bfF0 -w 02 >/dev/null 2>&1 && HANDLED=1
+            else
+                "$SMC" -k bfF0 -w 00 >/dev/null 2>&1 && HANDLED=1
+                if check_key_exists "bfD0"; then "$SMC" -k bfD0 -w 64000000 >/dev/null 2>&1 || true; fi
+                if check_key_exists "bfE0"; then "$SMC" -k bfE0 -w 64000000 >/dev/null 2>&1 || true; fi
+            fi
         fi
 
-        # Method 2: Apple Silicon CHTE
+        # Method 2: Apple Silicon CHTE (Release instant inhibit so battery can charge up to ceiling)
         if check_key_exists "CHTE"; then
             "$SMC" -k CHTE -w 00000000 >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 3: Apple Silicon CH0B / CH0C
+        # Method 3: Apple Silicon CH0B / CH0C (Release instant inhibit)
         if check_key_exists "CH0B"; then
             "$SMC" -k CH0B -w 00 >/dev/null 2>&1 && HANDLED=1
             if check_key_exists "CH0C"; then
@@ -209,14 +235,19 @@ case "$1" in
             fi
         fi
 
-        # Method 4: Intel BCLM (100% in hex is 64)
+        # Method 4: Intel / Legacy BCLM
         if check_key_exists "BCLM"; then
-            "$SMC" -k BCLM -w 64 >/dev/null 2>&1 && HANDLED=1
+            HEX_LIMIT=$(printf "%02x" "$CEILING_LIMIT" 2>/dev/null || echo "64")
+            "$SMC" -k BCLM -w "$HEX_LIMIT" >/dev/null 2>&1 && HANDLED=1
         fi
 
-        # Method 5: Native PowerUI MCL via Swift fallback
-        if call_powerui "charge-on" >/dev/null 2>&1; then
-            HANDLED=1
+        # Method 5: Native PowerUI MCL via Swift fallback (only when no SMC keys handled or full unlock)
+        if [ "$HANDLED" -eq 0 ]; then
+            if [ "$CEILING_LIMIT" -ge 80 ] && [ "$CEILING_LIMIT" -lt 100 ] 2>/dev/null; then
+                call_powerui "charge-off" "$CEILING_LIMIT" >/dev/null 2>&1 && HANDLED=1
+            else
+                call_powerui "charge-on" >/dev/null 2>&1 && HANDLED=1
+            fi
         fi
 
         if [ "$HANDLED" -eq 1 ]; then
@@ -245,30 +276,59 @@ case "$1" in
         ID="${2:-0}"
         RPM="$3"
         # Chỉ nhận số nguyên hợp lệ; chặn mọi đối số lạ (helper chạy bằng root).
-        case "$ID" in [0-3]) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
+        case "$ID" in [0-3]|all) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
         case "$RPM" in ''|*[!0-9]*) echo "ERROR: invalid rpm"; exit 2 ;; esac
-        FMIN=$("$SMC" -k "F${ID}Mn" -r 2>/dev/null | awk '{print int($4)}')
-        FMAX=$("$SMC" -k "F${ID}Mx" -r 2>/dev/null | awk '{print int($4)}')
-        if [ -z "$FMIN" ] || [ -z "$FMAX" ] || [ "$FMAX" -le 0 ]; then
-            echo "ERROR: fan range unavailable"; exit 3
-        fi
-        if [ "$RPM" -lt "$FMIN" ] || [ "$RPM" -gt "$FMAX" ]; then
-            echo "ERROR: rpm out of range ($FMIN-$FMAX)"; exit 2
-        fi
-        # float32 little-endian hex (vd 3000 -> 00803b45)
-        HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$RPM")
         if check_key_exists "Ftst"; then
             "$SMC" -k Ftst -w 01 >/dev/null 2>&1 || true
         fi
-        "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
-        "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
-        echo "FAN_SET_OK"
+        if [ "$ID" = "all" ]; then
+            FNUM=$("$SMC" -k FNum -r 2>/dev/null | awk '{print int($4)}')
+            FNUM="${FNUM:-1}"
+            I=0
+            while [ "$I" -lt "$FNUM" ] && [ "$I" -lt 4 ]; do
+                FMIN=$("$SMC" -k "F${I}Mn" -r 2>/dev/null | awk '{print int($4)}')
+                FMAX=$("$SMC" -k "F${I}Mx" -r 2>/dev/null | awk '{print int($4)}')
+                if [ -n "$FMIN" ] && [ -n "$FMAX" ] && [ "$FMAX" -gt 0 ]; then
+                    CLAMPED="$RPM"
+                    if [ "$CLAMPED" -lt "$FMIN" ]; then CLAMPED="$FMIN"; fi
+                    if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
+                    HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
+                    "$SMC" -k "F${I}Md" -w 01 >/dev/null 2>&1 || true
+                    "$SMC" -k "F${I}Tg" -w "$HEX" >/dev/null 2>&1 || true
+                fi
+                I=$((I + 1))
+            done
+            echo "FAN_SET_OK"
+        else
+            FMIN=$("$SMC" -k "F${ID}Mn" -r 2>/dev/null | awk '{print int($4)}')
+            FMAX=$("$SMC" -k "F${ID}Mx" -r 2>/dev/null | awk '{print int($4)}')
+            if [ -z "$FMIN" ] || [ -z "$FMAX" ] || [ "$FMAX" -le 0 ]; then
+                echo "ERROR: fan range unavailable"; exit 3
+            fi
+            CLAMPED="$RPM"
+            if [ "$CLAMPED" -lt "$FMIN" ]; then CLAMPED="$FMIN"; fi
+            if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
+            # float32 little-endian hex (vd 3000 -> 00803b45)
+            HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
+            "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
+            "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
+            echo "FAN_SET_OK"
+        fi
         ;;
     fan-auto)
-        ID="${2:-0}"
-        case "$ID" in [0-3]) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
-        "$SMC" -k "F${ID}Md" -w 00 >/dev/null 2>&1 || true
-        "$SMC" -k "F${ID}Tg" -w 00000000 >/dev/null 2>&1 || true
+        ID="${2:-all}"
+        case "$ID" in [0-3]|all) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
+        if [ "$ID" = "all" ]; then
+            for I in 0 1 2 3; do
+                if check_key_exists "F${I}Md"; then
+                    "$SMC" -k "F${I}Md" -w 00 >/dev/null 2>&1 || true
+                    "$SMC" -k "F${I}Tg" -w 00000000 >/dev/null 2>&1 || true
+                fi
+            done
+        else
+            "$SMC" -k "F${ID}Md" -w 00 >/dev/null 2>&1 || true
+            "$SMC" -k "F${ID}Tg" -w 00000000 >/dev/null 2>&1 || true
+        fi
         if check_key_exists "Ftst"; then
             "$SMC" -k Ftst -w 00 >/dev/null 2>&1 || true
         fi

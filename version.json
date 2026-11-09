@@ -1,7 +1,7 @@
 {
-  "version": "1.9.4",
-  "name": "HyperMac v1.9.4 (Khắc phục Memory Leak CGEvent & Tối ưu RAM lâu dài)",
-  "notes": "✨ Bản vá & Tối ưu hoá trong phiên bản v1.9.4:\n- 🧠 Khắc phục triệt để lỗi Memory Leak CGEvent (PR #3 từ contributor thaupc): Sửa lỗi retain không giải phóng trong Event Tap Callback của hệ thống khi lắng nghe phím tắt. Đổi toàn bộ sang Unmanaged.passUnretained(event), giúp giải phóng ngay lập tức các sự kiện bàn phím/chuột.\n- 🚀 Tối ưu hoá bộ nhớ dài hạn: Giữ mức tiêu hao RAM siêu nhẹ ổn định (~10–40MB) kể cả khi mở máy chạy liên tục nhiều tuần mà không bị phình bộ nhớ.\n- 🗄️ Kế thừa đầy đủ các nâng cấp Menu Bar Drawer và Notch Spacing Fix từ v1.9.3.",
-  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.4/HyperMac.zip",
-  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.4"
+  "version": "1.9.5",
+  "name": "HyperMac v1.9.5 (Khóa sạc kép M1–M5, Nhiệt độ nhân SMC, Sửa kẹt chuột & Vá Leak HIDEvent)",
+  "notes": "✨ Bản nâng cấp toàn diện v1.9.5:\n- 🔋 Kiến trúc Khóa Sạc Kép (Dual-Layer Lock) cho mọi dòng M1–M5 (Air/Pro/Max/Ultra) & macOS 14/15/26: Kết hợp đồng thời trần Firmware (PowerUI CHLT / bfD0) và công tắc ngắt tức thời (CHTE / CH0B), giữ trần 80% ngay cả khi gập máy Sleep và tự động khóa lại khi rút/cắm sạc MagSafe/USB-C PD.\n- 🌡️ Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC (PR #4 từ contributor thaupc): Đọc trực tiếp cảm biến nhân Tp*/Te*/Tf*/Tg* chuẩn xác như Macs Fan Control, hỗ trợ điều khiển đồng bộ đa quạt (F0 + F1) trên MacBook Pro 14\"/16\" và Mac Studio.\n- 🖱️ Khắc phục triệt để lỗi kẹt phím chuột khi bấm Chuột Trái + Chuột Phải mở Mission Control.\n- 🧠 Vá lỗ hổng rò rỉ bộ nhớ IOHIDEvent trong bộ đọc cảm biến HID, giữ RAM siêu nhẹ ~40MB.\n- 🌐 Tự động Retry khi tải bản cập nhật gặp lỗi HTTP 502/503/504 từ GitHub CDN.",
+  "download_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/download/v1.9.5/HyperMac.zip",
+  "html_url": "https://github.com/mrgoose000000-gif/HyperMac/releases/tag/v1.9.5"
 }

@@ -123,10 +123,10 @@ public class CaffeinateManager: ObservableObject {
         } else {
             disable()
             // Send user notification when timer expires
-            let notif = NSUserNotification()
-            notif.title = "☕️ Chống sleep màn kết thúc"
-            notif.informativeText = "Hết thời gian hẹn giờ giữ màn hình. Màn hình đã trở lại chế độ ngủ bình thường của macOS."
-            NSUserNotificationCenter.default.deliver(notif)
+            let script = "display notification \"Hết thời gian hẹn giờ giữ màn hình. Màn hình đã trở lại chế độ ngủ bình thường của macOS.\" with title \"☕️ Chống sleep màn kết thúc\""
+            DispatchQueue.global(qos: .utility).async {
+                _ = shell("osascript -e '\(script)'")
+            }
         }
     }
 

@@ -67,7 +67,7 @@ struct VersionManifest: Decodable {
 public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     public static let shared = UpdateManager()
 
-    public static let currentVersion: String = "1.9.4"
+    public static let currentVersion: String = "1.9.5"
 
     @Published public var state: UpdateState = .idle
     @Published public var downloadProgress: Double = 0.0
@@ -85,6 +85,8 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
     private var activeDownloadTask: URLSessionDownloadTask?
     private var downloadUrl: URL?
     private var htmlUrl: URL?
+    private var downloadRetryCount: Int = 0
+    private static let maxDownloadRetries: Int = 2
 
     public override init() {
         super.init()
@@ -295,14 +297,33 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
             return
         }
 
+        self.downloadRetryCount = 0
         self.state = .downloading(progress: 0.0)
         self.downloadProgress = 0.0
+        self.performDownloadAttempt(baseUrl: url)
+    }
 
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue.main)
-        let task = session.downloadTask(with: url)
+    private func performDownloadAttempt(baseUrl: URL) {
+        var targetUrl = baseUrl
+        if downloadRetryCount > 0, var comps = URLComponents(url: baseUrl, resolvingAgainstBaseURL: false) {
+            var items = comps.queryItems ?? []
+            items.append(URLQueryItem(name: "retry", value: "\(downloadRetryCount)_\(Int(Date().timeIntervalSince1970))"))
+            comps.queryItems = items
+            if let bustUrl = comps.url { targetUrl = bustUrl }
+        }
+
+        let config = URLSessionConfiguration.default
+        if downloadRetryCount > 0 {
+            config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        }
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue.main)
+        var req = URLRequest(url: targetUrl)
+        req.setValue("HyperMac-App", forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 25.0
+        let task = session.downloadTask(with: req)
         self.activeDownloadTask = task
         task.resume()
-        appLog("🚀 UpdateManager: Downloading update from \(url)")
+        appLog("🚀 UpdateManager: Downloading update from \(targetUrl) (attempt \(downloadRetryCount + 1))")
     }
 
     public func openReleasePage() {
@@ -337,6 +358,15 @@ public class UpdateManager: NSObject, ObservableObject, URLSessionDownloadDelega
         let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 200
         guard status == 200 else {
             Task { @MainActor in
+                // GitHub CDN edges occasionally return transient 502/503/504 -> auto-retry with cache busting
+                if (status == 502 || status == 503 || status == 504) && self.downloadRetryCount < Self.maxDownloadRetries,
+                   let baseUrl = self.downloadUrl {
+                    self.downloadRetryCount += 1
+                    appLog("⚠️ UpdateManager: GitHub CDN returned HTTP \(status), retrying (\(self.downloadRetryCount)/\(Self.maxDownloadRetries))...")
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    self.performDownloadAttempt(baseUrl: baseUrl)
+                    return
+                }
                 self.state = .failed("Máy chủ GitHub trả về mã lỗi \(status). Bản cập nhật chưa được tải, app hiện tại vẫn nguyên vẹn.")
             }
             return

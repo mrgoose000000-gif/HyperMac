@@ -477,7 +477,7 @@ public final class DiskSpeedManager: ObservableObject {
     private static let defaultsKey = "disk_speed_enabled"
 
     private let queue = DispatchQueue(label: "com.hypermac.diskspeed", qos: .utility)
-    private let sampler = DiskSpeedSampler()
+    nonisolated(unsafe) private let sampler = DiskSpeedSampler()
     private var timer: Timer?
     private var isSampling = false
     private var isPopoverVisible = false
@@ -533,7 +533,9 @@ public final class DiskSpeedManager: ObservableObject {
     private func start() {
         guard isEnabled, isPopoverVisible, timer == nil else { return }
         let pollTimer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
+            Task { @MainActor [weak self] in
+                self?.tick()
+            }
         }
         RunLoop.main.add(pollTimer, forMode: .common)
         timer = pollTimer

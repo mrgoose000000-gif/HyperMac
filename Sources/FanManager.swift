@@ -1,9 +1,53 @@
 import Foundation
+import IOKit
 import AppKit
 
-/// Điều khiển tốc độ quạt (Apple Silicon) theo kiểu iStat Menus:
+// MARK: - Direct AppleSMC Fan Telemetry Reader (Zero Process Spawn, 0% CPU)
+
+private final class SMCFanReader {
+    private var conn: io_connect_t = 0
+
+    init() {
+        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        guard svc != 0 else { return }
+        if IOServiceOpen(svc, mach_task_self_, 0, &conn) != KERN_SUCCESS { conn = 0 }
+        IOObjectRelease(svc)
+    }
+
+    deinit { if conn != 0 { IOServiceClose(conn) } }
+
+    private static func fourCC(_ s: String) -> UInt32 { s.utf8.reduce(0) { $0 << 8 | UInt32($1) } }
+
+    private func readBytes(key: String, size: UInt32) -> [UInt8]? {
+        guard conn != 0 else { return nil }
+        var inp = [UInt8](repeating: 0, count: 80)
+        let code = Self.fourCC(key)
+        withUnsafeBytes(of: code) { inp.replaceSubrange(0..<4, with: $0) }
+        withUnsafeBytes(of: size) { inp.replaceSubrange(28..<32, with: $0) }
+        inp[42] = 5 // kSMCReadKey
+        var out = [UInt8](repeating: 0, count: 80)
+        var outSize = 80
+        let kr = IOConnectCallStructMethod(conn, 2, inp, 80, &out, &outSize)
+        guard kr == KERN_SUCCESS && out[40] == 0 else { return nil }
+        return Array(out[48..<48 + Int(size)])
+    }
+
+    func readFanCount() -> Int {
+        guard let b = readBytes(key: "FNum", size: 1), let count = b.first else { return 0 }
+        return Int(count)
+    }
+
+    func readFloat(key: String) -> Double {
+        guard let b = readBytes(key: key, size: 4), b.count == 4 else { return 0 }
+        let bits = b.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+        let val = Double(Float(bitPattern: bits))
+        return val.isFinite && val >= 0 ? val : 0
+    }
+}
+
+/// Điều khiển tốc độ quạt (Apple Silicon M1–M5 Air/Pro/Max/Ultra) theo kiểu iStat Menus:
 /// System Controlled / Medium / High / thanh trượt thủ công.
-/// Đọc qua `smc` đi kèm (không cần root); ghi qua helper `displaycontrol-power` (sudo NOPASSWD).
+/// Đọc trực tiếp qua IOKit AppleSMC (0 tiến trình con); ghi đồng bộ toàn bộ quạt qua helper `displaycontrol-power`.
 @MainActor
 public final class FanManager: ObservableObject {
     public static let shared = FanManager()
@@ -15,8 +59,8 @@ public final class FanManager: ObservableObject {
         case manual
     }
 
-    private static let requiredHelperVersion = 2
-    private static let helperPath = "/usr/local/bin/displaycontrol-power"
+    nonisolated private static let requiredHelperVersion = 2
+    nonisolated private static let helperPath = "/usr/local/bin/displaycontrol-power"
     private static let safetyTempOn = 90.0
     private static let safetyTempOff = 80.0
 
@@ -38,6 +82,8 @@ public final class FanManager: ObservableObject {
 
     public var isAvailable: Bool { fanCount > 0 && maxRPM > 0 }
 
+    private let smcReader = SMCFanReader()
+    private var fanRanges: [(min: Double, max: Double)] = []
     private var pollTimer: Timer?
     private var smcPath: String?
     private var pendingApply: DispatchWorkItem?
@@ -51,8 +97,8 @@ public final class FanManager: ObservableObject {
         nc.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         nc.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
         startPolling()
-        // Khởi động luôn ở System: nếu bản trước crash giữa chừng, trả quạt về auto.
-        if isAvailable { runHelper(["fan-auto", "0"]) { _ in } }
+        // Khởi động luôn ở System: nếu bản trước crash giữa chừng, trả toàn bộ quạt về auto.
+        if isAvailable { restoreAllFansAutoAsync() }
     }
 
     // MARK: - Percent <-> RPM
@@ -79,7 +125,7 @@ public final class FanManager: ObservableObject {
         mode = .system
         targetRPM = 0
         errorMessage = nil
-        runHelper(["fan-auto", "0"]) { _ in }
+        restoreAllFansAutoAsync()
     }
 
     public func selectMedium() { apply(rpm: mediumRPM, as: .medium) }
@@ -105,15 +151,26 @@ public final class FanManager: ObservableObject {
         }
     }
 
-    /// Gọi khi thoát app (đồng bộ).
+    /// Gọi khi thoát app (đồng bộ cho tất cả quạt 0..<fanCount).
     public func restoreSystemSync() {
         guard isAvailable else { return }
-        _ = shell("sudo -n \(FanManager.helperPath) fan-auto 0 2>/dev/null")
+        let count = max(1, min(fanCount, 4))
+        for i in 0..<count {
+            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) 2>/dev/null")
+        }
         mode = .system
         targetRPM = 0
     }
 
     // MARK: - Internals
+
+    private func restoreAllFansAutoAsync() {
+        let count = max(1, min(fanCount, 4))
+        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0)" }.joined(separator: " && ")
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = shell(cmds + " 2>&1")
+        }
+    }
 
     private func apply(rpm: Double, as newMode: Mode) {
         guard isAvailable else { return }
@@ -133,84 +190,127 @@ public final class FanManager: ObservableObject {
         targetRPM = rpm
         errorMessage = nil
         isBusy = true
-        let value = Int(rpm.rounded())
-        runHelper(["fan-set", "0", "\(value)"]) { [weak self] ok in
-            guard let self = self else { return }
-            self.isBusy = false
-            if !ok {
-                self.mode = .system
-                self.targetRPM = 0
-                self.errorMessage = tr("Không đặt được tốc độ quạt trên máy này.",
-                                       "Could not set fan speed on this Mac.")
-                return
-            }
-            // Ghi SMC có độ trễ: đọc lại sau ~1.5s rồi kiểm chứng.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.verifyTarget(expected: Double(value))
-            }
-        }
-    }
 
-    private func verifyTarget(expected: Double) {
-        guard mode != .system, let smc = smcPath else { return }
-        DispatchQueue.global(qos: .utility).async {
-            let (out, _) = shell("'\(smc)' -k F0Tg -r 2>/dev/null")
-            let tg = FanManager.parseFloat(out)
+        // Tính tỷ lệ phần trăm tốc độ và áp dụng đồng bộ cho TOÀN BỘ quạt (F0, F1... trên Pro/Max/Ultra)
+        let ratio = maxRPM > 0 ? min(max(rpm / maxRPM, 0), 1) : 0.5
+        let count = max(1, min(fanCount, 4))
+        var subCommands: [String] = []
+        let primaryValue = Int(min(max(rpm.rounded(), minRPM), maxRPM))
+
+        for i in 0..<count {
+            let range = i < fanRanges.count ? fanRanges[i] : (min: minRPM, max: maxRPM)
+            let fanRpm = Int(min(max((range.max * ratio).rounded(), range.min), range.max))
+            subCommands.append("sudo -n \(FanManager.helperPath) fan-set \(i) \(fanRpm)")
+        }
+        let fullCmd = subCommands.joined(separator: " && ") + " 2>&1"
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let (out, code) = shell(fullCmd)
+            let ok = code == 0 && out.contains("FAN_SET_OK")
+            if !ok { appLog("⚠️ Fan helper apply: code=\(code) \(out)") }
             DispatchQueue.main.async {
-                guard self.mode != .system else { return }
-                if abs(tg - expected) > 2 {
+                guard let self = self else { return }
+                self.isBusy = false
+                if !ok {
                     self.mode = .system
                     self.targetRPM = 0
-                    self.errorMessage = tr("macOS không giữ tốc độ quạt (đã trả về Tự động).",
-                                           "macOS did not keep the fan speed (returned to Auto).")
-                    self.runHelper(["fan-auto", "0"]) { _ in }
+                    self.errorMessage = tr("Không đặt được tốc độ quạt trên máy này.",
+                                           "Could not set fan speed on this Mac.")
+                    return
+                }
+                // Ghi SMC có độ trễ: đọc lại sau ~1.5s rồi kiểm chứng.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    self?.verifyTarget(expected: Double(primaryValue))
                 }
             }
         }
     }
 
-    private func runHelper(_ args: [String], completion: @escaping @MainActor (Bool) -> Void) {
-        let cmd = "sudo -n \(FanManager.helperPath) " + args.joined(separator: " ") + " 2>&1"
-        DispatchQueue.global(qos: .userInitiated).async {
-            let (out, code) = shell(cmd)
-            let ok = code == 0 && (out.contains("FAN_SET_OK") || out.contains("FAN_AUTO_OK"))
-            if !ok { appLog("⚠️ Fan helper \(args.joined(separator: " ")): code=\(code) \(out)") }
-            DispatchQueue.main.async { Task { @MainActor in completion(ok) } }
+    private func verifyTarget(expected: Double) {
+        guard mode != .system else { return }
+        var tg = smcReader.readFloat(key: "F0Tg")
+        if tg <= 0, let smc = smcPath {
+            let (out, _) = shell("'\(smc)' -k F0Tg -r 2>/dev/null")
+            tg = FanManager.parseFloat(out)
+        }
+        if abs(tg - expected) > 5 {
+            self.mode = .system
+            self.targetRPM = 0
+            self.errorMessage = tr("macOS không giữ tốc độ quạt (đã trả về Tự động).",
+                                   "macOS did not keep the fan speed (returned to Auto).")
+            restoreAllFansAutoAsync()
         }
     }
 
     public func checkHelper() {
+        let path = FanManager.helperPath
+        let reqVer = FanManager.requiredHelperVersion
         DispatchQueue.global(qos: .utility).async {
-            let (out, code) = shell("sudo -n \(FanManager.helperPath) version 2>/dev/null")
+            let (out, code) = shell("sudo -n \(path) version 2>/dev/null")
             var ver = 0
             if code == 0, let r = out.range(of: "HELPER_VERSION:") {
                 ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
             }
             DispatchQueue.main.async {
-                self.isHelperReady = ver >= FanManager.requiredHelperVersion
+                self.isHelperReady = ver >= reqVer
             }
         }
     }
 
     private func refreshStatic() {
-        guard let smc = smcPath else { return }
-        let (n, _) = shell("'\(smc)' -k FNum -r 2>/dev/null")
-        fanCount = Int(FanManager.parseFloat(n))
+        // 1. Đọc trực tiếp từ IOKit AppleSMC (0ms, không tạo tiến trình)
+        var count = smcReader.readFanCount()
+        if count == 0, let smc = smcPath {
+            let (n, _) = shell("'\(smc)' -k FNum -r 2>/dev/null")
+            count = Int(FanManager.parseFloat(n))
+        }
+        fanCount = count
         guard fanCount > 0 else { return }
-        minRPM = FanManager.parseFloat(shell("'\(smc)' -k F0Mn -r 2>/dev/null").0)
-        maxRPM = FanManager.parseFloat(shell("'\(smc)' -k F0Mx -r 2>/dev/null").0)
+
+        var ranges: [(min: Double, max: Double)] = []
+        for i in 0..<min(fanCount, 4) {
+            var mn = smcReader.readFloat(key: "F\(i)Mn")
+            var mx = smcReader.readFloat(key: "F\(i)Mx")
+            if mx <= 0, let smc = smcPath {
+                mn = FanManager.parseFloat(shell("'\(smc)' -k F\(i)Mn -r 2>/dev/null").0)
+                mx = FanManager.parseFloat(shell("'\(smc)' -k F\(i)Mx -r 2>/dev/null").0)
+            }
+            if mx > 0 {
+                ranges.append((min: mn, max: mx))
+            }
+        }
+        fanRanges = ranges
+        if let first = ranges.first {
+            minRPM = first.min
+            maxRPM = first.max
+        }
     }
 
     private func refreshRPM() {
-        guard let smc = smcPath, fanCount > 0 else { return }
-        DispatchQueue.global(qos: .utility).async {
-            let rpm = FanManager.parseFloat(shell("'\(smc)' -k F0Ac -r 2>/dev/null").0)
-            DispatchQueue.main.async { self.currentRPM = rpm }
+        guard fanCount > 0 else { return }
+        // Đọc trực tiếp tất cả quạt (F0Ac, F1Ac...) qua IOKit AppleSMC — lấy trung bình RPM thực tế
+        var total: Double = 0
+        var validCount = 0
+        for i in 0..<min(fanCount, 4) {
+            let rpm = smcReader.readFloat(key: "F\(i)Ac")
+            if rpm >= 0 {
+                total += rpm
+                validCount += 1
+            }
+        }
+        if validCount > 0 {
+            self.currentRPM = total / Double(validCount)
+        } else if let smc = smcPath {
+            DispatchQueue.global(qos: .utility).async {
+                let rpm = FanManager.parseFloat(shell("'\(smc)' -k F0Ac -r 2>/dev/null").0)
+                DispatchQueue.main.async { self.currentRPM = rpm }
+            }
         }
     }
 
     private func startPolling() {
         pollTimer?.invalidate()
+        guard fanCount > 0 else { return } // Không chạy timer vô ích trên MacBook Air không quạt
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }

@@ -485,9 +485,10 @@ public class WindowManager: ObservableObject {
 
         // 4. Activate owning application WITHOUT activateAllWindows (preserves exact z-order)
         if let app = NSRunningApplication(processIdentifier: item.pid) {
-            app.activate(options: [.activateIgnoringOtherApps])
             if #available(macOS 14.0, *) {
                 app.activate()
+            } else {
+                app.activate(options: [.activateIgnoringOtherApps])
             }
         }
     }

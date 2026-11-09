@@ -111,8 +111,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         MenuBarHiderManager.shared.removeStatusItem()
         VirtualDisplayManager.shared.destroyVirtualDisplay()
         FanManager.shared.restoreSystemSync()
-        // Phục hồi sạc bình thường của macOS khi thoát app để tránh kẹt ngắt sạc phần cứng SMC
-        BatteryManager.shared.setChargingInhibited(false)
+        // Phục hồi đồng bộ công tắc sạc SMC khi thoát app (nhả CHTE/CH0B nhưng giữ trần CHLT nếu đang bật bảo vệ)
+        BatteryManager.shared.restoreOnTerminateSync()
     }
 
     /// Cửa sổ xem trước UI khi đặt `HYPERMAC_PREVIEW=1` (dùng để chụp/kiểm tra layout).

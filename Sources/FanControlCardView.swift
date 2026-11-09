@@ -19,10 +19,10 @@ struct FanControlCardView: View {
                     .overlay(RoundedRectangle(cornerRadius: Rad.md).stroke(Color.primary.opacity(0.06), lineWidth: 1))
             )
             .onAppear { syncSlider() }
-            .onChange(of: fan.targetRPM) { _ in if !fan.isDragging { syncSlider() } }
-            .onChange(of: fan.mode) { _ in if !fan.isDragging { syncSlider() } }
+            .onChange(of: fan.targetRPM) { if !fan.isDragging { syncSlider() } }
+            .onChange(of: fan.mode) { if !fan.isDragging { syncSlider() } }
             // Ở chế độ System, thanh trượt bám theo tốc độ quạt thực tế (như iStat Menus).
-            .onChange(of: fan.currentRPM) { _ in
+            .onChange(of: fan.currentRPM) {
                 if !fan.isDragging && fan.mode == .system { syncSlider() }
             }
         }
@@ -34,7 +34,7 @@ struct FanControlCardView: View {
                 Image(systemName: "fanblades.fill")
                     .font(.system(size: FS.title, weight: .bold))
                     .foregroundStyle(.secondary)
-                Text(tr("Quạt", "Fan"))
+                Text(fan.fanCount > 1 ? tr("Quạt (\(fan.fanCount))", "Fans (\(fan.fanCount))") : tr("Quạt", "Fan"))
                     .font(.system(size: FS.body, weight: .bold))
                 Spacer()
                 Text("\(Self.fmt(fan.currentRPM)) RPM")

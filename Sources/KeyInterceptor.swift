@@ -13,6 +13,23 @@ private var isRightMouseDown = false
 private var chordTriggered = false
 private var leftDownTime: TimeInterval = 0
 private var rightDownTime: TimeInterval = 0
+private var leftDownLocation: CGPoint = .zero
+private var rightDownLocation: CGPoint = .zero
+private var chordTriggerTime: TimeInterval = 0
+
+/// Posts a synthetic mouseUp event for the button whose mouseDown already leaked to the active app
+/// milliseconds before the second button completed the chord. This prevents the active app/window
+/// from remaining stuck in a dragging/selecting state after Mission Control opens.
+private func postSyntheticMouseUp(button: CGMouseButton, location: CGPoint) {
+    let mouseType: CGEventType = (button == .left) ? .leftMouseUp : .rightMouseUp
+    let src = CGEventSource(stateID: .combinedSessionState)
+    guard let upEvent = CGEvent(mouseEventSource: src, mouseType: mouseType, mouseCursorPosition: location, mouseButton: button) else {
+        return
+    }
+    gIsSynthesizingEvent = true
+    upEvent.post(tap: .cgSessionEventTap)
+    gIsSynthesizingEvent = false
+}
 
 // Fast lock-free flags for eventTapCallback
 public var gIsMouseChordEnabled: Bool = true
@@ -117,38 +134,90 @@ private func eventTapCallback(
     // 2. Mouse Chording: Simultaneous Left + Right Click -> F3 (Mission Control)
     if gIsMouseChordEnabled {
         let now = Date().timeIntervalSince1970
-        let chordWindow: TimeInterval = 0.5
+        let chordWindow: TimeInterval = 0.20 // 200ms window for simultaneous press (prevents false-triggers during normal drag)
+        let maxChordDrift: CGFloat = 24.0    // Max cursor movement between first and second button press
 
         switch type {
         case .leftMouseDown:
+            let loc = event.location
+            let rightPhysicallyDown = isRightMouseDown &&
+                                      (now - rightDownTime <= chordWindow) &&
+                                      CGEventSource.buttonState(.combinedSessionState, button: .right) &&
+                                      (hypot(loc.x - rightDownLocation.x, loc.y - rightDownLocation.y) <= maxChordDrift)
             isLeftMouseDown = true
             leftDownTime = now
-            if isRightMouseDown && (now - rightDownTime <= chordWindow) {
+            leftDownLocation = loc
+
+            if rightPhysicallyDown {
                 chordTriggered = true
+                chordTriggerTime = now
+                // Right mouseDown already leaked to the active app milliseconds ago -> immediately send synthetic rightMouseUp
+                // so the app releases its right-button state before Mission Control activates!
+                postSyntheticMouseUp(button: .right, location: rightDownLocation)
                 triggerMissionControl()
-                return nil // Swallow left click
+                return nil // Swallow leftMouseDown
+            } else {
+                // Fresh single left click: ensure any stale chord state is cleared so its leftMouseUp is never swallowed
+                chordTriggered = false
+                isRightMouseDown = false
             }
 
         case .rightMouseDown:
+            let loc = event.location
+            let leftPhysicallyDown = isLeftMouseDown &&
+                                     (now - leftDownTime <= chordWindow) &&
+                                     CGEventSource.buttonState(.combinedSessionState, button: .left) &&
+                                     (hypot(loc.x - leftDownLocation.x, loc.y - leftDownLocation.y) <= maxChordDrift)
             isRightMouseDown = true
             rightDownTime = now
-            if isLeftMouseDown && (now - leftDownTime <= chordWindow) {
+            rightDownLocation = loc
+
+            if leftPhysicallyDown {
                 chordTriggered = true
+                chordTriggerTime = now
+                // Left mouseDown already leaked to the active app milliseconds ago -> immediately send synthetic leftMouseUp
+                // so the app cleanly ends selection/dragging and never gets stuck!
+                postSyntheticMouseUp(button: .left, location: leftDownLocation)
                 triggerMissionControl()
-                return nil // Swallow right click
+                return nil // Swallow rightMouseDown
+            } else {
+                // Fresh single right click: ensure any stale chord state is cleared so its rightMouseUp is never swallowed
+                chordTriggered = false
+                isLeftMouseDown = false
+            }
+
+        case .leftMouseDragged, .rightMouseDragged:
+            if chordTriggered {
+                if now - chordTriggerTime <= 1.5 {
+                    return nil // Swallow phantom drag events while user is releasing the chord
+                } else {
+                    chordTriggered = false
+                }
             }
 
         case .leftMouseUp:
             isLeftMouseDown = false
             if chordTriggered {
-                if !isRightMouseDown { chordTriggered = false }
+                let rightStillHeld = isRightMouseDown &&
+                                     (now - chordTriggerTime <= 1.2) &&
+                                     CGEventSource.buttonState(.combinedSessionState, button: .right)
+                if !rightStillHeld {
+                    isRightMouseDown = false
+                    chordTriggered = false
+                }
                 return nil
             }
 
         case .rightMouseUp:
             isRightMouseDown = false
             if chordTriggered {
-                if !isLeftMouseDown { chordTriggered = false }
+                let leftStillHeld = isLeftMouseDown &&
+                                    (now - chordTriggerTime <= 1.2) &&
+                                    CGEventSource.buttonState(.combinedSessionState, button: .left)
+                if !leftStillHeld {
+                    isLeftMouseDown = false
+                    chordTriggered = false
+                }
                 return nil
             }
 
@@ -676,20 +745,22 @@ public class KeyInterceptor {
 
         updateSettings()
 
-        // Listen for Media Keys, KeyDowns, KeyUps, FlagsChanged, and Mouse Left/Right
+        // Listen for Media Keys, KeyDowns, KeyUps, FlagsChanged, and Mouse Left/Right (Down, Up, Dragged)
         let mask: UInt64 = (1 << NX_SYSDEFINED) |
                            (1 << CGEventType.keyDown.rawValue) |
                            (1 << CGEventType.keyUp.rawValue) |
                            (1 << CGEventType.flagsChanged.rawValue) |
                            (1 << CGEventType.leftMouseDown.rawValue) |
                            (1 << CGEventType.leftMouseUp.rawValue) |
+                           (1 << CGEventType.leftMouseDragged.rawValue) |
                            (1 << CGEventType.rightMouseDown.rawValue) |
-                           (1 << CGEventType.rightMouseUp.rawValue)
+                           (1 << CGEventType.rightMouseUp.rawValue) |
+                           (1 << CGEventType.rightMouseDragged.rawValue)
 
         // EXCLUSIVELY use .cgSessionEventTap for user-session safety!
         let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
-            place: .tailAppendEventTap,
+            place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: CGEventMask(mask),
             callback: eventTapCallback,
