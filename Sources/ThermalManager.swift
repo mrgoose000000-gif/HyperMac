@@ -123,6 +123,80 @@ private class AppleSiliconHIDReader {
     }
 }
 
+// MARK: - AppleSMC Core Temperature Reader
+
+/// Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC (khóa `Tp*`/`Te*`/`Tg*`, kiểu `flt `) — cùng nguồn với Macs Fan Control.
+/// HID `PMU tdie*` là nhiệt của chip PMU, không phải nhân CPU: khi tải nặng lệch ~35°C (58°C so với 94°C trên M2 Pro).
+/// Không cần root. Bố cục struct 80 byte theo `SMCKeyData_t` của smc.c.
+private final class SMCTempReader {
+    private var conn: io_connect_t = 0
+    private var keys: [(code: UInt32, name: String)]?   // nil = chưa dò
+
+    init() {
+        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        guard svc != 0 else { return }
+        if IOServiceOpen(svc, mach_task_self_, 0, &conn) != KERN_SUCCESS { conn = 0 }
+        IOObjectRelease(svc)
+    }
+
+    deinit { if conn != 0 { IOServiceClose(conn) } }
+
+    private static func fourCC(_ s: String) -> UInt32 { s.utf8.reduce(0) { $0 << 8 | UInt32($1) } }
+
+    private static func u32(_ b: [UInt8], _ o: Int) -> UInt32 {
+        b[o..<o + 4].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+    }
+
+    /// cmd: 5 = đọc giá trị, 8 = lấy khóa theo chỉ số, 9 = lấy thông tin khóa.
+    private func call(cmd: UInt8, key: UInt32 = 0, index: UInt32 = 0, size: UInt32 = 0) -> [UInt8]? {
+        guard conn != 0 else { return nil }
+        var inp = [UInt8](repeating: 0, count: 80)
+        withUnsafeBytes(of: key) { inp.replaceSubrange(0..<4, with: $0) }
+        withUnsafeBytes(of: size) { inp.replaceSubrange(28..<32, with: $0) }
+        inp[42] = cmd
+        withUnsafeBytes(of: index) { inp.replaceSubrange(44..<48, with: $0) }
+        var out = [UInt8](repeating: 0, count: 80)
+        var outSize = 80
+        let kr = IOConnectCallStructMethod(conn, 2, inp, 80, &out, &outSize)
+        return kr == KERN_SUCCESS && out[40] == 0 ? out : nil
+    }
+
+    private func discover() -> [(code: UInt32, name: String)] {
+        guard let n = call(cmd: 5, key: Self.fourCC("#KEY"), size: 4) else { return [] }
+        let count = UInt32(bigEndian: Self.u32(n, 48))
+        let flt = Self.fourCC("flt ")
+        var found: [(code: UInt32, name: String)] = []
+        for i in 0..<count {
+            guard let k = call(cmd: 8, index: i) else { continue }
+            let code = Self.u32(k, 0)
+            let name = String(bytes: withUnsafeBytes(of: code.bigEndian, Array.init), encoding: .ascii) ?? ""
+            guard name.hasPrefix("Tp") || name.hasPrefix("Te") || name.hasPrefix("Tg"),
+                  let info = call(cmd: 9, key: code),
+                  Self.u32(info, 28) == 4, Self.u32(info, 32) == flt else { continue }
+            found.append((code, name))
+        }
+        return found
+    }
+
+    /// Rỗng nếu máy không có các khóa này (nơi gọi sẽ dùng lại HID).
+    func read() -> (cpu: [SensorReading], gpu: [SensorReading]) {
+        if keys == nil { keys = discover() }
+        var cpu: [SensorReading] = [], gpu: [SensorReading] = []
+        for k in keys ?? [] {
+            guard let v = call(cmd: 5, key: k.code, size: 4) else { continue }
+            let t = Double(Float(bitPattern: Self.u32(v, 48)))
+            guard t > 15.0 && t < 130.0 else { continue }
+            if k.name.hasPrefix("Tg") {
+                gpu.append(SensorReading(name: k.name, displayName: "GPU \(k.name)", temp: t, category: "GPU"))
+            } else {
+                let kind = k.name.hasPrefix("Te") ? "E-Core" : "P-Core"
+                cpu.append(SensorReading(name: k.name, displayName: "CPU \(kind) \(k.name)", temp: t, category: "CPU"))
+            }
+        }
+        return (cpu, gpu)
+    }
+}
+
 // MARK: - Thermal Manager Engine (Temperature Monitoring Only)
 
 /// Reads Apple Silicon HID/PMU temperature sensors and exposes them to the UI.
@@ -165,6 +239,7 @@ public class ThermalManager: ObservableObject {
     public var onMenuBarUpdate: ((String?) -> Void)?
 
     private let hidReader = AppleSiliconHIDReader()
+    private let smcReader = SMCTempReader()
     private var pollTimer: Timer?
 
     private init() {
@@ -232,7 +307,21 @@ public class ThermalManager: ObservableObject {
 
     public func refreshMetrics() {
         // 1. Read Apple Silicon HID Temperatures
-        let (cpu, peak, gpu, bat, nand, hot, sensors) = hidReader.readTemperatures()
+        var (cpu, peak, gpu, bat, nand, hot, sensors) = hidReader.readTemperatures()
+
+        // CPU/GPU: ưu tiên SMC (nhiệt nhân thật); HID PMU chỉ là dự phòng.
+        let smc = smcReader.read()
+        if !smc.cpu.isEmpty {
+            let t = smc.cpu.map(\.temp)
+            cpu = t.reduce(0, +) / Double(t.count)
+            peak = t.max() ?? 0
+            sensors.removeAll { $0.category == "CPU" }
+        }
+        if !smc.gpu.isEmpty {
+            gpu = smc.gpu.map(\.temp).reduce(0, +) / Double(smc.gpu.count)
+            sensors.removeAll { $0.category == "GPU" }
+        }
+        sensors = smc.cpu + smc.gpu + sensors
         if cpu > 0 { self.cpuAvgTemp = cpu }
         if peak > 0 { self.cpuPeakTemp = peak }
         if gpu > 0 { self.gpuAvgTemp = gpu }

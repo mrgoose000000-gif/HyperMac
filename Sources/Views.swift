@@ -2596,7 +2596,7 @@ struct ThermalAndFanCardView: View {
                             .font(.system(size: FS.body, weight: .semibold))
                             .foregroundStyle(.primary)
 
-                        Text("HID PMU")
+                        Text("SMC + HID")
                             .font(.system(size: FS.caption, weight: .semibold))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -2684,7 +2684,7 @@ struct ThermalAndFanCardView: View {
     private var thermalMatrixGrid: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Label(tr("Bản đồ nhiệt Apple Silicon (HID PMU)", "Apple Silicon Thermal Matrix (HID PMU)"), systemImage: "cpu")
+                Label(tr("Bản đồ nhiệt Apple Silicon (SMC + HID)", "Apple Silicon Thermal Matrix (SMC + HID)"), systemImage: "cpu")
                     .font(.system(size: FS.caption, weight: .semibold))
                     .foregroundStyle(.primary)
 
@@ -2781,7 +2781,7 @@ struct ThermalAndFanCardView: View {
                         .font(.system(size: FS.caption))
                         .foregroundStyle(Color.accentColor)
 
-                    Text(tr("Chi tiết \(thermalManager.detailedSensors.count) cảm biến PMU trên chip", "Detailed \(thermalManager.detailedSensors.count) on-chip PMU sensors"))
+                    Text(tr("Chi tiết \(thermalManager.detailedSensors.count) cảm biến trên chip", "Detailed \(thermalManager.detailedSensors.count) on-chip sensors"))
                         .font(.system(size: FS.caption, weight: .semibold))
                         .foregroundStyle(.primary)
 
@@ -2848,9 +2848,13 @@ struct ThermalAndFanCardView: View {
     }
 
     private var localizedThermalStateDescription: String {
+        // thermalState chỉ báo áp lực nhiệt (giảm xung), vẫn "nominal" ở 9x°C — nên khi chưa giảm xung thì mô tả theo nhiệt độ, cùng ngưỡng với stateColor.
         switch ProcessInfo.processInfo.thermalState {
-        case .nominal: return tr("Mát mẻ (Bình thường)", "Nominal (Cool)")
-        case .fair: return tr("Ấm nhẹ (Tải vừa)", "Fair (Moderate)")
+        case .nominal, .fair:
+            let peak = thermalManager.cpuPeakTemp
+            if peak < 60.0 { return tr("Mát mẻ (Bình thường)", "Cool (Normal)") }
+            if peak < 80.0 { return tr("Ấm (Tải vừa)", "Warm (Moderate)") }
+            return tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
         case .serious: return tr("Nóng (Đang giảm xung)", "Serious (Throttling)")
         case .critical: return tr("Rất nóng (Throttling tối đa!)", "Critical (Heavy Throttling!)")
         @unknown default: return tr("Bình thường", "Normal")
