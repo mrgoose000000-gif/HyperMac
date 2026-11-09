@@ -2890,7 +2890,7 @@ struct FooterView: View {
 
             // Author Link Button
             Button {
-                if let url = URL(string: "https://bit.ly/4ectK8U") {
+                if let url = URL(string: "https://dub.sh/tL0ar4i") {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
@@ -3367,7 +3367,7 @@ struct DonateModalView: View {
 
                         // Facebook Link Button
                         Button {
-                            if let url = URL(string: "https://bit.ly/4ectK8U") {
+                            if let url = URL(string: "https://dub.sh/tL0ar4i") {
                                 NSWorkspace.shared.open(url)
                             }
                         } label: {

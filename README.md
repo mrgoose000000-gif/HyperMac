@@ -382,7 +382,7 @@ HyperMac là dự án phần mềm mã nguồn mở hoàn toàn **miễn phí** 
 > *Mình xin chân thành cảm ơn tấm lòng của mọi người 😊😊😊.*  
 > *Nếu được, rất mong bạn có thể nhắn cho mình thông tin donate qua FB để mình có thể gửi lời cảm ơn trực tiếp đến bạn ❤️"*
 
-[![Nhắn tin Facebook cho tác giả](https://img.shields.io/badge/💬_Nhắn_tin_qua_Facebook_cho_tác_giả-1877F2?style=for-the-badge&logo=facebook&logoColor=white)](https://bit.ly/4ectK8U)
+[![Nhắn tin Facebook cho tác giả](https://img.shields.io/badge/💬_Nhắn_tin_qua_Facebook_cho_tác_giả-1877F2?style=for-the-badge&logo=facebook&logoColor=white)](https://dub.sh/tL0ar4i)
 
 </div>
 
