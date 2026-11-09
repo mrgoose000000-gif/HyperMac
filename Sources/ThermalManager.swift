@@ -127,12 +127,24 @@ private class AppleSiliconHIDReader {
 
 // MARK: - AppleSMC Core Temperature Reader
 
-/// Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC (khóa `Tp*`/`Te*`/`Tf*`/`Tg*`, kiểu `flt `) — cùng nguồn với Macs Fan Control.
-/// Hỗ trợ toàn bộ các dòng M1, M2, M3, M4, M5 (Air / Pro / Max / Ultra).
+private struct SMCSensorKey {
+    enum Group { case cpu, gpu, battery, nand, hotspot }
+    let code: UInt32
+    let name: String
+    let label: String
+    let group: Group
+}
+
+/// Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC (kiểu `flt `) — cùng nguồn với Macs Fan Control / Stats.
+/// Chỉ đọc đúng danh sách khóa cảm biến nhân đã được xác minh cho từng đời chip M1–M5
+/// (theo bảng `exelban/stats`), KHÔNG quét mọi khóa `Tp*`: trên M2, các khóa như
+/// `Tp02/Tp06/Tp0A/Tp0E/Tp0g/Tp0k/Tp0o/Tp0s` không phải nhân CPU và luôn cao hơn 15–20°C,
+/// làm "CPU nóng nhất" bị vọt ảo.
 /// Không cần root. Bố cục struct 80 byte theo `SMCKeyData_t` của smc.c.
 private final class SMCTempReader {
     private var conn: io_connect_t = 0
-    private var keys: [(code: UInt32, name: String)]?   // nil = chưa dò
+    private var keys: [SMCSensorKey]?   // nil = chưa dò
+    private var lastGood: [UInt32: Double] = [:]
 
     init() {
         let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
@@ -163,21 +175,74 @@ private final class SMCTempReader {
         return kr == KERN_SUCCESS && out[40] == 0 ? out : nil
     }
 
-    private func discover() -> [(code: UInt32, name: String)] {
-        guard let n = call(cmd: 5, key: Self.fourCC("#KEY"), size: 4) else { return [] }
-        let count = min(UInt32(bigEndian: Self.u32(n, 48)), 4096)
-        let flt = Self.fourCC("flt ")
-        var found: [(code: UInt32, name: String)] = []
-        for i in 0..<count {
-            guard let k = call(cmd: 8, index: i) else { continue }
-            let code = Self.u32(k, 0)
-            let name = String(bytes: withUnsafeBytes(of: code.bigEndian, Array.init), encoding: .ascii) ?? ""
-            guard name.hasPrefix("Tp") || name.hasPrefix("Te") || name.hasPrefix("Tg") ||
-                  name.hasPrefix("Tf") || name == "TB0T" || name == "TH0x" || name == "TW0P" || name == "TPMP",
-                  let info = call(cmd: 9, key: code),
-                  Self.u32(info, 28) == 4, Self.u32(info, 32) == flt else { continue }
-            found.append((code, name))
+    /// Đời chip Apple Silicon từ `machdep.cpu.brand_string` ("Apple M2", "Apple M3 Max"...). 0 = không rõ.
+    private static func chipGeneration() -> Int {
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var buf = [CChar](repeating: 0, count: max(size, 1))
+        sysctlbyname("machdep.cpu.brand_string", &buf, &size, nil, 0)
+        let brand = String(cString: buf)
+        guard let r = brand.range(of: "Apple M") else { return 0 }
+        return Int(brand[r.upperBound...].prefix(while: { $0.isNumber })) ?? 0
+    }
+
+    /// Bảng khóa cảm biến nhân đã xác minh theo từng đời chip (nguồn: exelban/stats `values.swift`).
+    /// Khóa không tồn tại trên biến thể cụ thể (Air/Pro/Max/Ultra) sẽ tự bị bỏ qua lúc dò.
+    private static func catalog(for gen: Int) -> (cpu: [(key: String, label: String)], gpu: [String]) {
+        func cores(_ keys: [String], _ kind: String) -> [(key: String, label: String)] {
+            keys.enumerated().map { (key: $0.element, label: "CPU \(kind) \($0.offset + 1)") }
         }
+        switch gen {
+        case 1:
+            return (cores(["Tp09", "Tp0T"], "E-Core") +
+                    cores(["Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"], "P-Core"),
+                    ["Tg05", "Tg0D", "Tg0L", "Tg0T"])
+        case 2:
+            return (cores(["Tp1h", "Tp1t", "Tp1p", "Tp1l"], "E-Core") +
+                    cores(["Tp01", "Tp05", "Tp09", "Tp0D", "Tp0X", "Tp0b", "Tp0f", "Tp0j"], "P-Core"),
+                    ["Tg0f", "Tg0j"])
+        case 3:
+            return (cores(["Te05", "Te0L", "Te0P", "Te0S"], "E-Core") +
+                    cores(["Tf04", "Tf09", "Tf0A", "Tf0B", "Tf0D", "Tf0E",
+                           "Tf44", "Tf49", "Tf4A", "Tf4B", "Tf4D", "Tf4E"], "P-Core"),
+                    ["Tf14", "Tf18", "Tf19", "Tf1A", "Tf24", "Tf28", "Tf29", "Tf2A"])
+        case 4:
+            return (cores(["Te05", "Te0S", "Te09", "Te0H"], "E-Core") +
+                    cores(["Tp01", "Tp05", "Tp09", "Tp0D", "Tp0V", "Tp0Y", "Tp0b", "Tp0e"], "P-Core"),
+                    ["Tg0G", "Tg0H", "Tg1U", "Tg1k", "Tg0K", "Tg0L", "Tg0d", "Tg0e", "Tg0j", "Tg0k"])
+        case 5:
+            return (cores(["Tp00", "Tp04", "Tp08", "Tp0C", "Tp0G", "Tp0K"], "Super-Core") +
+                    cores(["Tp0O", "Tp0R", "Tp0U", "Tp0X", "Tp0a", "Tp0d",
+                           "Tp0g", "Tp0j", "Tp0m", "Tp0p", "Tp0u", "Tp0y"], "P-Core"),
+                    ["Tg0U", "Tg0X", "Tg0d", "Tg0g", "Tg0j", "Tg1Y", "Tg1c", "Tg1g"])
+        default:
+            // Đời chip chưa được xác minh → không đoán bừa, để HID làm dự phòng.
+            return ([], [])
+        }
+    }
+
+    private func discover() -> [SMCSensorKey] {
+        let flt = Self.fourCC("flt ")
+        func probe(_ name: String, _ label: String, _ group: SMCSensorKey.Group) -> SMCSensorKey? {
+            let code = Self.fourCC(name)
+            guard let info = call(cmd: 9, key: code),
+                  Self.u32(info, 28) == 4, Self.u32(info, 32) == flt else { return nil }
+            return SMCSensorKey(code: code, name: name, label: label, group: group)
+        }
+
+        let cat = Self.catalog(for: Self.chipGeneration())
+        var found: [SMCSensorKey] = cat.cpu.compactMap { probe($0.key, $0.label, .cpu) }
+        var gpuIndex = 0
+        for key in cat.gpu {
+            if let k = probe(key, "GPU \(gpuIndex + 1)", .gpu) {
+                found.append(k)
+                gpuIndex += 1
+            }
+        }
+        if let k = probe("TB0T", "Battery", .battery) { found.append(k) }
+        if let k = probe("TH0x", "NAND", .nand) { found.append(k) }
+        if let k = probe("TW0P", "Airport", .hotspot) { found.append(k) }
+        if let k = probe("TPMP", "PMU", .hotspot) { found.append(k) }
         return found
     }
 
@@ -185,36 +250,31 @@ private final class SMCTempReader {
     func read() -> (cpu: [SensorReading], gpu: [SensorReading], battery: Double, nand: Double, hotspot: Double) {
         if keys == nil { keys = discover() }
         var cpu: [SensorReading] = [], gpu: [SensorReading] = []
-        var tfCpu: [SensorReading] = [], tfGpu: [SensorReading] = []
         var bat: Double = 0, nand: Double = 0, hot: Double = 0
 
         for k in keys ?? [] {
-            guard let v = call(cmd: 5, key: k.code, size: 4) else { continue }
-            let t = Double(Float(bitPattern: Self.u32(v, 48)))
-            guard t > 15.0 && t < 130.0 else { continue }
+            var sample: Double?
+            if let v = call(cmd: 5, key: k.code, size: 4) {
+                let raw = Double(Float(bitPattern: Self.u32(v, 48)))
+                if raw >= 10.0 && raw < 120.0 { sample = raw }
+            }
+            // Cảm biến M2 thỉnh thoảng trả 0 / giá trị rác → giữ giá trị hợp lệ gần nhất (giống Stats).
+            if let sample { lastGood[k.code] = sample }
+            guard let t = sample ?? lastGood[k.code] else { continue }
 
-            if k.name.hasPrefix("Tg") {
-                gpu.append(SensorReading(name: k.name, displayName: "GPU \(k.name)", temp: t, category: "GPU"))
-            } else if k.name.hasPrefix("Tp") || k.name.hasPrefix("Te") {
-                let kind = k.name.hasPrefix("Te") ? "E-Core" : "P-Core"
-                cpu.append(SensorReading(name: k.name, displayName: "CPU \(kind) \(k.name)", temp: t, category: "CPU"))
-            } else if k.name.hasPrefix("Tf") {
-                // M3 / M3 Pro / M3 Max / M3 Ultra Ferrell core sensors fallback
-                if k.name.hasPrefix("Tf1") || k.name.hasPrefix("Tf2") {
-                    tfGpu.append(SensorReading(name: k.name, displayName: "GPU \(k.name)", temp: t, category: "GPU"))
-                } else {
-                    tfCpu.append(SensorReading(name: k.name, displayName: "CPU Core \(k.name)", temp: t, category: "CPU"))
-                }
-            } else if k.name == "TB0T" {
+            switch k.group {
+            case .cpu:
+                cpu.append(SensorReading(name: k.name, displayName: "\(k.label) (\(k.name))", temp: t, category: "CPU"))
+            case .gpu:
+                gpu.append(SensorReading(name: k.name, displayName: "\(k.label) (\(k.name))", temp: t, category: "GPU"))
+            case .battery:
                 bat = t
-            } else if k.name == "TH0x" {
+            case .nand:
                 nand = t
-            } else if k.name == "TPMP" || k.name == "TW0P" {
+            case .hotspot:
                 hot = max(hot, t)
             }
         }
-        if cpu.isEmpty && !tfCpu.isEmpty { cpu = tfCpu }
-        if gpu.isEmpty && !tfGpu.isEmpty { gpu = tfGpu }
         return (cpu, gpu, bat, nand, hot)
     }
 }
@@ -263,6 +323,30 @@ public class ThermalManager: ObservableObject {
     private let hidReader = AppleSiliconHIDReader()
     private let smcReader = SMCTempReader()
     private var pollTimer: Timer?
+
+    /// Ngưỡng trạng thái tính theo CPU TRUNG BÌNH (không theo 1 nhân đỉnh tức thời).
+    /// Apple Silicon: dùng nhẹ ~40–65°C, tải vừa 65–85°C, tải nặng > 85°C (giảm xung ~100°C+).
+    public static let warmThreshold: Double = 65.0
+    public static let hotThreshold: Double = 85.0
+
+    /// Hệ số làm mượt EMA (mẫu 2.5s) — lọc gai nhiệt tức thời khi 1 nhân vừa thức dậy vài mili-giây.
+    private static let emaAlpha: Double = 0.4
+
+    /// Nhiệt độ đại diện để hiển thị trên badge / Menu Bar: CPU trung bình.
+    public var displayTemp: Double { cpuAvgTemp > 0 ? cpuAvgTemp : cpuPeakTemp }
+
+    public enum ThermalLevel { case cool, warm, hot }
+    public var thermalLevel: ThermalLevel {
+        let t = displayTemp
+        if t < Self.warmThreshold { return .cool }
+        if t < Self.hotThreshold { return .warm }
+        return .hot
+    }
+
+    private func smooth(_ previous: Double, _ sample: Double) -> Double {
+        guard previous > 0 else { return sample }
+        return previous + Self.emaAlpha * (sample - previous)
+    }
 
     private init() {
         loadMachineHardwareInfo()
@@ -371,9 +455,9 @@ public class ThermalManager: ObservableObject {
         if hot <= 0 && smc.hotspot > 0 { hot = smc.hotspot }
 
         sensors = smc.cpu + smc.gpu + sensors
-        if cpu > 0 { self.cpuAvgTemp = cpu }
-        if peak > 0 { self.cpuPeakTemp = peak }
-        if gpu > 0 { self.gpuAvgTemp = gpu }
+        if cpu > 0 { self.cpuAvgTemp = smooth(self.cpuAvgTemp, cpu) }
+        if peak > 0 { self.cpuPeakTemp = smooth(self.cpuPeakTemp, peak) }
+        if gpu > 0 { self.gpuAvgTemp = smooth(self.gpuAvgTemp, gpu) }
         if bat > 0 { self.batteryTemp = bat }
         if nand > 0 { self.ssdTemp = nand }
         if hot > 0 { self.hotspotTemp = hot }
@@ -383,12 +467,10 @@ public class ThermalManager: ObservableObject {
         let state = ProcessInfo.processInfo.thermalState
         switch state {
         case .nominal, .fair:
-            if self.cpuPeakTemp < 60.0 {
-                self.thermalStateDescription = tr("Mát mẻ (Bình thường)", "Cool (Normal)")
-            } else if self.cpuPeakTemp < 80.0 {
-                self.thermalStateDescription = tr("Ấm (Tải vừa)", "Warm (Moderate)")
-            } else {
-                self.thermalStateDescription = tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
+            switch thermalLevel {
+            case .cool: self.thermalStateDescription = tr("Mát mẻ (Bình thường)", "Cool (Normal)")
+            case .warm: self.thermalStateDescription = tr("Ấm (Tải vừa)", "Warm (Moderate)")
+            case .hot:  self.thermalStateDescription = tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
             }
             self.isThrottling = false
         case .serious:
@@ -415,7 +497,7 @@ public class ThermalManager: ObservableObject {
             onMenuBarUpdate?(nil)
             return
         }
-        let temp = cpuAvgTemp > 0 ? Int(cpuAvgTemp) : (cpuPeakTemp > 0 ? Int(cpuPeakTemp) : 0)
+        let temp = Int(displayTemp.rounded())
         guard temp > 0 else {
             onMenuBarUpdate?(nil)
             return

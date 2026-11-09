@@ -209,7 +209,7 @@ struct ModernHeaderBar: View {
                         Image(systemName: "thermometer.medium")
                             .font(.system(size: FS.caption))
                             .foregroundStyle(headerTempColor)
-                        Text(String(format: "%.0f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp))
+                        Text(String(format: "%.0f°C", thermalManager.displayTemp))
                             .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
                     }
@@ -218,7 +218,7 @@ struct ModernHeaderBar: View {
                     .background(Capsule().fill(Color.primary.opacity(0.06)))
                 }
                 .buttonStyle(.plain)
-                .help(tr("Nhiệt độ CPU hiện tại: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Bấm để mở kiểm soát nhiệt & quạt", "Current CPU temp: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp)). Click for thermals & fan controls"))
+                .help(tr("CPU trung bình: \(String(format: "%.1f°C", thermalManager.displayTemp)) • Nhân nóng nhất: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp)). Bấm để mở kiểm soát nhiệt & quạt", "CPU average: \(String(format: "%.1f°C", thermalManager.displayTemp)) • Hottest core: \(String(format: "%.1f°C", thermalManager.cpuPeakTemp)). Click for thermals & fan controls"))
             }
 
             // Live Status Chip
@@ -256,13 +256,10 @@ struct ModernHeaderBar: View {
     }
 
     private var headerTempColor: Color {
-        let temp = thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp
-        if temp < 60.0 {
-            return Tone.good
-        } else if temp < 80.0 {
-            return .orange
-        } else {
-            return .red
+        switch thermalManager.thermalLevel {
+        case .cool: return Tone.good
+        case .warm: return .orange
+        case .hot:  return .red
         }
     }
 
@@ -360,7 +357,7 @@ struct HardwareCareTabView: View {
                     index: 1,
                     title: tr("Nhiệt độ & Cảm biến", "Thermals & Sensors"),
                     icon: "thermometer.sun.fill",
-                    badge: thermalManager.cpuAvgTemp > 0 ? String(format: "%.0f°C", thermalManager.cpuPeakTemp > 0 ? thermalManager.cpuPeakTemp : thermalManager.cpuAvgTemp) : nil
+                    badge: thermalManager.cpuAvgTemp > 0 ? String(format: "%.0f°C", thermalManager.displayTemp) : nil
                 )
             }
             .padding(3)
@@ -2837,24 +2834,22 @@ struct ThermalAndFanCardView: View {
         if thermalManager.isThrottling {
             return .red
         }
-        let peak = thermalManager.cpuPeakTemp
-        if peak < 60.0 {
-            return Tone.good
-        } else if peak < 80.0 {
-            return .orange
-        } else {
-            return .red
+        switch thermalManager.thermalLevel {
+        case .cool: return Tone.good
+        case .warm: return .orange
+        case .hot:  return .red
         }
     }
 
     private var localizedThermalStateDescription: String {
-        // thermalState chỉ báo áp lực nhiệt (giảm xung), vẫn "nominal" ở 9x°C — nên khi chưa giảm xung thì mô tả theo nhiệt độ, cùng ngưỡng với stateColor.
+        // thermalState chỉ báo áp lực nhiệt (giảm xung), vẫn "nominal" ở 9x°C — nên khi chưa giảm xung thì mô tả theo CPU trung bình, cùng ngưỡng với stateColor.
         switch ProcessInfo.processInfo.thermalState {
         case .nominal, .fair:
-            let peak = thermalManager.cpuPeakTemp
-            if peak < 60.0 { return tr("Mát mẻ (Bình thường)", "Cool (Normal)") }
-            if peak < 80.0 { return tr("Ấm (Tải vừa)", "Warm (Moderate)") }
-            return tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
+            switch thermalManager.thermalLevel {
+            case .cool: return tr("Mát mẻ (Bình thường)", "Cool (Normal)")
+            case .warm: return tr("Ấm (Tải vừa)", "Warm (Moderate)")
+            case .hot:  return tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
+            }
         case .serious: return tr("Nóng (Đang giảm xung)", "Serious (Throttling)")
         case .critical: return tr("Rất nóng (Throttling tối đa!)", "Critical (Heavy Throttling!)")
         @unknown default: return tr("Bình thường", "Normal")

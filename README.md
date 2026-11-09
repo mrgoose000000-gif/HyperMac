@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.5-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.6-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.5)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.6)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,17 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.6] — 2026-11-09
+- **🌡️ Đo nhiệt độ CPU/GPU chuẩn xác theo từng đời chip M1 / M2 / M3 / M4 / M5:**
+  - Bản v1.9.5 quét mọi khóa SMC bắt đầu bằng `Tp*` / `Te*` / `Tg*`. Trên chip M2, trong đó có nhiều khóa **không phải cảm biến nhân CPU** (`Tp02`, `Tp06`, `Tp0A`, `Tp0E`, `Tp0g`, `Tp0k`, `Tp0o`, `Tp0s`...) và luôn cao hơn nhân thật 10–20°C, làm **"CPU Nóng nhất"** bị vọt ảo.
+  - v1.9.6 chỉ đọc **đúng danh sách khóa cảm biến nhân đã được xác minh cho từng đời chip** (theo bảng chuẩn của ứng dụng mã nguồn mở *Stats*), tự bỏ qua khóa không có trên biến thể Air / Pro / Max / Ultra. Đời chip chưa xác minh sẽ dùng cảm biến HID làm dự phòng thay vì đoán bừa.
+  - Lọc giá trị rác (0°C hoặc > 120°C mà cảm biến M2 thỉnh thoảng trả về), giữ lại giá trị hợp lệ gần nhất.
+  - Khởi động nhanh hơn: không còn phải duyệt toàn bộ ~1.600 khóa SMC lúc mở app.
+- **📊 Badge nhiệt độ & trạng thái hiển thị theo CPU Trung bình:**
+  - Badge `🌡️` trên thanh tiêu đề, badge tab "Nhiệt độ & Cảm biến" và Menu Bar giờ cùng hiển thị **CPU Trung bình** (trước đây badge lấy nhân nóng nhất tức thời nên lúc 72°C lúc 53°C). Rê chuột vào badge để xem cả nhân nóng nhất.
+  - Nhãn **Mát mẻ / Ấm / Nóng** tính theo CPU trung bình với ngưỡng phù hợp Apple Silicon: `< 65°C` Mát mẻ, `65–85°C` Ấm (Tải vừa), `> 85°C` Nóng.
+  - Làm mượt nhẹ (EMA) để số không nhảy giật khi một nhân vừa thức dậy vài mili-giây.
 
 ### [v1.9.5] — 2026-11-09
 - **🔋 Kiến trúc Khóa Sạc Kép (Dual-Layer Charge Lock) cho toàn bộ dòng Mac chip M1–M5 (Air / Pro / Max / Ultra) & macOS 14 / 15 / 26:**
