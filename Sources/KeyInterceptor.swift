@@ -746,16 +746,17 @@ public class KeyInterceptor {
         updateSettings()
 
         // Listen for Media Keys, KeyDowns, KeyUps, FlagsChanged, and Mouse Left/Right (Down, Up, Dragged)
-        let mask: UInt64 = (1 << NX_SYSDEFINED) |
-                           (1 << CGEventType.keyDown.rawValue) |
-                           (1 << CGEventType.keyUp.rawValue) |
-                           (1 << CGEventType.flagsChanged.rawValue) |
-                           (1 << CGEventType.leftMouseDown.rawValue) |
-                           (1 << CGEventType.leftMouseUp.rawValue) |
-                           (1 << CGEventType.leftMouseDragged.rawValue) |
-                           (1 << CGEventType.rightMouseDown.rawValue) |
-                           (1 << CGEventType.rightMouseUp.rawValue) |
-                           (1 << CGEventType.rightMouseDragged.rawValue)
+        let keyMask: UInt64 = (UInt64(1) << UInt64(NX_SYSDEFINED)) |
+                              (UInt64(1) << UInt64(CGEventType.keyDown.rawValue)) |
+                              (UInt64(1) << UInt64(CGEventType.keyUp.rawValue)) |
+                              (UInt64(1) << UInt64(CGEventType.flagsChanged.rawValue))
+        let mouseMask: UInt64 = (UInt64(1) << UInt64(CGEventType.leftMouseDown.rawValue)) |
+                                (UInt64(1) << UInt64(CGEventType.leftMouseUp.rawValue)) |
+                                (UInt64(1) << UInt64(CGEventType.leftMouseDragged.rawValue)) |
+                                (UInt64(1) << UInt64(CGEventType.rightMouseDown.rawValue)) |
+                                (UInt64(1) << UInt64(CGEventType.rightMouseUp.rawValue)) |
+                                (UInt64(1) << UInt64(CGEventType.rightMouseDragged.rawValue))
+        let mask: UInt64 = keyMask | mouseMask
 
         // EXCLUSIVELY use .cgSessionEventTap for user-session safety!
         let tap = CGEvent.tapCreate(

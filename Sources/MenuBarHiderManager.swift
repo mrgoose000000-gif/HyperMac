@@ -4,13 +4,20 @@ import SwiftUI
 
 public var gIsMenuBarHiderEnabled = false
 
-struct MenuBarDrawerItem: Identifiable {
+struct MenuBarDrawerItem: Identifiable, @unchecked Sendable {
     let id: String
     let name: String
     let appName: String
     let icon: NSImage
     let element: AXUIElement?
     var additionalElements: [AXUIElement] = []
+}
+
+private struct RunningAppSnapshot: @unchecked Sendable {
+    let pid: pid_t
+    let bundleID: String
+    let name: String
+    let icon: NSImage
 }
 
 // Hallmark · native drawer · Theme tokens · pre-emit critique: P4 H4 E4 S5 R4 V4
@@ -133,19 +140,23 @@ public final class MenuBarHiderManager: NSObject, ObservableObject, NSPopoverDel
             "com.apple.dock", "com.apple.WindowManager",
             "com.apple.AccessibilityUIServer", "com.apple.screencaptureui"
         ]
-        let apps = NSWorkspace.shared.runningApplications.compactMap { app -> (pid_t, String, String, NSImage)? in
+        let apps = NSWorkspace.shared.runningApplications.compactMap { app -> RunningAppSnapshot? in
             guard app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
                   let bundleID = app.bundleIdentifier,
                   !systemHosts.contains(bundleID),
                   app.activationPolicy != .prohibited,
                   let name = app.localizedName else { return nil }
-            return (app.processIdentifier, bundleID, name, app.icon ?? NSImage())
+            return RunningAppSnapshot(pid: app.processIdentifier, bundleID: bundleID, name: name, icon: app.icon ?? NSImage())
         }
         let hypermac = ownItem()
         worker.async { [weak self] in
             var result: [MenuBarDrawerItem] = [hypermac]
             var seenBundles: Set<String> = []
-            for (pid, bundleID, name, icon) in apps {
+            for snap in apps {
+                let pid = snap.pid
+                let bundleID = snap.bundleID
+                let name = snap.name
+                let icon = snap.icon
                 guard !seenBundles.contains(bundleID) else { continue }
                 let app = AXUIElementCreateApplication(pid)
                 AXUIElementSetMessagingTimeout(app, 0.15)
