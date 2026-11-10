@@ -58,7 +58,15 @@ public class PermissionsManager: ObservableObject {
             self.isExpanded = true
         }
 
-        // Poll every 1.5s so when user toggles permission in System Settings, UI instantly updates
+    }
+
+    /// Thẻ quyền chỉ hiện trong popover: poll 1,5 s khi popover mở (để UI đổi ngay khi người dùng
+    /// bật quyền trong System Settings), dừng khi đóng.
+    public func setPopoverVisible(_ visible: Bool) {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        guard visible else { return }
+        refreshStatus()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshStatus()

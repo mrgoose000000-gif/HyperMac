@@ -60,8 +60,10 @@ private class AppleSiliconHIDReader {
                 for i in 0..<count {
                     guard let rawPtr = CFArrayGetValueAtIndex(servCF, i) else { continue }
                     let s = Unmanaged<CFTypeRef>.fromOpaque(rawPtr).takeUnretainedValue()
+                    // Chỉ giữ cảm biến được dùng bên dưới (CPU/GPU/pin/SSD/bo mạch): mỗi lần đọc
+                    // gọi CopyEvent cho ~57 thay vì ~140 service.
                     if let nameRef = copyProp(s, "Product" as CFString)?.takeRetainedValue(),
-                       let name = nameRef as? String {
+                       let name = nameRef as? String, Self.isUsedSensor(name) {
                         cachedServices.append((service: s, name: name))
                     }
                 }
@@ -117,6 +119,12 @@ private class AppleSiliconHIDReader {
         let hot = hotspotTemps.isEmpty ? 0.0 : (hotspotTemps.reduce(0, +) / Double(hotspotTemps.count))
 
         return (cpuAvg, cpuPeak, gpuAvg, bat, nand, hot, sensorList)
+    }
+
+    private static func isUsedSensor(_ name: String) -> Bool {
+        name.hasPrefix("PMU tdie") || name.hasPrefix("PMU2 tdie") ||
+            name.hasPrefix("PMU tdev") || name.hasPrefix("PMU2 tdev") ||
+            name.contains("battery") || name.contains("NAND") || name.contains("tcal")
     }
 
     deinit {
@@ -316,6 +324,7 @@ public class ThermalManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(showMenuBarMetrics, forKey: "show_menubar_thermal")
             updateMenuBarDisplay()
+            updatePolling()
         }
     }
     public var onMenuBarUpdate: ((String?) -> Void)?
@@ -323,6 +332,10 @@ public class ThermalManager: ObservableObject {
     private let hidReader = AppleSiliconHIDReader()
     private let smcReader = SMCTempReader()
     private var pollTimer: Timer?
+    /// Ai đang cần số liệu: popover đang mở, quạt đang chỉnh tay (ngưỡng an toàn 90°C), hoặc
+    /// nhiệt độ hiện trên menu bar. Không ai cần thì không đọc cảm biến.
+    private var isPopoverVisible = false
+    private var isFanSafetyActive = false
 
     /// Ngưỡng trạng thái tính theo CPU TRUNG BÌNH (không theo 1 nhân đỉnh tức thời).
     /// Apple Silicon: dùng nhẹ ~40–65°C, tải vừa 65–85°C, tải nặng > 85°C (giảm xung ~100°C+).
@@ -351,7 +364,7 @@ public class ThermalManager: ObservableObject {
     private init() {
         loadMachineHardwareInfo()
         refreshMetrics()
-        startPolling()
+        updatePolling()
 
         NotificationCenter.default.addObserver(
             self,
@@ -425,13 +438,42 @@ public class ThermalManager: ObservableObject {
 
     // MARK: - Polling & Refresh Metrics
 
-    private func startPolling() {
+    public func setPopoverVisible(_ visible: Bool) {
+        guard visible != isPopoverVisible else { return }
+        isPopoverVisible = visible
+        if visible { refreshMetrics() }
+        updatePolling()
+    }
+
+    func setFanSafetyActive(_ active: Bool) {
+        guard active != isFanSafetyActive else { return }
+        isFanSafetyActive = active
+        updatePolling()
+    }
+
+    /// 2,5 s khi popover mở hoặc quạt chỉnh tay; 5 s khi chỉ hiện nhiệt độ trên menu bar; dừng hẳn
+    /// khi không ai cần.
+    private func updatePolling() {
+        let interval: TimeInterval
+        if isPopoverVisible || isFanSafetyActive {
+            interval = 2.5
+        } else if showMenuBarMetrics {
+            interval = 5.0
+        } else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            return
+        }
+        if let pollTimer, pollTimer.isValid, pollTimer.timeInterval == interval { return }
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshMetrics()
             }
         }
+        timer.tolerance = interval * 0.2  // cho macOS gộp lần thức với việc khác
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     public func refreshMetrics() {

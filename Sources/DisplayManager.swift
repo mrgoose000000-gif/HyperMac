@@ -96,6 +96,26 @@ public class DisplayManager: ObservableObject {
             _ = AXIsProcessTrustedWithOptions(options)
         }
 
+        startPermissionPolling()
+        // macOS phát thông báo này mỗi khi danh sách Accessibility đổi: dùng để bật lại việc kiểm tra
+        // nếu quyền bị thu hồi rồi cấp lại sau khi timer đã dừng.
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.accessibility.api"), object: nil, queue: .main
+        ) { [weak self] _ in
+            // Trạng thái quyền cập nhật trễ một chút sau thông báo.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                MainActor.assumeIsolated {
+                    self?.checkAccessibility()
+                    self?.startPermissionPolling()
+                }
+            }
+        }
+    }
+
+    /// Kiểm tra mỗi 1,5 s tới khi có quyền và event tap chạy, rồi dừng.
+    private func startPermissionPolling() {
+        guard permCheckTimer == nil,
+              !(AXIsProcessTrusted() && KeyInterceptor.shared.currentTap != nil) else { return }
         permCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkAccessibility()
@@ -117,6 +137,10 @@ public class DisplayManager: ObservableObject {
         }
         if trusted && KeyInterceptor.shared.currentTap == nil {
             KeyInterceptor.shared.start()
+        }
+        if trusted && KeyInterceptor.shared.currentTap != nil {
+            permCheckTimer?.invalidate()
+            permCheckTimer = nil
         }
     }
 
@@ -376,21 +400,37 @@ public class DisplayManager: ObservableObject {
 
     // MARK: - External Brightness via CoreGraphics Hardware Gamma LUT
 
+    /// Thấp hơn mức này màn gần như đen hẳn, người dùng dễ tưởng màn hỏng.
+    private static let minimumGammaBrightness = 0.15
+
+    /// Bảng gamma gốc của từng màn (theo profile ColorSync), đọc lần đầu chỉnh sáng.
+    private var originalGamma: [CGDirectDisplayID: (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue])] = [:]
+
+    /// Nhân bảng gamma GỐC với hệ số sáng — thay vì ghi đè bằng đường thẳng — để giữ hiệu chỉnh màu
+    /// của profile ColorSync (đường thẳng làm lệch màu kể cả ở 100%).
     private func setHardwareGamma(displayID: CGDirectDisplayID, brightness: Double) {
-        let tableSize: UInt32 = 256
-        var red = [Float](repeating: 0, count: Int(tableSize))
-        var green = [Float](repeating: 0, count: Int(tableSize))
-        var blue = [Float](repeating: 0, count: Int(tableSize))
+        let original = originalGamma[displayID] ?? captureGamma(displayID)
+        originalGamma[displayID] = original
 
-        let b = Float(max(0.0, min(1.0, brightness)))
-        for i in 0..<Int(tableSize) {
-            let val = (Float(i) / Float(tableSize - 1)) * b
-            red[i] = val
-            green[i] = val
-            blue[i] = val
+        let factor = CGGammaValue(max(Self.minimumGammaBrightness, min(1.0, brightness)))
+        var red = original.red.map { $0 * factor }
+        var green = original.green.map { $0 * factor }
+        var blue = original.blue.map { $0 * factor }
+        _ = CGSetDisplayTransferByTable(displayID, UInt32(red.count), &red, &green, &blue)
+    }
+
+    private func captureGamma(_ displayID: CGDirectDisplayID) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
+        let capacity = max(Int(CGDisplayGammaTableCapacity(displayID)), 2)
+        var red = [CGGammaValue](repeating: 0, count: capacity)
+        var green = red, blue = red
+        var count: UInt32 = 0
+        if CGGetDisplayTransferByTable(displayID, UInt32(capacity), &red, &green, &blue, &count) == .success, count >= 2 {
+            let n = Int(count)
+            return (Array(red.prefix(n)), Array(green.prefix(n)), Array(blue.prefix(n)))
         }
-
-        _ = CGSetDisplayTransferByTable(displayID, tableSize, &red, &green, &blue)
+        // Không đọc được: dùng đường thẳng như trước.
+        let ramp = (0..<256).map { CGGammaValue($0) / 255 }
+        return (ramp, ramp, ramp)
     }
 
     // MARK: - Unified Brightness Setter

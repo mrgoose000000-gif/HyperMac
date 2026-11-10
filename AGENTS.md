@@ -360,7 +360,8 @@ Khuyến nghị (chưa bắt buộc, làm khi cần siết):
 - Đọc (không cần root): `Resources/smc -k F0Ac|F0Tg|F0Md|F0Mn|F0Mx|FNum -r` (định dạng `F0Ac  [flt ]  2985 (bytes ...)`, giá trị là trường thứ 4 khi tách theo khoảng trắng).
 
 ### 9.3. Helper đặc quyền
-- `Resources/displaycontrol-power` (cài vào `/usr/local/bin`, sudoers NOPASSWD sẵn có) có thêm: `version` (in `HELPER_VERSION:2`), `fan-set <id 0-3> <rpm>` (chỉ nhận số nguyên trong khoảng min..max đọc từ SMC), `fan-auto <id>`.
+- `Resources/displaycontrol-power` cài vào `/Library/PrivilegedHelperTools/com.opensource.hypermac.power` (root:wheel 755), `smc` cài cạnh đó thành `com.opensource.hypermac.smc`. Đường dẫn gom trong `Sources/PrivilegedHelper.swift`. Sudoers `/etc/sudoers.d/hypermac_power` chỉ cho **đúng user cài** chạy helper (kiểm tra bằng `visudo -cf` trước khi đặt vào); bộ cài tự gỡ rule cũ `ALL ALL NOPASSWD` và file trong `/usr/local/bin`. Helper (`HELPER_VERSION:3`) cố định `PATH`, chỉ dùng `smc` do root sở hữu, và kiểm tra mọi tham số (`charge-on/off` 20–100, quạt 0–3) **trước** khi đưa vào `$(( ))` — bash tính biểu thức số học kể cả chuỗi như `a[$(lệnh)]`. Lệnh có: `status`, `charge-off/on <limit>`, `version`, `fan-count`, `fan-info <id>`, `fan-set <id 0-3> <rpm>`, `fan-auto <id>`.
+- ĐỌC trạng thái khóa sạc (`CHTE`/`CH0B`/`bfF0`/`BCLM`) không cần root: `SMCKeyReader` đọc thẳng AppleSMC. Chỉ GHI mới gọi `sudo -n` helper.
 - `FanManager` yêu cầu helper phiên bản >= 2; bản helper cũ → thẻ Quạt hiện nút cài lại (`BatteryManager.installHelper`, hỏi mật khẩu 1 lần).
 - **Cài helper từ thư mục dưới `~/Documents`** bằng `osascript ... with administrator privileges` sẽ lỗi `Operation not permitted` (root bị TCC chặn). Sao chép 3 file (`install-helper.sh`, `smc`, `displaycontrol-power`) ra `/private/tmp/...` rồi cài từ đó. App đã cài trong `/Applications` thì không gặp lỗi này.
 

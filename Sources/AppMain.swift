@@ -113,6 +113,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         FanManager.shared.restoreSystemSync()
         // Phục hồi đồng bộ công tắc sạc SMC khi thoát app (nhả CHTE/CH0B nhưng giữ trần CHLT nếu đang bật bảo vệ)
         BatteryManager.shared.restoreOnTerminateSync()
+        // Trả bảng gamma màn ngoài về theo profile ColorSync.
+        CGDisplayRestoreColorSyncSettings()
     }
 
     /// Cửa sổ xem trước UI khi đặt `HYPERMAC_PREVIEW=1` (dùng để chụp/kiểm tra layout).
@@ -216,10 +218,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // Bật/tắt bộ đo tốc độ chép file theo vòng đời popover (chỉ chạy khi bảng mở).
     func popoverDidShow(_ notification: Notification) {
         DiskSpeedManager.shared.setPopoverVisible(true)
+        ThermalManager.shared.setPopoverVisible(true)
+        FanManager.shared.setPopoverVisible(true)
+        PermissionsManager.shared.setPopoverVisible(true)
     }
 
     func popoverDidClose(_ notification: Notification) {
         DiskSpeedManager.shared.setPopoverVisible(false)
+        ThermalManager.shared.setPopoverVisible(false)
+        FanManager.shared.setPopoverVisible(false)
+        PermissionsManager.shared.setPopoverVisible(false)
     }
 }
 

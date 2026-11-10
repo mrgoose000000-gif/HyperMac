@@ -363,44 +363,47 @@ public class ClipboardManager: ObservableObject {
                 let clipID = UUID()
                 let fileName = "\(clipID.uuidString).png"
                 let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
-
-                // 1. Extract lossless/high-fidelity original image data
-                var originalData: Data? = pb.data(forType: .png)
-                if originalData == nil, let tiff = pb.data(forType: .tiff) ?? image.tiffRepresentation,
-                   let rep = NSBitmapImageRep(data: tiff) {
-                    originalData = rep.representation(using: .png, properties: [:])
-                }
-                if originalData == nil {
-                    originalData = image.tiffRepresentation
-                }
-
-                // Save full-resolution original to disk
-                if let origData = originalData {
-                    try? origData.write(to: fileURL, options: .atomic)
-                }
-
-                // 2. Generate crisp Retina-quality thumbnail (max 400px) for smooth HUD preview
-                let thumbnail = image.resized(maxDimension: 400)
-                let tiffData = thumbnail?.tiffRepresentation
-                let bitmap = tiffData.flatMap { NSBitmapImageRep(data: $0) }
-                let thumbData = bitmap?.representation(using: .png, properties: [:])
-                    ?? bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
-
                 let title = "Ảnh (\(Int(size.width)) × \(Int(size.height))px)"
                 let detail = "Định dạng ảnh clipboard"
 
-                appendClip(ClipItem(
-                    id: clipID,
-                    type: .image,
-                    title: title,
-                    detail: detail,
-                    imageData: thumbData,
-                    imageFileName: fileName,
-                    sourceAppName: appName,
-                    sourceBundleID: bundleID,
-                    timestamp: Date(),
-                    isPinned: false
-                ))
+                // Trên main chỉ lấy dữ liệu thô từ pasteboard (nhanh). Đổi sang PNG, ghi đĩa và tạo
+                // thumbnail — hàng trăm ms với ảnh chụp 5K — chạy nền, xong mới thêm vào danh sách.
+                let rawPNG = pb.data(forType: .png)
+                let rawTIFF = rawPNG == nil ? (pb.data(forType: .tiff) ?? image.tiffRepresentation) : nil
+
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    // 1. Extract lossless/high-fidelity original image data
+                    var originalData = rawPNG
+                    if originalData == nil, let tiff = rawTIFF, let rep = NSBitmapImageRep(data: tiff) {
+                        originalData = rep.representation(using: .png, properties: [:])
+                    }
+                    if originalData == nil {
+                        originalData = rawTIFF
+                    }
+
+                    // Save full-resolution original to disk
+                    if let origData = originalData {
+                        try? origData.write(to: fileURL, options: .atomic)
+                    }
+
+                    // 2. Thumbnail tối đa 800 px (400 pt Retina) cho HUD
+                    let thumbData = originalData.flatMap { ClipboardManager.thumbnailPNG(from: $0, maxPixelSize: 800) }
+
+                    Task { @MainActor [weak self] in
+                        self?.appendClip(ClipItem(
+                            id: clipID,
+                            type: .image,
+                            title: title,
+                            detail: detail,
+                            imageData: thumbData,
+                            imageFileName: fileName,
+                            sourceAppName: appName,
+                            sourceBundleID: bundleID,
+                            timestamp: Date(),
+                            isPinned: false
+                        ))
+                    }
+                }
                 return
             }
         }
@@ -1010,22 +1013,22 @@ public class ClipboardManager: ObservableObject {
     }
 }
 
-// MARK: - NSImage Helpers
+// MARK: - Thumbnail
 
-private extension NSImage {
-    func resized(maxDimension: CGFloat) -> NSImage? {
-        let w = size.width
-        let h = size.height
-        guard w > 0 && h > 0 else { return nil }
-
-        let ratio = min(maxDimension / w, maxDimension / h)
-        if ratio >= 1.0 { return self }
-
-        let newSize = NSSize(width: floor(w * ratio), height: floor(h * ratio))
-        let target = NSImage(size: newSize)
-        target.lockFocus()
-        self.draw(in: NSRect(origin: .zero, size: newSize), from: NSRect(origin: .zero, size: size), operation: .sourceOver, fraction: 1.0)
-        target.unlockFocus()
-        return target
+extension ClipboardManager {
+    /// Thu nhỏ bằng ImageIO (an toàn ngoài main thread, không giải mã cả ảnh gốc vào bộ nhớ).
+    nonisolated static func thumbnailPNG(from data: Data, maxPixelSize: Int) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+              ] as CFDictionary)
+        else { return nil }
+        let output = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(output, "public.png" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, thumb, nil)
+        return CGImageDestinationFinalize(dest) ? output as Data : nil
     }
 }
+

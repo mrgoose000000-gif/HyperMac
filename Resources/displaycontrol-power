@@ -1,27 +1,22 @@
 #!/bin/bash
 # HyperMac Power & Battery SMC Management Helper
 
-# 1. Locate smc binary
-if [ -x "/usr/local/bin/displaycontrol-smc" ]; then
-    SMC="/usr/local/bin/displaycontrol-smc"
-elif [ -x "/Applications/HyperMac.app/Contents/Resources/smc" ]; then
-    SMC="/Applications/HyperMac.app/Contents/Resources/smc"
-elif [ -x "/Applications/DisplayControl.app/Contents/Resources/smc" ]; then
-    SMC="/Applications/DisplayControl.app/Contents/Resources/smc"
-elif [ -x "/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl/Resources/smc" ]; then
-    SMC="/Users/khacdai24/.gemini/antigravity-ide/scratch/DisplayControl/Resources/smc"
-elif [ -x "/usr/local/bin/smc" ]; then
-    SMC="/usr/local/bin/smc"
-elif [ -x "/opt/homebrew/bin/smc" ]; then
-    SMC="/opt/homebrew/bin/smc"
-else
-    SMC="$(which smc 2>/dev/null || true)"
-fi
+# Chạy bằng root qua sudo: không tin $PATH của người gọi, chỉ dùng smc do root sở hữu
+# nằm cạnh helper (cài bởi install-helper.sh). Không tìm smc ở thư mục user ghi được.
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SMC="/Library/PrivilegedHelperTools/com.opensource.hypermac.smc"
 
-if [ -z "$SMC" ] || [ ! -x "$SMC" ]; then
+if [ ! -x "$SMC" ] || [ "$(stat -f %u "$SMC")" != "0" ]; then
     echo "ERROR: smc binary not found"
     exit 1
 fi
+
+# Ngưỡng sạc: chỉ số nguyên 20–100. Phải kiểm tra TRƯỚC khi đưa vào $(( )) / printf —
+# bash tính biểu thức số học kể cả với chuỗi kiểu 'a[$(lệnh)]' (chèn lệnh chạy bằng root).
+valid_limit() {
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$1" -ge 20 ] && [ "$1" -le 100 ]
+}
 
 check_key_exists() {
     local key="$1"
@@ -153,6 +148,7 @@ case "$1" in
         ;;
     charge-off)
         LIMIT="${2:-80}"
+        valid_limit "$LIMIT" || { echo "ERROR: invalid limit"; exit 2; }
         HANDLED=0
 
         # Method 1: Apple Silicon bfF0 / bfD0 / bfE0 (Firmware Limit for M3, M4, M5 / modern firmware)
@@ -204,6 +200,7 @@ case "$1" in
         ;;
     charge-on)
         CEILING_LIMIT="${2:-100}"
+        valid_limit "$CEILING_LIMIT" || { echo "ERROR: invalid limit"; exit 2; }
         HANDLED=0
 
         # Method 1: Apple Silicon bfF0 / bfD0 / bfE0
@@ -263,6 +260,7 @@ case "$1" in
         ;;
     fan-info)
         ID="${2:-0}"
+        case "$ID" in [0-3]) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
         echo "ACTUAL:" $("$SMC" -k "F${ID}Ac" -r 2>/dev/null || true)
         echo "MIN:" $("$SMC" -k "F${ID}Mn" -r 2>/dev/null || true)
         echo "MAX:" $("$SMC" -k "F${ID}Mx" -r 2>/dev/null || true)
@@ -270,7 +268,7 @@ case "$1" in
         echo "MODE:" $("$SMC" -k "F${ID}Md" -r 2>/dev/null || true)
         ;;
     version)
-        echo "HELPER_VERSION:2"
+        echo "HELPER_VERSION:3"
         ;;
     fan-set)
         ID="${2:-0}"

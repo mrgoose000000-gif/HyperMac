@@ -59,8 +59,8 @@ public final class FanManager: ObservableObject {
         case manual
     }
 
-    nonisolated private static let requiredHelperVersion = 2
-    nonisolated private static let helperPath = "/usr/local/bin/displaycontrol-power"
+    nonisolated private static let requiredHelperVersion = PrivilegedHelper.requiredVersion
+    nonisolated private static let helperPath = PrivilegedHelper.powerPath
     private static let safetyTempOn = 90.0
     private static let safetyTempOff = 80.0
 
@@ -68,7 +68,14 @@ public final class FanManager: ObservableObject {
     @Published public private(set) var minRPM: Double = 0
     @Published public private(set) var maxRPM: Double = 0
     @Published public private(set) var currentRPM: Double = 0
-    @Published public private(set) var mode: Mode = .system
+    @Published public private(set) var mode: Mode = .system {
+        didSet {
+            guard mode != oldValue else { return }
+            // Chỉnh tay thì cần đo nhiệt liên tục cho ngưỡng an toàn 90°C, kể cả khi popover đóng.
+            ThermalManager.shared.setFanSafetyActive(mode != .system)
+            updatePolling()
+        }
+    }
     /// Tốc độ đích đang áp dụng (RPM) khi không ở System.
     @Published public private(set) var targetRPM: Double = 0
     @Published public private(set) var isHelperReady: Bool = false
@@ -85,6 +92,7 @@ public final class FanManager: ObservableObject {
     private let smcReader = SMCFanReader()
     private var fanRanges: [(min: Double, max: Double)] = []
     private var pollTimer: Timer?
+    private var isPopoverVisible = false
     private var smcPath: String?
     private var pendingApply: DispatchWorkItem?
 
@@ -96,7 +104,7 @@ public final class FanManager: ObservableObject {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         nc.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
-        startPolling()
+        updatePolling()
         // Khởi động luôn ở System: nếu bản trước crash giữa chừng, trả toàn bộ quạt về auto.
         if isAvailable { restoreAllFansAutoAsync() }
     }
@@ -308,12 +316,29 @@ public final class FanManager: ObservableObject {
         }
     }
 
-    private func startPolling() {
-        pollTimer?.invalidate()
-        guard fanCount > 0 else { return } // Không chạy timer vô ích trên MacBook Air không quạt
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+    public func setPopoverVisible(_ visible: Bool) {
+        guard visible != isPopoverVisible else { return }
+        isPopoverVisible = visible
+        if visible { refreshRPM() }
+        updatePolling()
+    }
+
+    /// Chỉ đọc RPM khi popover mở (để hiển thị) hoặc quạt đang chỉnh tay (ngưỡng an toàn).
+    /// Ở System Controlled mà popover đóng thì không cần thức dậy mỗi 2,5 s.
+    private func updatePolling() {
+        let needed = fanCount > 0 && (isPopoverVisible || mode != .system)
+        guard needed else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            return
+        }
+        guard pollTimer?.isValid != true else { return }
+        let timer = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     private func tick() {
@@ -346,8 +371,7 @@ public final class FanManager: ObservableObject {
     private static func locateSMC() -> String? {
         let candidates = [
             Bundle.main.path(forResource: "smc", ofType: nil),
-            "/usr/local/bin/displaycontrol-smc",
-            FileManager.default.currentDirectoryPath + "/Resources/smc"
+            PrivilegedHelper.smcPath
         ].compactMap { $0 }
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }

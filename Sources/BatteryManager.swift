@@ -371,7 +371,8 @@ public class BatteryManager: ObservableObject {
         }
         if let source = IOPSNotificationCreateRunLoopSource(callback, nil)?.takeRetainedValue() {
             self.powerSourceRunLoopSource = source
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+            // .commonModes: vẫn nhận khi menu/popover đang mở (event tracking mode).
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         }
     }
 
@@ -415,9 +416,9 @@ public class BatteryManager: ObservableObject {
             }
             if isHelperInstalled {
                 if currentLevel >= chargeLimit {
-                    _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)")
+                    _ = shell("sudo -n \(PrivilegedHelper.powerPath) charge-off \(chargeLimit)")
                 } else {
-                    _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(chargeLimit)")
+                    _ = shell("sudo -n \(PrivilegedHelper.powerPath) charge-on \(chargeLimit)")
                 }
             }
         }
@@ -482,7 +483,9 @@ public class BatteryManager: ObservableObject {
 
     public func startPolling() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: true) { [weak self] _ in
+        // Cập nhật tức thời đã có IOPSNotificationCreateRunLoopSource (pin đổi 1%, cắm/rút sạc) và
+        // didWake. Timer chỉ còn là lưới an toàn + lịch hiệu chuẩn → 30 s thay vì 3,5 s.
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.refreshBatteryInfo()
@@ -683,8 +686,15 @@ public class BatteryManager: ObservableObject {
 
         // Always verify real SMC hardware registers first when helper is installed
         if isHelperInstalled {
+            // Đọc thẳng SMC (không root, không tiến trình con). Chỉ khi máy không có key nào quen
+            // thuộc mới hỏi helper (nhánh PowerUI MCL).
+            if let smcBypassed = Self.nativeBypassState() {
+                let activelyChargingPastLimit = (currentLevel >= chargeLimit) && (amperage > 100)
+                isBypassActive = smcBypassed && isPluggedIn && !activelyChargingPastLimit
+                return
+            }
             DispatchQueue.global(qos: .utility).async {
-                let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
+                let (out, code) = shell("sudo -n \(PrivilegedHelper.powerPath) status 2>/dev/null")
                 DispatchQueue.main.async {
                     guard self.isProtectionEnabled else {
                         self.isBypassActive = false
@@ -718,6 +728,18 @@ public class BatteryManager: ObservableObject {
             }
         }
         self.isBypassActive = false
+    }
+
+    /// Cùng logic với lệnh `status` của helper, nhưng đọc trực tiếp. nil = không có key nào.
+    private static func nativeBypassState() -> Bool? {
+        let smc = SMCKeyReader.shared
+        var found = false
+        var bypassed = false
+        if let v = smc.read("CHTE") { found = true; if v.first == 1 { bypassed = true } }
+        if let v = smc.read("CH0B") { found = true; if v.first == 2 { bypassed = true } }
+        if let v = smc.read("bfF0") { found = true; if v.first == 1 || v.first == 2 { bypassed = true } }
+        if let v = smc.read("BCLM"), let b = v.first { found = true; if b != 100 && b != 0 { bypassed = true } }
+        return found ? bypassed : nil
     }
 
     // MARK: - Power & Limiter Evaluation
@@ -877,7 +899,7 @@ public class BatteryManager: ObservableObject {
                 lastSMCWriteDate = now
                 let targetCeiling = keepCeilingArmed ? chargeLimit : 100
                 DispatchQueue.global(qos: .utility).async {
-                    let (_, _) = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(targetCeiling)")
+                    let (_, _) = shell("sudo -n \(PrivilegedHelper.powerPath) charge-on \(targetCeiling)")
                     DispatchQueue.main.async {
                         self.isBypassActive = false
                         self.refreshBatteryInfo()
@@ -907,7 +929,7 @@ public class BatteryManager: ObservableObject {
                 lastAppliedLimit = chargeLimit
                 lastSMCWriteDate = now
                 let limitToLock = chargeLimit
-                let cmd = "sudo -n /usr/local/bin/displaycontrol-power charge-off \(limitToLock)"
+                let cmd = "sudo -n \(PrivilegedHelper.powerPath) charge-off \(limitToLock)"
                 DispatchQueue.global(qos: .utility).async {
                     let (out, code) = shell(cmd)
                     DispatchQueue.main.async {
@@ -934,14 +956,14 @@ public class BatteryManager: ObservableObject {
                 _ = NativePowerUIClient.shared.setLimit(chargeLimit)
             }
             if isHelperInstalled {
-                _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(chargeLimit) 2>/dev/null")
+                _ = shell("sudo -n \(PrivilegedHelper.powerPath) charge-on \(chargeLimit) 2>/dev/null")
             }
         } else {
             if NativePowerUIClient.shared.isSupported {
                 _ = NativePowerUIClient.shared.disable()
             }
             if isHelperInstalled {
-                _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on 100 2>/dev/null")
+                _ = shell("sudo -n \(PrivilegedHelper.powerPath) charge-on 100 2>/dev/null")
             }
         }
     }
@@ -1039,7 +1061,7 @@ public class BatteryManager: ObservableObject {
     // MARK: - Helper Installation Check & Prompt
 
     public func checkHelperStatus(completion: ((Bool) -> Void)? = nil) {
-        let exists = FileManager.default.fileExists(atPath: "/usr/local/bin/displaycontrol-power")
+        let exists = FileManager.default.fileExists(atPath: PrivilegedHelper.powerPath)
         guard exists else {
             self.isHelperInstalled = false
             self.helperVersion = 0
@@ -1051,20 +1073,14 @@ public class BatteryManager: ObservableObject {
             return
         }
         DispatchQueue.global(qos: .utility).async {
-            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            let (out, code) = shell("sudo -n \(PrivilegedHelper.powerPath) version 2>&1")
             var ver = 0
             if code == 0, let r = out.range(of: "HELPER_VERSION:") {
                 ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
             }
-            // Fallback for users who updated via auto-updater from v1.9.0/v1.9.1 where helper v1 is installed:
-            // Helper v1 supports status / charge-off / charge-on via sudoers even without the `version` subcommand.
-            if ver == 0 {
-                let (statusOut, statusCode) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>&1")
-                if statusCode == 0 && (statusOut.contains("BYPASS:") || statusOut.contains("CHTE") || statusOut.contains("CH0B") || statusOut.contains("BCLM")) {
-                    ver = 1
-                }
-            }
-            let isRealReady = (ver >= 1)
+            // Helper cũ (≤ v2, nằm ở /usr/local/bin với sudoers mở cho mọi user) không còn được dùng:
+            // người dùng cài lại một lần, bộ cài tự gỡ bản cũ.
+            let isRealReady = (ver >= PrivilegedHelper.requiredVersion)
             DispatchQueue.main.async {
                 self.helperVersion = ver
                 self.isHelperInstalled = isRealReady
@@ -1084,11 +1100,12 @@ public class BatteryManager: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             // Find smc, helper and install script across bundle, working directory, and installed locations
+            // Chỉ lấy file trong app bundle (đã ký) — không lấy script từ thư mục làm việc hiện tại,
+            // vì script này sẽ chạy bằng quyền admin.
             let searchDirs = [
                 Bundle.main.resourcePath,
                 Bundle.main.bundleURL.appendingPathComponent("Contents/Resources").path,
-                "/Applications/HyperMac.app/Contents/Resources",
-                FileManager.default.currentDirectoryPath + "/Resources"
+                "/Applications/HyperMac.app/Contents/Resources"
             ].compactMap { $0 }
 
             var smcSrc: String? = Bundle.main.path(forResource: "smc", ofType: nil)
@@ -1119,8 +1136,22 @@ public class BatteryManager: ObservableObject {
                 return
             }
 
+            // Rule sudoers chỉ cho đúng user đang dùng app. Mọi giá trị chèn vào lệnh nằm trong
+            // nháy đơn; chặn ký tự có thể phá nháy.
+            let user = NSUserName()
+            let paths = [sInstall, sSMC, sHelper]
+            guard user.range(of: #"^[A-Za-z0-9._-]+$"#, options: .regularExpression) != nil,
+                  !paths.contains(where: { $0.contains("'") || $0.contains("\\") || $0.contains("\"") })
+            else {
+                appLog("❌ installHelper: unsafe user name or resource path")
+                DispatchQueue.main.async {
+                    self.isInstallingHelper = false
+                    completion?(false)
+                }
+                return
+            }
             let appleScriptCmd = """
-            do shell script "/bin/bash '\(sInstall)' '\(sSMC)' '\(sHelper)'" with administrator privileges
+            do shell script "/bin/bash '\(sInstall)' '\(sSMC)' '\(sHelper)' '\(user)'" with administrator privileges
             """
 
             var errorDict: NSDictionary?
@@ -1132,12 +1163,12 @@ public class BatteryManager: ObservableObject {
             }
 
             // Verify installation with deep probe
-            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            let (out, code) = shell("sudo -n \(PrivilegedHelper.powerPath) version 2>&1")
             var ver = 0
             if code == 0, let r = out.range(of: "HELPER_VERSION:") {
                 ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
             }
-            let success = (code == 0 && ver >= 2)
+            let success = (code == 0 && ver >= PrivilegedHelper.requiredVersion)
 
             DispatchQueue.main.async {
                 self.isInstallingHelper = false
