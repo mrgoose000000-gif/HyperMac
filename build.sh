@@ -79,6 +79,9 @@ if [ -d "Resources" ]; then
     cp -R Resources/* "${RESOURCES}/"
     chmod +x "${RESOURCES}/smc" "${RESOURCES}/displaycontrol-power" "${RESOURCES}/install-helper.sh" 2>/dev/null || true
 fi
+if [ -f "LICENSE" ]; then
+    cp "LICENSE" "${RESOURCES}/LICENSE"
+fi
 
 # Info.plist — LSUIElement hides dock icon (menu-bar only)
 cat > "${CONTENTS}/Info.plist" << 'PLIST'
@@ -98,9 +101,9 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleVersion</key>
-    <string>1.9.6</string>
+    <string>1.9.7</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.9.6</string>
+    <string>1.9.7</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -109,6 +112,8 @@ cat > "${CONTENTS}/Info.plist" << 'PLIST'
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Nguyễn Khắc Đại. Licensed under GNU GPLv3.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>HyperMac sử dụng Bluetooth để tự động ngắt kết nối khi gập nắp máy (Sleep Guard), giúp chống tụt pin và chống nóng máy khi ngủ.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
@@ -171,6 +176,9 @@ fi
 
 # ── Step 4: Install to /Applications/ ──
 echo "🚀 Installing to /Applications/HyperMac.app..."
+pkill -9 HyperMac 2>/dev/null || true
+pkill -9 DisplayControl 2>/dev/null || true
+sleep 0.3
 rm -rf /Applications/HyperMac.app
 cp -R "${APP_DIR}" /Applications/HyperMac.app
 rm -rf /Applications/DisplayControl.app 2>/dev/null || true

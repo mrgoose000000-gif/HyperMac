@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// HyperMac — Copyright (C) 2026 Nguyễn Khắc Đại
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3 of the License.
+// See the LICENSE file in the repository root for the full text.
+
 import SwiftUI
 import AppKit
 
@@ -47,22 +54,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "command.circle.fill", accessibilityDescription: "HyperMac")
+            button.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
             button.action = #selector(togglePopover)
             button.target = self
         }
 
-        // Macs Fan Control Menu Bar Live Metrics
-        ThermalManager.shared.onMenuBarUpdate = { [weak self] text in
-            guard let button = self?.statusItem.button else { return }
-            if let text = text, !text.isEmpty {
-                button.title = " \(text)"
-                button.imagePosition = .imageLeading
-            } else {
-                button.title = ""
-                button.imagePosition = .imageOnly
-            }
+        // Menu Bar Live Telemetry (Nhiệt độ + % CPU / RAM / GPU)
+        ThermalManager.shared.onMenuBarUpdate = { [weak self] _ in
+            self?.refreshMenuBarStatusItem()
         }
-        ThermalManager.shared.updateMenuBarDisplay()
+        SystemMonitorManager.shared.onStatsUpdate = { [weak self] in
+            self?.refreshMenuBarStatusItem()
+        }
+        refreshMenuBarStatusItem()
 
         // Tự khôi phục quyền Accessibility nếu vừa update làm mất quyền
         AccessibilityRecovery.handleLaunch()
@@ -76,6 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         _ = SystemCleanerManager.shared
         _ = PermissionsManager.shared
         _ = FanManager.shared
+        _ = SystemMonitorManager.shared
         _ = ScreenshotManager.shared
         _ = MenuBarHiderManager.shared
         _ = ActivationManager.shared
@@ -113,6 +118,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         FanManager.shared.restoreSystemSync()
         // Phục hồi đồng bộ công tắc sạc SMC khi thoát app (nhả CHTE/CH0B nhưng giữ trần CHLT nếu đang bật bảo vệ)
         BatteryManager.shared.restoreOnTerminateSync()
+        // Chỉ trả bảng gamma màn ngoài về ColorSync nếu HyperMac thực sự đã điều chỉnh gamma trước đó
+        DisplayManager.shared.restoreHardwareGammaIfNeeded()
     }
 
     /// Cửa sổ xem trước UI khi đặt `HYPERMAC_PREVIEW=1` (dùng để chụp/kiểm tra layout).
@@ -155,6 +162,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_ACTIVATION"] == "1" {
             ActivationManager.shared.isActivated = false
+        }
+
+        if ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_THERMAL"] == "1" {
+            _ = FanManager.shared
+            _ = SystemMonitorManager.shared
+            ThermalManager.shared.selectedSection = 1
         }
 
         let waitSec = Double(ProcessInfo.processInfo.environment["HYPERMAC_PREVIEW_WAIT"] ?? "") ?? 0.25
@@ -200,6 +213,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    private func refreshMenuBarStatusItem() {
+        guard let button = statusItem?.button else { return }
+        var parts: [String] = []
+        if let tempText = ThermalManager.shared.menuBarDisplayText {
+            parts.append(tempText)
+        }
+        if let statsText = SystemMonitorManager.shared.formattedMenuBarSummary() {
+            parts.append(statsText)
+        }
+        if parts.isEmpty {
+            button.title = ""
+            button.imagePosition = .imageOnly
+        } else {
+            button.title = " " + parts.joined(separator: " · ")
+            button.imagePosition = .imageLeading
+        }
+    }
+
     @objc func togglePopover() {
         guard let button = statusItem.button else { return }
 
@@ -213,13 +244,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    // Bật/tắt bộ đo tốc độ chép file theo vòng đời popover (chỉ chạy khi bảng mở).
+    // Điều phối toàn bộ manager nhạy năng lượng theo vòng đời mở/đóng popover.
     func popoverDidShow(_ notification: Notification) {
         DiskSpeedManager.shared.setPopoverVisible(true)
+        BatteryManager.shared.setPopoverVisible(true)
+        PermissionsManager.shared.setPopoverVisible(true)
+        ThermalManager.shared.setPopoverVisible(true)
+        FanManager.shared.setPopoverVisible(true)
+        DisplayManager.shared.checkAccessibility()
     }
 
     func popoverDidClose(_ notification: Notification) {
         DiskSpeedManager.shared.setPopoverVisible(false)
+        BatteryManager.shared.setPopoverVisible(false)
+        PermissionsManager.shared.setPopoverVisible(false)
+        ThermalManager.shared.setPopoverVisible(false)
+        FanManager.shared.setPopoverVisible(false)
     }
 }
 

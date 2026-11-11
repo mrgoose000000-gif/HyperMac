@@ -59,8 +59,8 @@ public final class FanManager: ObservableObject {
         case manual
     }
 
-    nonisolated private static let requiredHelperVersion = 2
-    nonisolated private static let helperPath = "/usr/local/bin/displaycontrol-power"
+    nonisolated private static let requiredHelperVersion = PrivilegedHelper.requiredVersion
+    nonisolated private static let helperPath = PrivilegedHelper.powerPath
     private static let safetyTempOn = 90.0
     private static let safetyTempOff = 80.0
 
@@ -87,6 +87,9 @@ public final class FanManager: ObservableObject {
     private var pollTimer: Timer?
     private var smcPath: String?
     private var pendingApply: DispatchWorkItem?
+    private var isPopoverVisible = false
+
+    public var needsSafetyMonitoring: Bool { isAvailable && (mode != .system || safetyTripped) }
 
     private init() {
         smcPath = FanManager.locateSMC()
@@ -299,26 +302,56 @@ public final class FanManager: ObservableObject {
             }
         }
         if validCount > 0 {
-            self.currentRPM = total / Double(validCount)
+            let avg = total / Double(validCount)
+            if abs(avg - self.currentRPM) >= 5.0 || self.currentRPM == 0 {
+                self.currentRPM = avg
+            }
         } else if let smc = smcPath {
             DispatchQueue.global(qos: .utility).async {
                 let rpm = FanManager.parseFloat(shell("'\(smc)' -k F0Ac -r 2>/dev/null").0)
-                DispatchQueue.main.async { self.currentRPM = rpm }
+                DispatchQueue.main.async {
+                    if abs(rpm - self.currentRPM) >= 5.0 || self.currentRPM == 0 {
+                        self.currentRPM = rpm
+                    }
+                }
             }
         }
     }
 
+    public func setPopoverVisible(_ visible: Bool) {
+        isPopoverVisible = visible
+        if visible && fanCount > 0 {
+            tick()
+        }
+        startPolling()
+    }
+
     private func startPolling() {
-        pollTimer?.invalidate()
-        guard fanCount > 0 else { return } // Không chạy timer vô ích trên MacBook Air không quạt
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        ThermalManager.shared.setFanThermalMonitorNeeded(needsSafetyMonitoring)
+        guard fanCount > 0 else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            return
+        }
+        let shouldRun = isPopoverVisible || mode != .system || safetyTripped
+        guard shouldRun else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            return
+        }
+        guard pollTimer == nil else { return }
+        let t = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        t.tolerance = 0.5
+        RunLoop.main.add(t, forMode: .common)
+        pollTimer = t
     }
 
     private func tick() {
         refreshRPM()
         enforceSafety()
+        ThermalManager.shared.setFanThermalMonitorNeeded(needsSafetyMonitoring)
     }
 
     /// Ngưỡng an toàn: CPU/GPU >= 90°C thì ép về System, mở lại khi < 80°C.
@@ -346,8 +379,7 @@ public final class FanManager: ObservableObject {
     private static func locateSMC() -> String? {
         let candidates = [
             Bundle.main.path(forResource: "smc", ofType: nil),
-            "/usr/local/bin/displaycontrol-smc",
-            FileManager.default.currentDirectoryPath + "/Resources/smc"
+            PrivilegedHelper.smcPath
         ].compactMap { $0 }
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }

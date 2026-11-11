@@ -153,6 +153,7 @@ public class BatteryManager: ObservableObject {
                 setChargingInhibited(false, forceImmediate: true)
             }
             evaluatePowerManagement()
+            syncPollingTimer()
         }
     }
 
@@ -170,6 +171,7 @@ public class BatteryManager: ObservableObject {
             updateAppNapProtection()
             lastAppliedInhibitState = nil
             evaluatePowerManagement()
+            syncPollingTimer()
         }
     }
 
@@ -260,11 +262,15 @@ public class BatteryManager: ObservableObject {
     private var hasAlertedBypassThisSession: Bool = false
 
     private var timer: Timer?
+    private var timerInterval: TimeInterval = 0
+    private var isPopoverVisible: Bool = false
+    private let smcClient = AppleSMCClient()
     private var powerSourceRunLoopSource: CFRunLoopSource?
     private var appNapActivityToken: NSObjectProtocol?
     private var lastAppliedInhibitState: Bool? = nil
     private var lastAppliedLimit: Int = 0
     private var lastSMCWriteDate: Date = .distantPast
+    private var consecutiveChargeSpikes: Int = 0
 
     private init() {
         // Load preferences
@@ -350,7 +356,7 @@ public class BatteryManager: ObservableObject {
         timer?.invalidate()
         restingTimer?.invalidate()
         if let source = powerSourceRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
         }
         if let token = appNapActivityToken {
             ProcessInfo.processInfo.endActivity(token)
@@ -367,21 +373,27 @@ public class BatteryManager: ObservableObject {
                 bm.refreshBatteryInfo()
                 bm.checkSMCBypassStatus()
                 bm.evaluatePowerManagement()
+                bm.updateAppNapProtection()
+                bm.syncPollingTimer()
             }
         }
         if let source = IOPSNotificationCreateRunLoopSource(callback, nil)?.takeRetainedValue() {
             self.powerSourceRunLoopSource = source
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         }
     }
 
     private func updateAppNapProtection() {
-        let needsActiveMonitoring = isProtectionEnabled || isTopUpActive || calibrationState != .idle
+        // Chỉ giữ App Nap token khi đang cắm sạc VÀ đang nạp lên ngưỡng hoặc hiệu chuẩn.
+        // Khi đang dùng pin (!isPluggedIn) hoặc đã khóa bypass xong (isBypassActive),
+        // nhả ngay token để macOS gộp timer và tiết kiệm năng lượng.
+        let needsActiveMonitoring = isPluggedIn &&
+            ((isProtectionEnabled && !isBypassActive) || isTopUpActive || calibrationState != .idle)
         if needsActiveMonitoring {
             if appNapActivityToken == nil {
                 appNapActivityToken = ProcessInfo.processInfo.beginActivity(
                     options: .userInitiatedAllowingIdleSystemSleep,
-                    reason: "HyperMac Real-Time Battery Charge Limiter"
+                    reason: "HyperMac Active Charging Limiter"
                 )
             }
         } else if let token = appNapActivityToken {
@@ -415,9 +427,9 @@ public class BatteryManager: ObservableObject {
             }
             if isHelperInstalled {
                 if currentLevel >= chargeLimit {
-                    _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-off \(chargeLimit)")
+                    _ = shell(PrivilegedHelper.sudo("charge-off \(chargeLimit)"))
                 } else {
-                    _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(chargeLimit)")
+                    _ = shell(PrivilegedHelper.sudo("charge-on \(chargeLimit)"))
                 }
             }
         }
@@ -478,18 +490,67 @@ public class BatteryManager: ObservableObject {
         }
     }
 
-    // MARK: - Polling Timer
+    // MARK: - Polling Timer (Dynamic & Energy-Aware)
+
+    public func setPopoverVisible(_ visible: Bool) {
+        isPopoverVisible = visible
+        if visible {
+            refreshBatteryInfo()
+            checkSMCBypassStatus()
+            evaluatePowerManagement()
+            updateAppNapProtection()
+        }
+        syncPollingTimer()
+    }
 
     public func startPolling() {
+        syncPollingTimer()
+    }
+
+    private func syncPollingTimer() {
+        let desiredInterval: TimeInterval
+        if !hasBattery {
+            desiredInterval = 0
+        } else if isPopoverVisible {
+            desiredInterval = 3.5
+        } else if isPluggedIn && (isProtectionEnabled || isTopUpActive || calibrationState != .idle) {
+            // Khi popover đóng và đang cắm sạc, chỉ kiểm tra in-process mỗi 20s (0 tiến trình con);
+            // sự kiện cắm/rút/đổi % đã được IOPSNotification báo tức thì.
+            desiredInterval = 20.0
+        } else {
+            // Đang dùng pin hoặc không bật bảo vệ khi đóng popover: 0 timer wakeup, dựa hoàn toàn vào IOPSNotification + didWake.
+            desiredInterval = 0
+        }
+
+        if desiredInterval <= 0 {
+            timer?.invalidate()
+            timer = nil
+            timerInterval = 0
+            return
+        }
+
+        guard timer == nil || timerInterval != desiredInterval else { return }
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: true) { [weak self] _ in
+        timerInterval = desiredInterval
+        let t = Timer(timeInterval: desiredInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 self.refreshBatteryInfo()
                 self.checkSMCBypassStatus()
                 self.checkAutoCalibrationSchedule()
                 self.evaluatePowerManagement()
+                self.updateAppNapProtection()
+                self.syncPollingTimer()
             }
+        }
+        t.tolerance = desiredInterval >= 15.0 ? 4.0 : 0.5
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    private func setIfChanged<T: Equatable>(_ target: inout T, _ newValue: T) {
+        if target != newValue {
+            target = newValue
         }
     }
 
@@ -500,16 +561,18 @@ public class BatteryManager: ObservableObject {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, matching)
         guard service != 0 else {
             // Desktop Macs (Mac mini, Mac Studio Max/Ultra, iMac, Mac Pro) do not have an internal battery
-            self.hasBattery = false
-            self.isPluggedIn = true
-            self.isCharging = false
-            self.isFullyCharged = true
-            self.currentLevel = 100
-            self.statusMessage = tr("Nguồn AC trực tiếp (Máy bàn Mac)", "Direct AC Power (Desktop Mac)")
+            setIfChanged(&self.hasBattery, false)
+            setIfChanged(&self.isPluggedIn, true)
+            setIfChanged(&self.isCharging, false)
+            setIfChanged(&self.isFullyCharged, true)
+            setIfChanged(&self.currentLevel, 100)
+            setIfChanged(&self.statusMessage, tr("Nguồn AC trực tiếp (Máy bàn Mac)", "Direct AC Power (Desktop Mac)"))
+            syncPollingTimer()
+            updateAppNapProtection()
             return
         }
         defer { IOObjectRelease(service) }
-        self.hasBattery = true
+        setIfChanged(&self.hasBattery, true)
 
         var props: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == kIOReturnSuccess,
@@ -517,73 +580,85 @@ public class BatteryManager: ObservableObject {
             return
         }
 
-        self.currentLevel = dict["CurrentCapacity"] as? Int ?? self.currentLevel
-        self.maxCapacityPercent = dict["MaxCapacity"] as? Int ?? 100
-        self.nominalCapacity = dict["NominalChargeCapacity"] as? Int ?? self.nominalCapacity
-        self.designCapacity = dict["DesignCapacity"] as? Int ?? self.designCapacity
-        self.cycleCount = dict["CycleCount"] as? Int ?? self.cycleCount
+        setIfChanged(&self.currentLevel, dict["CurrentCapacity"] as? Int ?? self.currentLevel)
+        setIfChanged(&self.maxCapacityPercent, dict["MaxCapacity"] as? Int ?? 100)
+        setIfChanged(&self.nominalCapacity, dict["NominalChargeCapacity"] as? Int ?? self.nominalCapacity)
+        setIfChanged(&self.designCapacity, dict["DesignCapacity"] as? Int ?? self.designCapacity)
+        setIfChanged(&self.cycleCount, dict["CycleCount"] as? Int ?? self.cycleCount)
         let rawCharging = dict["IsCharging"] as? Bool ?? false
-        self.isPluggedIn = dict["ExternalConnected"] as? Bool ?? false
-        self.isFullyCharged = dict["FullyCharged"] as? Bool ?? false
-        self.timeRemaining = dict["TimeRemaining"] as? Int ?? 0
+        setIfChanged(&self.isPluggedIn, dict["ExternalConnected"] as? Bool ?? false)
+        setIfChanged(&self.isFullyCharged, dict["FullyCharged"] as? Bool ?? false)
+        setIfChanged(&self.timeRemaining, dict["TimeRemaining"] as? Int ?? 0)
 
         // If not physically plugged in or protection is disabled, bypass cannot be active
         if !self.isPluggedIn || !self.isProtectionEnabled {
-            self.isBypassActive = false
+            setIfChanged(&self.isBypassActive, false)
         }
 
         if let rawTemp = dict["Temperature"] as? Double {
-            self.temperature = rawTemp / 100.0
+            let t = rawTemp / 100.0
+            if abs(self.temperature - t) >= 0.05 { self.temperature = t }
         } else if let rawTempInt = dict["Temperature"] as? Int {
-            self.temperature = Double(rawTempInt) / 100.0
+            let t = Double(rawTempInt) / 100.0
+            if abs(self.temperature - t) >= 0.05 { self.temperature = t }
         }
 
         if let rawVolt = dict["Voltage"] as? Double {
-            self.voltage = rawVolt / 1000.0
+            let v = rawVolt / 1000.0
+            if abs(self.voltage - v) >= 0.01 { self.voltage = v }
         } else if let rawVoltInt = dict["Voltage"] as? Int {
-            self.voltage = Double(rawVoltInt) / 1000.0
+            let v = Double(rawVoltInt) / 1000.0
+            if abs(self.voltage - v) >= 0.01 { self.voltage = v }
         }
 
         if let rawAmp = dict["Amperage"] as? Int64 {
             // Signed 64-bit: negative = discharging, positive = charging, 0 = bypass
-            self.amperage = Int(rawAmp)
+            setIfChanged(&self.amperage, Int(rawAmp))
         }
 
         // Live Wattage = Voltage (V) * abs(Amperage (A))
-        self.wattage = (self.voltage * Double(abs(self.amperage))) / 1000.0
+        let newWattage = (self.voltage * Double(abs(self.amperage))) / 1000.0
+        if abs(self.wattage - newWattage) >= 0.05 {
+            self.wattage = newWattage
+        }
 
         // Responsive charging detection: even if macOS IsCharging flag is delayed, positive current means charging
-        self.isCharging = rawCharging || (self.isPluggedIn && self.amperage > 50)
+        let nextCharging = rawCharging || (self.isPluggedIn && self.amperage > 50)
+        setIfChanged(&self.isCharging, nextCharging)
 
         // Parse Adapter details (only valid when plugged in)
         if self.isPluggedIn {
             if let adapter = dict["AdapterDetails"] as? [String: Any], let w = adapter["Watts"] as? Int, w > 0 {
-                self.adapterWatts = w
-                self.adapterDescription = adapter["Description"] as? String ?? "USB-C PD"
-                self.adapterSerial = adapter["SerialString"] as? String ?? ""
+                setIfChanged(&self.adapterWatts, w)
+                setIfChanged(&self.adapterDescription, adapter["Description"] as? String ?? "USB-C PD")
+                setIfChanged(&self.adapterSerial, adapter["SerialString"] as? String ?? "")
             } else if let adapterList = dict["AppleRawAdapterDetails"] as? [[String: Any]],
                       let first = adapterList.first,
                       let w = first["Watts"] as? Int, w > 0 {
-                self.adapterWatts = w
-                self.adapterDescription = first["Description"] as? String ?? "USB-C PD"
-                self.adapterSerial = first["SerialString"] as? String ?? ""
+                setIfChanged(&self.adapterWatts, w)
+                setIfChanged(&self.adapterDescription, first["Description"] as? String ?? "USB-C PD")
+                setIfChanged(&self.adapterSerial, first["SerialString"] as? String ?? "")
             }
         } else {
-            self.adapterWatts = 0
-            self.adapterDescription = ""
-            self.adapterSerial = ""
+            setIfChanged(&self.adapterWatts, 0)
+            setIfChanged(&self.adapterDescription, "")
+            setIfChanged(&self.adapterSerial, "")
         }
 
-        self.batterySerial = dict["Serial"] as? String ?? self.batterySerial
-        self.gasGaugeChip = dict["DeviceName"] as? String ?? self.gasGaugeChip
+        setIfChanged(&self.batterySerial, dict["Serial"] as? String ?? self.batterySerial)
+        setIfChanged(&self.gasGaugeChip, dict["DeviceName"] as? String ?? self.gasGaugeChip)
 
         if self.designCapacity > 0 && self.nominalCapacity > 0 {
             let ratio = Double(self.nominalCapacity) / Double(self.designCapacity) * 100.0
-            self.exactHealthPercent = ratio
-            self.healthPercent = min(100, Int(round(ratio)))
+            if abs(self.exactHealthPercent - ratio) >= 0.01 {
+                self.exactHealthPercent = ratio
+            }
+            setIfChanged(&self.healthPercent, min(100, Int(round(ratio))))
         }
 
-        self.lastUpdated = Date()
+        if isPopoverVisible {
+            self.lastUpdated = Date()
+        }
         checkTemperatureAlert()
         checkSmartSafetyAlerts()
     }
@@ -674,62 +749,74 @@ public class BatteryManager: ObservableObject {
         }
     }
 
+    /// Đọc trạng thái khóa sạc SMC trực tiếp in-process qua IOKit AppleSMC (`0ms`, 0 tiến trình con, 0 sudo).
+    /// Trả `nil` nếu thiết bị không có khóa SMC nào (khi đó fallback sang PowerUI MCL).
+    private func readHardwareBypassInProcess() -> Bool? {
+        var foundKey = false
+        var bypassed = false
+
+        if let chte = smcClient.readKeyBytes("CHTE"), !chte.isEmpty {
+            foundKey = true
+            if chte[0] == 1 { bypassed = true }
+        }
+        if let ch0b = smcClient.readKeyBytes("CH0B"), !ch0b.isEmpty {
+            foundKey = true
+            if ch0b[0] == 2 { bypassed = true }
+        }
+        if let bff0 = smcClient.readKeyBytes("bfF0"), !bff0.isEmpty {
+            foundKey = true
+            if bff0[0] == 1 || bff0[0] == 2 { bypassed = true }
+        }
+        if let bclm = smcClient.readKeyBytes("BCLM"), !bclm.isEmpty {
+            foundKey = true
+            if bclm[0] > 0 && bclm[0] < 100 { bypassed = true }
+        }
+
+        return foundKey ? bypassed : nil
+    }
+
     public func checkSMCBypassStatus() {
         // If protection is disabled by user, bypass is NEVER active
         guard isProtectionEnabled else {
-            self.isBypassActive = false
+            setIfChanged(&self.isBypassActive, false)
             return
         }
 
-        // Always verify real SMC hardware registers first when helper is installed
-        if isHelperInstalled {
-            DispatchQueue.global(qos: .utility).async {
-                let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>/dev/null")
-                DispatchQueue.main.async {
-                    guard self.isProtectionEnabled else {
-                        self.isBypassActive = false
-                        return
-                    }
-                    if code == 0 {
-                        // Check if CHTE is 1 (bytes 01 00 00 00), BYPASS:1 or CH0B/bfF0/BCLM active
-                        let smcBypassed = out.contains("BYPASS:1") ||
-                                          out.contains("01 00 00 00") ||
-                                          out.contains("1 (bytes 01 00 00 00)") ||
-                                          out.contains("(bytes 02)")
-                        // If battery is actively drawing >100mA charge current while at/above limit,
-                        // hardware bypass was reset (e.g., MagSafe/USB-C PD cable re-plugged), so mark false to trigger re-lock!
-                        let activelyChargingPastLimit = (self.currentLevel >= self.chargeLimit) && (self.amperage > 100)
-                        self.isBypassActive = smcBypassed && self.isPluggedIn && !activelyChargingPastLimit
-                    } else {
-                        self.isBypassActive = false
-                    }
-                }
+        // 1. Đọc trực tiếp từ IOKit AppleSMC trong tiến trình (0 tiến trình con, không cần sudo!)
+        if let smcBypassed = readHardwareBypassInProcess() {
+            // Nếu đang ở/vượt ngưỡng mà dòng sạc >120mA liên tục, phần cứng đã bị reset (cắm lại MagSafe/USB-C PD)
+            if currentLevel >= chargeLimit && amperage > 120 {
+                consecutiveChargeSpikes += 1
+            } else {
+                consecutiveChargeSpikes = 0
             }
+            let activelyChargingPastLimit = isPluggedIn && (currentLevel >= chargeLimit) && (isCharging || consecutiveChargeSpikes >= 2)
+            setIfChanged(&self.isBypassActive, smcBypassed && isPluggedIn && !activelyChargingPastLimit)
             return
         }
 
-        // Fallback when SMC helper is not installed yet (Native PowerUI only)
+        // 2. Fallback when SMC register is unavailable (Native PowerUI only)
         if NativePowerUIClient.shared.isSupported && chargeLimit >= 80 {
             let enabled = NativePowerUIClient.shared.isCurrentlyEnabled()
             let limit = NativePowerUIClient.shared.currentLimit()
             if enabled && limit <= self.chargeLimit && self.currentLevel >= self.chargeLimit && !self.isCharging {
-                self.isBypassActive = self.isPluggedIn
+                setIfChanged(&self.isBypassActive, self.isPluggedIn)
                 return
             }
         }
-        self.isBypassActive = false
+        setIfChanged(&self.isBypassActive, false)
     }
 
     // MARK: - Power & Limiter Evaluation
 
     public func evaluatePowerManagement() {
         guard hasBattery else {
-            self.isBypassActive = false
-            statusMessage = tr("Nguồn AC trực tiếp (Máy bàn Mac)", "Direct AC Power (Desktop Mac)")
+            setIfChanged(&self.isBypassActive, false)
+            setIfChanged(&statusMessage, tr("Nguồn AC trực tiếp (Máy bàn Mac)", "Direct AC Power (Desktop Mac)"))
             return
         }
         guard isHelperInstalled || (NativePowerUIClient.shared.isSupported && chargeLimit >= 80) else {
-            statusMessage = tr("Cần cấp quyền để kích hoạt bảo vệ nguồn SMC", "Permission needed for SMC power protection")
+            setIfChanged(&statusMessage, tr("Cần cấp quyền để kích hoạt bảo vệ nguồn SMC", "Permission needed for SMC power protection"))
             return
         }
 
@@ -788,7 +875,7 @@ public class BatteryManager: ObservableObject {
 
         // 2. Normal power state
         if !isPluggedIn {
-            self.isBypassActive = false
+            setIfChanged(&self.isBypassActive, false)
             // Keep firmware ceiling armed even while on battery if protection is enabled,
             // so plugging in while asleep won't overshoot the limit
             if isProtectionEnabled && !isTopUpActive && NativePowerUIClient.shared.isSupported && chargeLimit >= 80 {
@@ -796,7 +883,7 @@ public class BatteryManager: ObservableObject {
                     _ = NativePowerUIClient.shared.setLimit(chargeLimit)
                 }
             }
-            statusMessage = tr("Đang dùng pin (\(currentLevel)%)", "On battery (\(currentLevel)%)")
+            setIfChanged(&statusMessage, tr("Đang dùng pin (\(currentLevel)%)", "On battery (\(currentLevel)%)"))
             return
         }
 
@@ -805,37 +892,35 @@ public class BatteryManager: ObservableObject {
             setChargingInhibited(false)
             if currentLevel >= 100 {
                 isTopUpActive = false
-                statusMessage = tr("Đã sạc đầy 100%", "Fully charged 100%")
+                setIfChanged(&statusMessage, tr("Đã sạc đầy 100%", "Fully charged 100%"))
             } else {
-                statusMessage = tr("Đang sạc đầy tạm thời (\(currentLevel)%)", "Temporary top-up (\(currentLevel)%)")
+                setIfChanged(&statusMessage, tr("Đang sạc đầy tạm thời (\(currentLevel)%)", "Temporary top-up (\(currentLevel)%)"))
             }
             return
         }
 
         if isProtectionEnabled {
             if currentLevel >= chargeLimit {
-                // Force immediate re-lock if battery is still charging or bypass was reset by cable re-plug
-                let needsUrgentLock = !isBypassActive || isCharging || amperage > 50
+                // Chỉ gọi sudo ghi lại SMC khi khóa phần cứng chưa active hoặc đang có dòng sạc vào pin
+                let needsUrgentLock = !isBypassActive || isCharging || amperage > 120
                 setChargingInhibited(true, forceImmediate: needsUrgentLock)
-                statusMessage = tr("Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)", "Direct AC Power (Locked at \(chargeLimit)% to protect battery)")
+                setIfChanged(&statusMessage, tr("Nguồn AC trực tiếp (Đã khóa \(chargeLimit)% chống chai pin)", "Direct AC Power (Locked at \(chargeLimit)% to protect battery)"))
             } else if currentLevel <= max(10, chargeLimit - 3) {
                 setChargingInhibited(false)
-                statusMessage = tr("Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)", "Recharging up to \(chargeLimit)% (\(currentLevel)%)")
+                setIfChanged(&statusMessage, tr("Đang sạc bù lên \(chargeLimit)% (\(currentLevel)%)", "Recharging up to \(chargeLimit)% (\(currentLevel)%)"))
             } else {
-                // Hysteresis band (e.g. 78% - 79% when limit is 80%):
-                // If already bypassed (drifted down from 80%), maintain bypass;
-                // if charging up toward 80%, keep ceiling armed so it stops right at 80%.
+                // Hysteresis band (e.g. 78% - 79% when limit is 80%)
                 if isBypassActive {
                     setChargingInhibited(true)
-                    statusMessage = tr("Nguồn AC trực tiếp (\(currentLevel)%)", "Direct AC Power (\(currentLevel)%)")
+                    setIfChanged(&statusMessage, tr("Nguồn AC trực tiếp (\(currentLevel)%)", "Direct AC Power (\(currentLevel)%)"))
                 } else {
                     setChargingInhibited(false)
-                    statusMessage = tr("Đang sạc lên \(chargeLimit)% (\(currentLevel)%)", "Charging to \(chargeLimit)% (\(currentLevel)%)")
+                    setIfChanged(&statusMessage, tr("Đang sạc lên \(chargeLimit)% (\(currentLevel)%)", "Charging to \(chargeLimit)% (\(currentLevel)%)"))
                 }
             }
         } else {
             setChargingInhibited(false)
-            statusMessage = isFullyCharged ? tr("Đã sạc đầy 100%", "Fully charged 100%") : tr("Đang sạc thường (\(currentLevel)%)", "Standard charging (\(currentLevel)%)")
+            setIfChanged(&statusMessage, isFullyCharged ? tr("Đã sạc đầy 100%", "Fully charged 100%") : tr("Đang sạc thường (\(currentLevel)%)", "Standard charging (\(currentLevel)%)"))
         }
     }
 
@@ -843,13 +928,12 @@ public class BatteryManager: ObservableObject {
 
     public func setChargingInhibited(_ inhibit: Bool, forceImmediate: Bool = false) {
         let now = Date()
-        let shouldWriteSMC = forceImmediate ||
-                             (lastAppliedInhibitState != inhibit) ||
-                             (lastAppliedLimit != chargeLimit) ||
-                             (now.timeIntervalSince(lastSMCWriteDate) >= 25.0)
+        let cooldownElapsed = now.timeIntervalSince(lastSMCWriteDate) >= 10.0
+        let stateOrLimitChanged = (lastAppliedInhibitState != inhibit) || (lastAppliedLimit != chargeLimit)
+        let shouldWriteSMC = stateOrLimitChanged || (forceImmediate && cooldownElapsed)
 
         if !inhibit {
-            self.isBypassActive = false
+            setIfChanged(&self.isBypassActive, false)
             // Determine whether we are recharging up to `chargeLimit` (keep ceiling armed!)
             // vs. completely unlocking to 100% (Protection OFF, Top-Up 100%, or Calibration charging)
             let keepCeilingArmed = isProtectionEnabled && !isTopUpActive && (calibrationState == .idle)
@@ -857,29 +941,30 @@ public class BatteryManager: ObservableObject {
             if keepCeilingArmed {
                 // Keep firmware ceiling (CHLT / PowerUI) armed at `chargeLimit` so Mac stops at `chargeLimit` even during Sleep!
                 if NativePowerUIClient.shared.isSupported && chargeLimit >= 80 {
-                    if shouldWriteSMC || !NativePowerUIClient.shared.isCurrentlyEnabled() {
+                    if stateOrLimitChanged || !NativePowerUIClient.shared.isCurrentlyEnabled() || NativePowerUIClient.shared.currentLimit() != chargeLimit {
                         _ = NativePowerUIClient.shared.setLimit(chargeLimit)
                     }
                 }
             } else {
                 // Full 100% unlock: disable native macOS PowerUI MCL
                 if NativePowerUIClient.shared.isSupported {
-                    if shouldWriteSMC || NativePowerUIClient.shared.isCurrentlyEnabled() {
+                    if stateOrLimitChanged || NativePowerUIClient.shared.isCurrentlyEnabled() {
                         _ = NativePowerUIClient.shared.disable()
                     }
                 }
             }
 
-            // Release instant SMC switches (CHTE = 0, CH0B = 0) while preserving ceiling if keepCeilingArmed
-            if isHelperInstalled && shouldWriteSMC {
+            // Chỉ chạy sudo helper khi vừa chuyển trạng thái / vừa mở khóa hoặc khi đọc SMC thấy công tắc vẫn đang đóng
+            let hardwareStillInhibited = (readHardwareBypassInProcess() == true)
+            if isHelperInstalled && (shouldWriteSMC || (hardwareStillInhibited && cooldownElapsed)) {
                 lastAppliedInhibitState = false
                 lastAppliedLimit = chargeLimit
                 lastSMCWriteDate = now
                 let targetCeiling = keepCeilingArmed ? chargeLimit : 100
                 DispatchQueue.global(qos: .utility).async {
-                    let (_, _) = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(targetCeiling)")
+                    let (_, _) = shell(PrivilegedHelper.sudo("charge-on \(targetCeiling)"))
                     DispatchQueue.main.async {
-                        self.isBypassActive = false
+                        self.setIfChanged(&self.isBypassActive, false)
                         self.refreshBatteryInfo()
                     }
                 }
@@ -891,28 +976,29 @@ public class BatteryManager: ObservableObject {
         // Layer 1: Arm Native PowerUI / CHLT firmware ceiling (for macOS 15+ / sleep persistence)
         var nativeSuccess = false
         if NativePowerUIClient.shared.isSupported && chargeLimit >= 80 {
-            if shouldWriteSMC || !NativePowerUIClient.shared.isCurrentlyEnabled() || NativePowerUIClient.shared.currentLimit() != chargeLimit {
+            if !NativePowerUIClient.shared.isCurrentlyEnabled() || NativePowerUIClient.shared.currentLimit() != chargeLimit {
                 nativeSuccess = NativePowerUIClient.shared.setLimit(chargeLimit)
             } else {
                 nativeSuccess = true
             }
         }
 
-        // Layer 2: ALWAYS enforce SMC hardware cut-off switches (CHTE / CH0B / bfF0 / BCLM) via root helper!
-        // Never skip `displaycontrol-power charge-off` when `nativeSuccess` is true, because on M1-M5 MacBook Pros
-        // `setMCLLimit` only sets `CHLT` without flipping `CHTE = 01000000` or `CH0B = 02`!
+        // Layer 2: ALWAYS enforce SMC hardware cut-off switches (CHTE / CH0B / bfF0 / BCLM) via root helper
+        // when state/limit changes or in-process read detects bypass is missing / still charging (0 background spam when already locked!).
         if isHelperInstalled {
-            if shouldWriteSMC || !isBypassActive || isCharging || amperage > 50 {
+            let needsLockWrite = shouldWriteSMC || (!isBypassActive && cooldownElapsed) || ((isCharging || amperage > 120) && cooldownElapsed)
+            if needsLockWrite {
                 lastAppliedInhibitState = true
                 lastAppliedLimit = chargeLimit
                 lastSMCWriteDate = now
                 let limitToLock = chargeLimit
-                let cmd = "sudo -n /usr/local/bin/displaycontrol-power charge-off \(limitToLock)"
+                let cmd = PrivilegedHelper.sudo("charge-off \(limitToLock)")
                 DispatchQueue.global(qos: .utility).async {
                     let (out, code) = shell(cmd)
                     DispatchQueue.main.async {
                         if code == 0 {
-                            self.isBypassActive = self.isPluggedIn
+                            self.setIfChanged(&self.isBypassActive, self.isPluggedIn)
+                            self.updateAppNapProtection()
                         } else if !nativeSuccess {
                             appLog("⚠️ setChargingInhibited(true) failed with code \(code): \(out)")
                         }
@@ -920,7 +1006,7 @@ public class BatteryManager: ObservableObject {
                 }
             }
         } else if nativeSuccess {
-            self.isBypassActive = self.isPluggedIn
+            setIfChanged(&self.isBypassActive, self.isPluggedIn)
         }
     }
 
@@ -934,14 +1020,14 @@ public class BatteryManager: ObservableObject {
                 _ = NativePowerUIClient.shared.setLimit(chargeLimit)
             }
             if isHelperInstalled {
-                _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on \(chargeLimit) 2>/dev/null")
+                _ = shell(PrivilegedHelper.sudo("charge-on \(chargeLimit) 2>/dev/null"))
             }
         } else {
             if NativePowerUIClient.shared.isSupported {
                 _ = NativePowerUIClient.shared.disable()
             }
             if isHelperInstalled {
-                _ = shell("sudo -n /usr/local/bin/displaycontrol-power charge-on 100 2>/dev/null")
+                _ = shell(PrivilegedHelper.sudo("charge-on 100 2>/dev/null"))
             }
         }
     }
@@ -1039,10 +1125,11 @@ public class BatteryManager: ObservableObject {
     // MARK: - Helper Installation Check & Prompt
 
     public func checkHelperStatus(completion: ((Bool) -> Void)? = nil) {
-        let exists = FileManager.default.fileExists(atPath: "/usr/local/bin/displaycontrol-power")
+        let exists = FileManager.default.fileExists(atPath: PrivilegedHelper.powerPath)
         guard exists else {
+            let hasLegacy = FileManager.default.fileExists(atPath: PrivilegedHelper.legacyPowerPath)
             self.isHelperInstalled = false
-            self.helperVersion = 0
+            self.helperVersion = hasLegacy ? 2 : 0
             if self.isProtectionEnabled {
                 self.checkSMCBypassStatus()
                 self.evaluatePowerManagement()
@@ -1051,20 +1138,14 @@ public class BatteryManager: ObservableObject {
             return
         }
         DispatchQueue.global(qos: .utility).async {
-            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            let (out, code) = shell(PrivilegedHelper.sudo("version 2>&1"))
             var ver = 0
             if code == 0, let r = out.range(of: "HELPER_VERSION:") {
                 ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
             }
-            // Fallback for users who updated via auto-updater from v1.9.0/v1.9.1 where helper v1 is installed:
-            // Helper v1 supports status / charge-off / charge-on via sudoers even without the `version` subcommand.
-            if ver == 0 {
-                let (statusOut, statusCode) = shell("sudo -n /usr/local/bin/displaycontrol-power status 2>&1")
-                if statusCode == 0 && (statusOut.contains("BYPASS:") || statusOut.contains("CHTE") || statusOut.contains("CH0B") || statusOut.contains("BCLM")) {
-                    ver = 1
-                }
-            }
-            let isRealReady = (ver >= 1)
+            // Không còn dùng helper cũ (<= v2 ở /usr/local/bin với sudoers mở cho mọi user);
+            // người dùng cài lại 1 lần lên v3 trong /Library/PrivilegedHelperTools, bộ cài tự gỡ bản cũ.
+            let isRealReady = (ver >= PrivilegedHelper.requiredVersion)
             DispatchQueue.main.async {
                 self.helperVersion = ver
                 self.isHelperInstalled = isRealReady
@@ -1083,12 +1164,11 @@ public class BatteryManager: ObservableObject {
         isInstallingHelper = true
 
         DispatchQueue.global(qos: .userInitiated).async {
-            // Find smc, helper and install script across bundle, working directory, and installed locations
+            // Chỉ lấy tệp nguồn từ app bundle (hoặc /Applications/HyperMac.app), tuyệt đối không lấy từ thư mục làm việc hiện tại.
             let searchDirs = [
                 Bundle.main.resourcePath,
                 Bundle.main.bundleURL.appendingPathComponent("Contents/Resources").path,
-                "/Applications/HyperMac.app/Contents/Resources",
-                FileManager.default.currentDirectoryPath + "/Resources"
+                "/Applications/HyperMac.app/Contents/Resources"
             ].compactMap { $0 }
 
             var smcSrc: String? = Bundle.main.path(forResource: "smc", ofType: nil)
@@ -1119,8 +1199,55 @@ public class BatteryManager: ObservableObject {
                 return
             }
 
+            // Kiểm tra tên user chặt chẽ trước khi ghi rule sudoers
+            let user = NSUserName()
+            guard user.range(of: #"^[A-Za-z0-9._-]+$"#, options: .regularExpression) != nil,
+                  !user.hasPrefix("-"), user != ".", user != "..", user != "ALL", user != "root"
+            else {
+                appLog("❌ installHelper: unsafe user name")
+                DispatchQueue.main.async {
+                    self.isInstallingHelper = false
+                    completion?(false)
+                }
+                return
+            }
+
+            // Stage bản sao sạch vào thư mục riêng tư (0700) trong /private/tmp để tránh lỗi TCC khi app chạy từ ~/Downloads hoặc ~/Documents
+            let fm = FileManager.default
+            let stageURL = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+                .appendingPathComponent("hypermac-helper-\(UUID().uuidString)", isDirectory: true)
+            defer { try? fm.removeItem(at: stageURL) }
+
+            let stagedSMC = stageURL.appendingPathComponent("smc").path
+            let stagedHelper = stageURL.appendingPathComponent("displaycontrol-power").path
+            let stagedInstall = stageURL.appendingPathComponent("install-helper.sh").path
+
+            do {
+                try fm.createDirectory(at: stageURL, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+                try fm.copyItem(atPath: sSMC, toPath: stagedSMC)
+                try fm.copyItem(atPath: sHelper, toPath: stagedHelper)
+                try fm.copyItem(atPath: sInstall, toPath: stagedInstall)
+            } catch {
+                appLog("❌ installHelper: failed staging resources: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.isInstallingHelper = false
+                    completion?(false)
+                }
+                return
+            }
+
+            let stagedPaths = [stagedInstall, stagedSMC, stagedHelper]
+            guard !stagedPaths.contains(where: { $0.contains("'") || $0.contains("\\") || $0.contains("\"") }) else {
+                appLog("❌ installHelper: unsafe staged path")
+                DispatchQueue.main.async {
+                    self.isInstallingHelper = false
+                    completion?(false)
+                }
+                return
+            }
+
             let appleScriptCmd = """
-            do shell script "/bin/bash '\(sInstall)' '\(sSMC)' '\(sHelper)'" with administrator privileges
+            do shell script "/bin/bash '\(stagedInstall)' '\(stagedSMC)' '\(stagedHelper)' '\(user)'" with administrator privileges
             """
 
             var errorDict: NSDictionary?
@@ -1132,12 +1259,12 @@ public class BatteryManager: ObservableObject {
             }
 
             // Verify installation with deep probe
-            let (out, code) = shell("sudo -n /usr/local/bin/displaycontrol-power version 2>&1")
+            let (out, code) = shell(PrivilegedHelper.sudo("version 2>&1"))
             var ver = 0
             if code == 0, let r = out.range(of: "HELPER_VERSION:") {
                 ver = Int(out[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).prefix(while: { $0.isNumber })) ?? 0
             }
-            let success = (code == 0 && ver >= 2)
+            let success = (code == 0 && ver >= PrivilegedHelper.requiredVersion)
 
             DispatchQueue.main.async {
                 self.isInstallingHelper = false

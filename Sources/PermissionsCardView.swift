@@ -150,8 +150,8 @@ public struct PermissionsCardView: View {
 
                     // 3. SMC Helper (Khóa sạc 80% & Quạt) - Phần cứng
                     let helperVer = BatteryManager.shared.helperVersion
-                    let helperActionTitle = (helperVer > 0 && helperVer < 2)
-                        ? tr("Cập nhật v2", "Update to v2")
+                    let helperActionTitle = (helperVer > 0 && helperVer < PrivilegedHelper.requiredVersion)
+                        ? tr("Cập nhật v\(PrivilegedHelper.requiredVersion)", "Update to v\(PrivilegedHelper.requiredVersion)")
                         : tr("Cài đặt Helper", "Install Helper")
 
                     permissionRow(

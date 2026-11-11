@@ -60,6 +60,7 @@ public class DisplayManager: ObservableObject {
     private var dsGetBrightness: GetBrightnessFunc?
     private var dsSetBrightness: SetBrightnessFunc?
     private var permCheckTimer: Timer?
+    private var accessibilityObserver: NSObjectProtocol?
 
     private init() {
         appLog("🚀 DisplayManager: Initializing...")
@@ -96,15 +97,45 @@ public class DisplayManager: ObservableObject {
             _ = AXIsProcessTrustedWithOptions(options)
         }
 
-        permCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkAccessibility()
+        syncAccessibilityPolling()
+
+        // macOS phát thông báo mỗi khi danh sách quyền Accessibility đổi: kiểm tra lại tức thì kể cả khi timer đã dừng.
+        accessibilityObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Trạng thái quyền cập nhật trễ nhẹ sau thông báo hệ thống.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                Task { @MainActor [weak self] in
+                    self?.checkAccessibility()
+                }
             }
         }
     }
 
     deinit {
         permCheckTimer?.invalidate()
+        if let observer = accessibilityObserver {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
+    }
+
+    private func syncAccessibilityPolling() {
+        let ready = hasAccessibility && KeyInterceptor.shared.currentTap != nil
+        if ready {
+            permCheckTimer?.invalidate()
+            permCheckTimer = nil
+        } else if permCheckTimer == nil {
+            let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.checkAccessibility()
+                }
+            }
+            t.tolerance = 0.5
+            RunLoop.main.add(t, forMode: .common)
+            permCheckTimer = t
+        }
     }
 
     // MARK: - Accessibility Check
@@ -118,6 +149,7 @@ public class DisplayManager: ObservableObject {
         if trusted && KeyInterceptor.shared.currentTap == nil {
             KeyInterceptor.shared.start()
         }
+        syncAccessibilityPolling()
     }
 
     public func requestAccessibility() {
@@ -231,6 +263,9 @@ public class DisplayManager: ObservableObject {
             if a.isBuiltIn != b.isBuiltIn { return a.isBuiltIn }
             return a.id < b.id
         }
+
+        let knownIDs = Set(updatedList.map(\.id))
+        originalGamma = originalGamma.filter { knownIDs.contains($0.key) }
 
         self.monitors = updatedList
         appLog("🖥 Display list refreshed. Total: \(updatedList.count) (Active: \(updatedList.filter { $0.isConnected }.count))")
@@ -376,21 +411,43 @@ public class DisplayManager: ObservableObject {
 
     // MARK: - External Brightness via CoreGraphics Hardware Gamma LUT
 
+    /// Thấp hơn mức này màn gần như đen hẳn, người dùng dễ tưởng màn hỏng.
+    private static let minimumGammaBrightness = 0.15
+
+    /// Bảng gamma gốc của từng màn (theo profile ColorSync), chụp lần đầu khi chỉnh sáng.
+    private var originalGamma: [CGDirectDisplayID: (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue])] = [:]
+
+    /// Chỉ khôi phục bảng gamma ColorSync khi HyperMac thực sự từng điều chỉnh độ sáng màn ngoài.
+    public func restoreHardwareGammaIfNeeded() {
+        guard !originalGamma.isEmpty else { return }
+        originalGamma.removeAll()
+        CGDisplayRestoreColorSyncSettings()
+    }
+
+    /// Nhân bảng gamma gốc với hệ số sáng để giữ nguyên hiệu chỉnh màu ColorSync (thay vì ghi đè bằng đường thẳng).
     private func setHardwareGamma(displayID: CGDirectDisplayID, brightness: Double) {
-        let tableSize: UInt32 = 256
-        var red = [Float](repeating: 0, count: Int(tableSize))
-        var green = [Float](repeating: 0, count: Int(tableSize))
-        var blue = [Float](repeating: 0, count: Int(tableSize))
+        let original = originalGamma[displayID] ?? captureGamma(displayID)
+        originalGamma[displayID] = original
 
-        let b = Float(max(0.0, min(1.0, brightness)))
-        for i in 0..<Int(tableSize) {
-            let val = (Float(i) / Float(tableSize - 1)) * b
-            red[i] = val
-            green[i] = val
-            blue[i] = val
+        let factor = CGGammaValue(max(Self.minimumGammaBrightness, min(1.0, brightness)))
+        var red = original.red.map { $0 * factor }
+        var green = original.green.map { $0 * factor }
+        var blue = original.blue.map { $0 * factor }
+        _ = CGSetDisplayTransferByTable(displayID, UInt32(red.count), &red, &green, &blue)
+    }
+
+    private func captureGamma(_ displayID: CGDirectDisplayID) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
+        let capacity = max(Int(CGDisplayGammaTableCapacity(displayID)), 2)
+        var red = [CGGammaValue](repeating: 0, count: capacity)
+        var green = red, blue = red
+        var count: UInt32 = 0
+        if CGGetDisplayTransferByTable(displayID, UInt32(capacity), &red, &green, &blue, &count) == .success, count >= 2 {
+            let n = Int(count)
+            return (Array(red.prefix(n)), Array(green.prefix(n)), Array(blue.prefix(n)))
         }
-
-        _ = CGSetDisplayTransferByTable(displayID, tableSize, &red, &green, &blue)
+        // Fallback tuyến tính nếu không đọc được bảng gamma hiện tại.
+        let ramp = (0..<256).map { CGGammaValue($0) / 255 }
+        return (ramp, ramp, ramp)
     }
 
     // MARK: - Unified Brightness Setter

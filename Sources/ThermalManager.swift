@@ -60,8 +60,9 @@ private class AppleSiliconHIDReader {
                 for i in 0..<count {
                     guard let rawPtr = CFArrayGetValueAtIndex(servCF, i) else { continue }
                     let s = Unmanaged<CFTypeRef>.fromOpaque(rawPtr).takeUnretainedValue()
+                    // Chỉ giữ lại các cảm biến cần dùng (CPU/GPU/pin/SSD/bo mạch cho M1–M5), giảm chi phí quét HID.
                     if let nameRef = copyProp(s, "Product" as CFString)?.takeRetainedValue(),
-                       let name = nameRef as? String {
+                       let name = nameRef as? String, Self.isUsedSensor(name) {
                         cachedServices.append((service: s, name: name))
                     }
                 }
@@ -93,9 +94,16 @@ private class AppleSiliconHIDReader {
                 let coreIdx = name.replacingOccurrences(of: "PMU tdie", with: "").replacingOccurrences(of: "PMU2 tdie", with: " (P-Core ")
                 let label = name.contains("PMU2") ? "CPU P-Core \(coreIdx.replacingOccurrences(of: " (P-Core ", with: ""))" : "CPU Core \(coreIdx)"
                 sensorList.append(SensorReading(name: name, displayName: label, temp: temp, category: "CPU"))
-            } else if name.hasPrefix("PMU tdev") || name.hasPrefix("PMU2 tdev") {
+            } else if name.hasPrefix("pACC MTR Temp Sensor") || name.hasPrefix("eACC MTR Temp Sensor") {
+                cpuTemps.append(temp)
+                let kind = name.hasPrefix("pACC") ? "P-Core" : "E-Core"
+                let idx = name.split(separator: " ").last.map(String.init) ?? ""
+                sensorList.append(SensorReading(name: name, displayName: "CPU \(kind) \(idx)", temp: temp, category: "CPU"))
+            } else if name.hasPrefix("PMU tdev") || name.hasPrefix("PMU2 tdev") || name.hasPrefix("GPU MTR Temp Sensor") {
                 gpuTemps.append(temp)
-                let gpuIdx = name.replacingOccurrences(of: "PMU tdev", with: "").replacingOccurrences(of: "PMU2 tdev", with: " ")
+                let gpuIdx = name.hasPrefix("GPU")
+                    ? (name.split(separator: " ").last.map(String.init) ?? "")
+                    : name.replacingOccurrences(of: "PMU tdev", with: "").replacingOccurrences(of: "PMU2 tdev", with: " ")
                 sensorList.append(SensorReading(name: name, displayName: tr("GPU Cụm \(gpuIdx)", "GPU Cluster \(gpuIdx)"), temp: temp, category: "GPU"))
             } else if name.contains("battery") {
                 batteryTemps.append(temp)
@@ -103,7 +111,7 @@ private class AppleSiliconHIDReader {
             } else if name.contains("NAND") {
                 nandTemps.append(temp)
                 sensorList.append(SensorReading(name: name, displayName: "SSD NVMe Flash", temp: temp, category: tr("Ổ cứng", "Storage")))
-            } else if name.contains("tcal") {
+            } else if name.contains("tcal") || name.hasPrefix("PMGR SOC Die Temp Sensor") {
                 hotspotTemps.append(temp)
                 sensorList.append(SensorReading(name: name, displayName: tr("Hotspot Bo mạch", "Logic Board Hotspot"), temp: temp, category: tr("Bo mạch", "Logic Board")))
             }
@@ -117,6 +125,16 @@ private class AppleSiliconHIDReader {
         let hot = hotspotTemps.isEmpty ? 0.0 : (hotspotTemps.reduce(0, +) / Double(hotspotTemps.count))
 
         return (cpuAvg, cpuPeak, gpuAvg, bat, nand, hot, sensorList)
+    }
+
+    /// Lọc trước danh sách cảm biến HID được sử dụng bên dưới (hỗ trợ cả M1–M3 PMU lẫn M4–M5 MTR/SOC).
+    private static func isUsedSensor(_ name: String) -> Bool {
+        name.hasPrefix("PMU tdie") || name.hasPrefix("PMU2 tdie") ||
+            name.hasPrefix("pACC MTR Temp Sensor") || name.hasPrefix("eACC MTR Temp Sensor") ||
+            name.hasPrefix("PMU tdev") || name.hasPrefix("PMU2 tdev") ||
+            name.hasPrefix("GPU MTR Temp Sensor") ||
+            name.contains("battery") || name.contains("NAND") ||
+            name.contains("tcal") || name.hasPrefix("PMGR SOC Die Temp Sensor")
     }
 
     deinit {
@@ -316,6 +334,7 @@ public class ThermalManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(showMenuBarMetrics, forKey: "show_menubar_thermal")
             updateMenuBarDisplay()
+            syncPollingState()
         }
     }
     public var onMenuBarUpdate: ((String?) -> Void)?
@@ -323,6 +342,9 @@ public class ThermalManager: ObservableObject {
     private let hidReader = AppleSiliconHIDReader()
     private let smcReader = SMCTempReader()
     private var pollTimer: Timer?
+    private var pollInterval: TimeInterval = 0
+    private var isPopoverVisible: Bool = false
+    private var needsFanThermalMonitor: Bool = false
 
     /// Ngưỡng trạng thái tính theo CPU TRUNG BÌNH (không theo 1 nhân đỉnh tức thời).
     /// Apple Silicon: dùng nhẹ ~40–65°C, tải vừa 65–85°C, tải nặng > 85°C (giảm xung ~100°C+).
@@ -425,21 +447,69 @@ public class ThermalManager: ObservableObject {
 
     // MARK: - Polling & Refresh Metrics
 
+    public func setPopoverVisible(_ visible: Bool) {
+        isPopoverVisible = visible
+        if visible {
+            refreshMetrics()
+        }
+        syncPollingState()
+    }
+
+    public func setFanThermalMonitorNeeded(_ needed: Bool) {
+        guard needsFanThermalMonitor != needed else { return }
+        needsFanThermalMonitor = needed
+        syncPollingState()
+    }
+
     private func startPolling() {
+        syncPollingState()
+    }
+
+    private func syncPollingState() {
+        let desiredInterval: TimeInterval
+        if isPopoverVisible {
+            desiredInterval = 2.5
+        } else if showMenuBarMetrics || needsFanThermalMonitor {
+            // Khi đóng popover nhưng bật nhiệt độ trên Menu Bar hoặc đang chỉnh quạt thủ công:
+            // giảm xuống 5s kèm tolerance để tiết kiệm wakeup.
+            desiredInterval = 5.0
+        } else {
+            // Không mở popover, không hiện nhiệt độ Menu Bar, quạt đang Tự động -> 0 wakeup!
+            desiredInterval = 0
+        }
+
+        if desiredInterval <= 0 {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            pollInterval = 0
+            return
+        }
+
+        guard pollTimer == nil || pollInterval != desiredInterval else { return }
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        pollInterval = desiredInterval
+        let t = Timer(timeInterval: desiredInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshMetrics()
             }
         }
+        t.tolerance = desiredInterval >= 5.0 ? 1.0 : 0.4
+        RunLoop.main.add(t, forMode: .common)
+        pollTimer = t
     }
 
     public func refreshMetrics() {
-        // 1. Read Apple Silicon HID Temperatures
-        var (cpu, peak, gpu, bat, nand, hot, sensors) = hidReader.readTemperatures()
+        // Khi popover đang ĐÓNG, ưu tiên chỉ đọc SMC (vài key rất nhẹ) và bỏ qua 45 cảm biến HID
+        // nếu SMC đã có số liệu CPU (hoàn toàn fallback sang HID nếu SMC không trả kết quả).
+        let smc = smcReader.read()
+        var cpu = 0.0, peak = 0.0, gpu = 0.0, bat = 0.0, nand = 0.0, hot = 0.0
+        var sensors: [SensorReading] = []
+
+        if isPopoverVisible || smc.cpu.isEmpty {
+            (cpu, peak, gpu, bat, nand, hot, sensors) = hidReader.readTemperatures()
+        }
 
         // CPU/GPU: ưu tiên SMC (nhiệt nhân thật trên M1–M5 Air/Pro/Max/Ultra); HID PMU là dự phòng.
-        let smc = smcReader.read()
         if !smc.cpu.isEmpty {
             let t = smc.cpu.map(\.temp)
             cpu = t.reduce(0, +) / Double(t.count)
@@ -455,34 +525,52 @@ public class ThermalManager: ObservableObject {
         if hot <= 0 && smc.hotspot > 0 { hot = smc.hotspot }
 
         sensors = smc.cpu + smc.gpu + sensors
-        if cpu > 0 { self.cpuAvgTemp = smooth(self.cpuAvgTemp, cpu) }
-        if peak > 0 { self.cpuPeakTemp = smooth(self.cpuPeakTemp, peak) }
-        if gpu > 0 { self.gpuAvgTemp = smooth(self.gpuAvgTemp, gpu) }
-        if bat > 0 { self.batteryTemp = bat }
-        if nand > 0 { self.ssdTemp = nand }
-        if hot > 0 { self.hotspotTemp = hot }
-        if !sensors.isEmpty { self.detailedSensors = sensors }
+        let newCpu = cpu > 0 ? smooth(self.cpuAvgTemp, cpu) : self.cpuAvgTemp
+        let newPeak = peak > 0 ? smooth(self.cpuPeakTemp, peak) : self.cpuPeakTemp
+        let newGpu = gpu > 0 ? smooth(self.gpuAvgTemp, gpu) : self.gpuAvgTemp
+
+        if isPopoverVisible {
+            if cpu > 0 { self.cpuAvgTemp = newCpu }
+            if peak > 0 { self.cpuPeakTemp = newPeak }
+            if gpu > 0 { self.gpuAvgTemp = newGpu }
+            if bat > 0 && abs(self.batteryTemp - bat) >= 0.05 { self.batteryTemp = bat }
+            if nand > 0 && abs(self.ssdTemp - nand) >= 0.05 { self.ssdTemp = nand }
+            if hot > 0 && abs(self.hotspotTemp - hot) >= 0.05 { self.hotspotTemp = hot }
+            if !sensors.isEmpty { self.detailedSensors = sensors }
+        } else {
+            // Khi popover ĐÓNG, chỉ cập nhật @Published nếu số làm tròn thay đổi (tránh SwiftUI churn!)
+            if cpu > 0 && Int(newCpu.rounded()) != Int(self.cpuAvgTemp.rounded()) { self.cpuAvgTemp = newCpu }
+            else if cpu > 0 && self.cpuAvgTemp == 0 { self.cpuAvgTemp = newCpu }
+            if peak > 0 && Int(newPeak.rounded()) != Int(self.cpuPeakTemp.rounded()) { self.cpuPeakTemp = newPeak }
+            else if peak > 0 && self.cpuPeakTemp == 0 { self.cpuPeakTemp = newPeak }
+            if gpu > 0 && Int(newGpu.rounded()) != Int(self.gpuAvgTemp.rounded()) { self.gpuAvgTemp = newGpu }
+            if hot > 0 && Int(hot.rounded()) != Int(self.hotspotTemp.rounded()) { self.hotspotTemp = hot }
+        }
 
         // 2. Read System Thermal Pressure
         let state = ProcessInfo.processInfo.thermalState
+        let nextDesc: String
+        let nextThrottle: Bool
         switch state {
         case .nominal, .fair:
             switch thermalLevel {
-            case .cool: self.thermalStateDescription = tr("Mát mẻ (Bình thường)", "Cool (Normal)")
-            case .warm: self.thermalStateDescription = tr("Ấm (Tải vừa)", "Warm (Moderate)")
-            case .hot:  self.thermalStateDescription = tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
+            case .cool: nextDesc = tr("Mát mẻ (Bình thường)", "Cool (Normal)")
+            case .warm: nextDesc = tr("Ấm (Tải vừa)", "Warm (Moderate)")
+            case .hot:  nextDesc = tr("Nóng (Chưa giảm xung)", "Hot (Not throttling)")
             }
-            self.isThrottling = false
+            nextThrottle = false
         case .serious:
-            self.thermalStateDescription = tr("Nóng (Đang giảm xung nhẹ)", "Hot (Slight Throttling)")
-            self.isThrottling = true
+            nextDesc = tr("Nóng (Đang giảm xung nhẹ)", "Hot (Slight Throttling)")
+            nextThrottle = true
         case .critical:
-            self.thermalStateDescription = tr("Rất nóng (Thermal Throttling tối đa!)", "Critical (Heavy Throttling!)")
-            self.isThrottling = true
+            nextDesc = tr("Rất nóng (Thermal Throttling tối đa!)", "Critical (Heavy Throttling!)")
+            nextThrottle = true
         @unknown default:
-            self.thermalStateDescription = tr("Bình thường", "Normal")
-            self.isThrottling = false
+            nextDesc = tr("Bình thường", "Normal")
+            nextThrottle = false
         }
+        if self.thermalStateDescription != nextDesc { self.thermalStateDescription = nextDesc }
+        if self.isThrottling != nextThrottle { self.isThrottling = nextThrottle }
 
         // 3. Update Menu Bar Live Telemetry
         updateMenuBarDisplay()
@@ -492,16 +580,15 @@ public class ThermalManager: ObservableObject {
         refreshMetrics()
     }
 
-    public func updateMenuBarDisplay() {
-        guard showMenuBarMetrics else {
-            onMenuBarUpdate?(nil)
-            return
-        }
+    /// Chuỗi nhiệt độ hiển thị trên Menu Bar (`nil` nếu tắt hoặc chưa có số liệu).
+    public var menuBarDisplayText: String? {
+        guard showMenuBarMetrics else { return nil }
         let temp = Int(displayTemp.rounded())
-        guard temp > 0 else {
-            onMenuBarUpdate?(nil)
-            return
-        }
-        onMenuBarUpdate?("\(temp)°C")
+        guard temp > 0 else { return nil }
+        return "\(temp)°C"
+    }
+
+    public func updateMenuBarDisplay() {
+        onMenuBarUpdate?(menuBarDisplayText)
     }
 }

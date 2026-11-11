@@ -34,6 +34,8 @@ public class PermissionsManager: ObservableObject {
 
     private var pollTimer: Timer?
     private var isFirstCheck = true
+    private var isPopoverVisible = false
+    private var activeObserver: NSObjectProtocol?
 
     public var allGranted: Bool {
         hasAccessibility && hasScreenCapture && hasSMCHelper
@@ -58,8 +60,12 @@ public class PermissionsManager: ObservableObject {
             self.isExpanded = true
         }
 
-        // Poll every 1.5s so when user toggles permission in System Settings, UI instantly updates
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        // Chỉ kiểm tra khi người dùng vừa quay lại app từ System Settings hoặc mở popover (0 wakeup khi chạy nền).
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshStatus()
             }
@@ -68,6 +74,29 @@ public class PermissionsManager: ObservableObject {
 
     deinit {
         pollTimer?.invalidate()
+        if let observer = activeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    public func setPopoverVisible(_ visible: Bool) {
+        isPopoverVisible = visible
+        if visible {
+            refreshStatus()
+            if pollTimer == nil {
+                let t = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.refreshStatus()
+                    }
+                }
+                t.tolerance = 0.4
+                RunLoop.main.add(t, forMode: .common)
+                pollTimer = t
+            }
+        } else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        }
     }
 
     // MARK: - Live Permission Checks

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// HyperMac — Copyright (C) 2026 Nguyễn Khắc Đại
+
 import SwiftUI
 
 // MARK: - Main MenuBar View (Tabbed & Organized Architecture)
@@ -343,6 +346,7 @@ struct TopTabBar: View {
 struct HardwareCareTabView: View {
     @ObservedObject var batteryManager: BatteryManager
     @ObservedObject var thermalManager: ThermalManager = ThermalManager.shared
+    @ObservedObject var systemMonitor: SystemMonitorManager = SystemMonitorManager.shared
 
     var body: some View {
         VStack(spacing: 6) {
@@ -379,7 +383,7 @@ struct HardwareCareTabView: View {
                             }
                         })
                     } else {
-                        ThermalAndFanCardView(thermalManager: thermalManager)
+                        ThermalAndFanCardView(thermalManager: thermalManager, systemMonitor: systemMonitor)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -2062,9 +2066,9 @@ struct BatteryCardView: View {
                         .font(.system(size: FS.body))
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 1) {
-                        let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < 2
+                        let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < PrivilegedHelper.requiredVersion
                         Text(isOldHelper
-                             ? tr("Cần cập nhật Helper SMC lên bản mới (v2)", "SMC Helper update required (v2)")
+                             ? tr("Cần cập nhật Helper SMC lên bản mới (v\(PrivilegedHelper.requiredVersion))", "SMC Helper update required (v\(PrivilegedHelper.requiredVersion))")
                              : tr("Chưa cấp quyền SMC (hoặc bạn đã bấm Bỏ qua)", "SMC Helper not installed (or skipped)"))
                             .font(.system(size: FS.caption, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -2080,7 +2084,7 @@ struct BatteryCardView: View {
                             if batteryManager.isInstallingHelper {
                                 ProgressView().controlSize(.mini)
                             }
-                            let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < 2
+                            let isOldHelper = batteryManager.helperVersion > 0 && batteryManager.helperVersion < PrivilegedHelper.requiredVersion
                             Text(batteryManager.isInstallingHelper
                                  ? tr("Đang cài...", "Installing...")
                                  : (isOldHelper ? tr("Cập nhật ngay", "Update Now") : tr("Cấp quyền ngay", "Grant Now")))
@@ -2553,6 +2557,7 @@ struct BatteryCardView: View {
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
 struct ThermalAndFanCardView: View {
     @ObservedObject var thermalManager: ThermalManager
+    @ObservedObject var systemMonitor: SystemMonitorManager
 
     var body: some View {
         VStack(spacing: 8) {
@@ -2645,36 +2650,96 @@ struct ThermalAndFanCardView: View {
         .cardBackground()
     }
 
-    // MARK: - 2. Menu Bar Monitor (temperature only)
+    // MARK: - 2. Menu Bar Monitor (Temperature, CPU/RAM, Separate GPU Option)
 
+    /* Hallmark · component: menubar-metrics-card · genre: macos-native · theme: system-tokens · pre-emit critique: P5 H5 E5 S5 R5 V4 */
     private var menuBarMonitorRow: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "menubar.dock.rectangle")
-                .font(.system(size: FS.caption))
-                .foregroundStyle(Color.accentColor)
+        VStack(spacing: 6) {
+            menuBarToggleRow(
+                icon: "menubar.dock.rectangle",
+                title: tr("Hiện nhiệt độ trên Menu Bar", "Show temperature on Menu Bar"),
+                preview: thermalManager.showMenuBarMetrics ? "\(Int(thermalManager.displayTemp.rounded()))°C" : nil,
+                isOn: Binding<Bool>(
+                    get: { thermalManager.showMenuBarMetrics },
+                    set: { thermalManager.showMenuBarMetrics = $0 }
+                )
+            )
 
-            Text(tr("Hiện nhiệt độ trên Menu Bar", "Show temperature on Menu Bar"))
-                .font(.system(size: FS.caption))
-                .foregroundStyle(.secondary)
+            Divider().opacity(0.45)
 
-            Spacer()
+            menuBarToggleRow(
+                icon: "cpu",
+                title: tr("Hiện % CPU & RAM trên Menu Bar", "Show CPU & RAM % on Menu Bar"),
+                preview: systemMonitor.showCPURAMMenuBar
+                    ? "CPU \(Int(systemMonitor.cpuUsagePercent.rounded()))% · RAM \(Int(systemMonitor.ramUsagePercent.rounded()))%"
+                    : nil,
+                isOn: Binding<Bool>(
+                    get: { systemMonitor.showCPURAMMenuBar },
+                    set: { systemMonitor.showCPURAMMenuBar = $0 }
+                ),
+                tooltip: tr("Hiển thị % CPU và % RAM đang sử dụng lên thanh Menu Bar",
+                            "Display active CPU and RAM usage percentage on the Menu Bar")
+            )
 
-            if thermalManager.showMenuBarMetrics {
-                Text("\(Int(thermalManager.cpuAvgTemp))°C")
-                    .font(.system(size: FS.caption, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.accentColor)
-            }
+            Divider().opacity(0.45)
 
-            Toggle("", isOn: Binding<Bool>(
-                get: { thermalManager.showMenuBarMetrics },
-                set: { thermalManager.showMenuBarMetrics = $0 }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .labelsHidden()
+            menuBarToggleRow(
+                icon: "square.3.layers.3d",
+                title: tr("Hiện % GPU trên Menu Bar (riêng)", "Show GPU % on Menu Bar (separate)"),
+                preview: !systemMonitor.hasGPU
+                    ? tr("Không hỗ trợ", "Unsupported")
+                    : (systemMonitor.showGPUMenuBar ? "GPU \(Int(systemMonitor.gpuUsagePercent.rounded()))%" : nil),
+                isOn: Binding<Bool>(
+                    get: { systemMonitor.showGPUMenuBar && systemMonitor.hasGPU },
+                    set: { systemMonitor.showGPUMenuBar = $0 }
+                ),
+                isDisabled: !systemMonitor.hasGPU,
+                isMutedPreview: !systemMonitor.hasGPU,
+                tooltip: tr("Tùy chọn riêng để hiển thị % sử dụng GPU (nếu có) lên thanh Menu Bar",
+                            "Separate option to display GPU utilization percentage (if available) on the Menu Bar")
+            )
         }
         .padding(8)
         .cardBackground()
+    }
+
+    private func menuBarToggleRow(
+        icon: String,
+        title: String,
+        preview: String?,
+        isOn: Binding<Bool>,
+        isDisabled: Bool = false,
+        isMutedPreview: Bool = false,
+        tooltip: String? = nil
+    ) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: FS.caption))
+                .foregroundStyle(isDisabled ? Tone.muted : Color.accentColor)
+                .frame(width: 14)
+
+            Text(title)
+                .font(.system(size: FS.caption))
+                .foregroundStyle(isDisabled ? .tertiary : .secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            if let preview {
+                Text(preview)
+                    .font(.system(size: FS.caption, weight: isMutedPreview ? .regular : .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(isMutedPreview ? Color.secondary.opacity(0.6) : Color.accentColor)
+                    .lineLimit(1)
+            }
+
+            Toggle("", isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .disabled(isDisabled)
+        }
+        .help(tooltip ?? "")
     }
 
     // MARK: - 3. Apple Silicon Thermal Matrix (6 Core Metrics)
@@ -2867,6 +2932,7 @@ struct ThermalAndFanCardView: View {
 
 // MARK: - Footer
 
+/* Hallmark · component: footer-license-pill · genre: macos-native · theme: system-tokens · pre-emit critique: P5 H5 E5 S5 R5 V4 */
 struct FooterView: View {
     @ObservedObject var updateManager: UpdateManager
 
@@ -2876,10 +2942,12 @@ struct FooterView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
-                Text(tr("Open Source • Miễn phí", "Open Source • Free"))
+                Text(tr("GPLv3 • Miễn phí", "GPLv3 • Free"))
                     .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .help(tr("HyperMac — Copyright © 2026 Nguyễn Khắc Đại • Giấy phép mã nguồn mở GNU GPLv3", "HyperMac — Copyright © 2026 Nguyen Khac Dai • GNU GPLv3 Open Source License"))
 
             Spacer()
 

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ImageIO
 import SwiftUI
 import Combine
 
@@ -148,6 +149,11 @@ public class ClipboardManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(isMonitoringEnabled, forKey: "clipboard_monitoring_enabled")
             gIsClipboardEnabled = isMonitoringEnabled
+            if isMonitoringEnabled {
+                startMonitoring()
+            } else {
+                stopMonitoring()
+            }
         }
     }
     @Published public var isDetailsExpanded: Bool = false {
@@ -198,6 +204,9 @@ public class ClipboardManager: ObservableObject {
     private var lastChangeCount: Int = 0
     private var suppressChangeCount: Int = 0
     private var pollTimer: Timer?
+    private var quickCheckGeneration: Int = 0
+    private var historyResetGeneration: Int = 0
+    private let imageProcessingQueue = DispatchQueue(label: "com.opensource.hypermac.clipboard.image", qos: .utility)
     private var previousApp: NSRunningApplication?
     private var hudPanel: NSPanel?
     private let storageURL: URL
@@ -280,16 +289,41 @@ public class ClipboardManager: ObservableObject {
 
     public func startMonitoring() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
+        guard isMonitoringEnabled else {
+            pollTimer = nil
+            return
+        }
+        // Fallback thưa (1.5s + tolerance) để bắt thao tác Copy bằng chuột phải;
+        // phím tắt Cmd+C / Cmd+X được scheduleQuickCheck() từ KeyInterceptor bắt tức thì sau 60–300ms.
+        let t = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkPasteboard()
             }
         }
+        t.tolerance = 0.5
+        RunLoop.main.add(t, forMode: .common)
+        pollTimer = t
     }
 
     public func stopMonitoring() {
         pollTimer?.invalidate()
         pollTimer = nil
+    }
+
+    /// Kích hoạt kiểm tra pasteboard nhanh (60ms -> 150ms -> 300ms) sau phím Cmd+C / Cmd+X;
+    /// tự dừng ngay khi phát hiện changeCount tăng để không bỏ lỡ dữ liệu từ app nặng (Xcode/Adobe).
+    public func scheduleQuickCheck() {
+        guard isMonitoringEnabled else { return }
+        quickCheckGeneration &+= 1
+        let gen = quickCheckGeneration
+        let baseline = lastChangeCount
+        for delay in [0.06, 0.15, 0.30] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.isMonitoringEnabled, self.quickCheckGeneration == gen else { return }
+                guard self.lastChangeCount == baseline else { return }
+                self.checkPasteboard()
+            }
+        }
     }
 
     private func checkPasteboard() {
@@ -363,44 +397,55 @@ public class ClipboardManager: ObservableObject {
                 let clipID = UUID()
                 let fileName = "\(clipID.uuidString).png"
                 let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
-
-                // 1. Extract lossless/high-fidelity original image data
-                var originalData: Data? = pb.data(forType: .png)
-                if originalData == nil, let tiff = pb.data(forType: .tiff) ?? image.tiffRepresentation,
-                   let rep = NSBitmapImageRep(data: tiff) {
-                    originalData = rep.representation(using: .png, properties: [:])
-                }
-                if originalData == nil {
-                    originalData = image.tiffRepresentation
-                }
-
-                // Save full-resolution original to disk
-                if let origData = originalData {
-                    try? origData.write(to: fileURL, options: .atomic)
-                }
-
-                // 2. Generate crisp Retina-quality thumbnail (max 400px) for smooth HUD preview
-                let thumbnail = image.resized(maxDimension: 400)
-                let tiffData = thumbnail?.tiffRepresentation
-                let bitmap = tiffData.flatMap { NSBitmapImageRep(data: $0) }
-                let thumbData = bitmap?.representation(using: .png, properties: [:])
-                    ?? bitmap?.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
-
                 let title = "Ảnh (\(Int(size.width)) × \(Int(size.height))px)"
                 let detail = "Định dạng ảnh clipboard"
+                let capturedResetGen = self.historyResetGeneration
 
-                appendClip(ClipItem(
-                    id: clipID,
-                    type: .image,
-                    title: title,
-                    detail: detail,
-                    imageData: thumbData,
-                    imageFileName: fileName,
-                    sourceAppName: appName,
-                    sourceBundleID: bundleID,
-                    timestamp: Date(),
-                    isPinned: false
-                ))
+                // Trên main chỉ lấy dữ liệu thô từ pasteboard (nhanh); đổi PNG, ghi đĩa và tạo thumbnail 800px
+                // (có thể mất hàng trăm ms với ảnh chụp 5K) chuyển sang luồng nền để không làm khựng UI.
+                let rawPNG = pb.data(forType: .png)
+                let rawTIFF = rawPNG == nil ? (pb.data(forType: .tiff) ?? image.tiffRepresentation) : nil
+                let queue = self.imageProcessingQueue
+
+                queue.async { [weak self] in
+                    var originalData = rawPNG
+                    if originalData == nil, let tiff = rawTIFF, let rep = NSBitmapImageRep(data: tiff) {
+                        originalData = rep.representation(using: .png, properties: [:])
+                    }
+                    if originalData == nil {
+                        originalData = rawTIFF
+                    }
+
+                    if let origData = originalData {
+                        try? origData.write(to: fileURL, options: .atomic)
+                    }
+
+                    // Thumbnail tối đa 800 px (400 pt Retina) qua ImageIO (an toàn ngoài main thread).
+                    let thumbData = originalData.flatMap { ClipboardManager.thumbnailPNG(from: $0, maxPixelSize: 800) }
+
+                    Task { @MainActor [weak self] in
+                        guard let self else {
+                            queue.async { try? FileManager.default.removeItem(at: fileURL) }
+                            return
+                        }
+                        guard self.isMonitoringEnabled, self.historyResetGeneration == capturedResetGen else {
+                            queue.async { try? FileManager.default.removeItem(at: fileURL) }
+                            return
+                        }
+                        self.appendClip(ClipItem(
+                            id: clipID,
+                            type: .image,
+                            title: title,
+                            detail: detail,
+                            imageData: thumbData,
+                            imageFileName: fileName,
+                            sourceAppName: appName,
+                            sourceBundleID: bundleID,
+                            timestamp: Date(),
+                            isPinned: false
+                        ))
+                    }
+                }
                 return
             }
         }
@@ -704,6 +749,7 @@ public class ClipboardManager: ObservableObject {
         guard !pendingClearAllConfirm else {
             pendingClearAllConfirm = false
             pendingClearAllToken &+= 1
+            historyResetGeneration &+= 1
             let unpinned = items.filter { !$0.isPinned }
             for item in unpinned {
                 deleteAssociatedImage(for: item)
@@ -1010,22 +1056,21 @@ public class ClipboardManager: ObservableObject {
     }
 }
 
-// MARK: - NSImage Helpers
+// MARK: - Thumbnail
 
-private extension NSImage {
-    func resized(maxDimension: CGFloat) -> NSImage? {
-        let w = size.width
-        let h = size.height
-        guard w > 0 && h > 0 else { return nil }
-
-        let ratio = min(maxDimension / w, maxDimension / h)
-        if ratio >= 1.0 { return self }
-
-        let newSize = NSSize(width: floor(w * ratio), height: floor(h * ratio))
-        let target = NSImage(size: newSize)
-        target.lockFocus()
-        self.draw(in: NSRect(origin: .zero, size: newSize), from: NSRect(origin: .zero, size: size), operation: .sourceOver, fraction: 1.0)
-        target.unlockFocus()
-        return target
+extension ClipboardManager {
+    /// Thu nhỏ ảnh bằng ImageIO (an toàn ngoài main thread, không giải mã toàn bộ ảnh gốc vào RAM).
+    nonisolated static func thumbnailPNG(from data: Data, maxPixelSize: Int) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+              ] as CFDictionary)
+        else { return nil }
+        let output = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(output, "public.png" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, thumb, nil)
+        return CGImageDestinationFinalize(dest) ? output as Data : nil
     }
 }

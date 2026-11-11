@@ -516,6 +516,17 @@ private func eventTapCallback(
             }
         }
 
+        // Bất kỳ ⌘C (8) hoặc ⌘X (7) đi qua hệ thống -> kích quick check ClipboardManager (60-300ms)
+        if gIsClipboardEnabled &&
+            flags.contains(.maskCommand) &&
+            !flags.contains(.maskControl) &&
+            !flags.contains(.maskAlternate) &&
+            (keycode == 8 || keycode == 7) {
+            DispatchQueue.main.async {
+                ClipboardManager.shared.scheduleQuickCheck()
+            }
+        }
+
         // Command + Shift + (C or V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
         let isCmdShift = flags.contains(.maskCommand) && flags.contains(.maskShift) && !flags.contains(.maskControl)
         if gIsClipboardEnabled && isCmdShift && keycode == gClipboardShortcutKeycode {

@@ -1,10 +1,10 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.6-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.7-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
-[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Donate](https://img.shields.io/badge/❤️_Donate-Ủng_hộ-ff69b4.svg)](#-ủng-hộ-phát-triển-donate)
 
 > 🚀 **HyperMac** là bộ công cụ tối thượng viết bằng **Swift thuần** dành riêng cho máy Mac chạy chip **Apple Silicon (M1, M2, M3, M4, M5 — Air / Pro / Max / Ultra)**. Ứng dụng gom trọn tính năng của **9 ứng dụng rời rạc** vào một icon duy nhất trên thanh Menu Bar với mức tiêu hao RAM siêu nhẹ **chỉ ~45MB**:
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.6)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.7)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -222,6 +222,23 @@ chmod +x build.sh
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
 
+### [v1.9.7] — 2026-11-11
+- **🛠️ Sửa triệt để lỗi hiện hộp thoại cài Command Line Developer Tools ("swift"):**
+  - Loại bỏ hoàn toàn lời gọi `/usr/bin/swift` khỏi `Resources/displaycontrol-power` (vì phần `PowerUI.framework` đã được xử lý trực tiếp bằng Swift trong `NativePowerUIClient`). Trên các máy Mac phổ thông chưa cài Xcode / Command Line Tools, `/usr/bin/swift` tồn tại dưới dạng file mồi (*stub*) nên việc gọi lệnh này từng khiến macOS bật hộp thoại yêu cầu cài CLT liên tục.
+- **🔒 Nâng cấp Bảo mật Helper đặc quyền v3 (Đóng góp từ contributor [@thaupc](https://github.com/thaupc) — Hau Nguyen qua [PR #6](https://github.com/mrgoose000000-gif/HyperMac/pull/6)):**
+  - Chuyển helper `com.opensource.hypermac.power` và `com.opensource.hypermac.smc` vào `/Library/PrivilegedHelperTools` (`root:wheel 755`), thay thế cho `/usr/local/bin/` cũ.
+  - Siết chặt rule `/etc/sudoers.d/hypermac_power` chỉ cấp quyền cho **đúng user cài đặt** (kiểm tra cú pháp qua `visudo -cf`), tự động dọn dẹp rule `ALL ALL` và file helper cũ ở `/usr/local/bin`.
+  - Cố định `PATH`, xác minh chủ sở hữu `root` (`stat -f %u == 0`, không theo symlink) cho `smc`, kiểm tra chặt số nguyên `20...100` trước khi tính toán `$(( ))` ở `charge-off`/`charge-on` và `0...3` ở `fan-info`, bỏ tìm tài nguyên trong thư mục làm việc hiện tại, và stage an toàn qua thư mục tạm riêng `0700`.
+- **🔋 Tối ưu mạnh Energy Impact & giảm hao pin ngầm (~0.0 POWER khi chạy nền):**
+  - Đọc khóa SMC khóa sạc trực tiếp trong tiến trình app (`AppleSMCClient` dùng chung có `NSLock` + reconnect) thay cho gọi `sudo status` mỗi 3,5 giây; bỏ ép ghi `sudo charge-off` mỗi 25s; tự nhả *App Nap* khi dùng pin hoặc đã khóa sạc xong; dừng timer kiểm tra pin khi rút sạc (`0 wakeup`); gắn cơ chế tiết kiệm theo vòng đời Popover cho `ThermalManager`, `FanManager`, `PermissionsManager` và `DisplayManager`; tối ưu `ClipboardManager` (`1,5s` + `scheduleQuickCheck()` khi bấm `⌘C`/`⌘X`).
+- **🎨 Giữ chuẩn màu ColorSync, Clipboard 5K mượt & Lọc cảm biến M1–M5 (Tích hợp từ PR #6 của [@thaupc](https://github.com/thaupc)):**
+  - Chụp và nhân bảng gamma gốc khi chỉnh sáng màn ngoài (`min 15%`) giữ nguyên hiệu chỉnh màu ColorSync, tự khôi phục ColorSync khi thoát nếu HyperMac từng chỉnh sáng.
+  - Lắng nghe tức thì thông báo `com.apple.accessibility.api`; đẩy nén PNG, ghi `.atomic` và tạo thumbnail 800px (`ImageIO`) của ảnh Clipboard 5K ra luồng nền; lọc trước cảm biến HID hỗ trợ đầy đủ cả Apple Silicon **M1–M5**.
+- **📊 Hiển thị `% CPU` / `% RAM` & tùy chọn `% GPU` tách riêng trên Menu Bar:**
+  - Bổ sung chỉ số `% CPU` (từng nhân qua `host_processor_info`) và `% RAM` (theo công thức Activity Monitor) ngay dưới dòng nhiệt độ trên thanh Menu Bar, kèm tùy chọn bật/tắt `% GPU` (`IOAccelerator`) tách riêng.
+- **⚖️ Chuyển đổi giấy phép mã nguồn mở sang GNU GPLv3 (`LICENSE`).**
+- **🙏 Tri ân Contributor:** Xin cảm ơn sâu sắc bạn **Hau Nguyen ([@thaupc](https://github.com/thaupc))** với **[PR #6](https://github.com/mrgoose000000-gif/HyperMac/pull/6)** về bảo mật Helper v3, ColorSync Gamma, Clipboard background ImageIO, Accessibility và tối ưu cảm biến HID!
+
 ### [v1.9.6] — 2026-11-09
 - **🌡️ Đo nhiệt độ CPU/GPU chuẩn xác theo từng đời chip M1 / M2 / M3 / M4 / M5:**
   - Bản v1.9.5 quét mọi khóa SMC bắt đầu bằng `Tp*` / `Te*` / `Tg*`. Trên chip M2, trong đó có nhiều khóa **không phải cảm biến nhân CPU** (`Tp02`, `Tp06`, `Tp0A`, `Tp0E`, `Tp0g`, `Tp0k`, `Tp0o`, `Tp0s`...) và luôn cao hơn nhân thật 10–20°C, làm **"CPU Nóng nhất"** bị vọt ảo.
@@ -399,6 +416,11 @@ HyperMac là dự án phần mềm mã nguồn mở hoàn toàn **miễn phí** 
 
 ---
 
-## 👤 Tác Giả & Bản Quyền
-- Dự án mã nguồn mở phát triển bởi **Nguyễn Khắc Đại** ([@khacdai24](https://github.com/khacdai24)) & [mrgoose000000-gif](https://github.com/mrgoose000000-gif).
-- Phát hành miễn phí dưới giấy phép **MIT License**.
+## 👤 Tác Giả & Bản Quyền (License)
+- **Copyright © 2026 Nguyễn Khắc Đại** ([@khacdai24](https://github.com/khacdai24) & [mrgoose000000-gif](https://github.com/mrgoose000000-gif)).
+- Phát hành miễn phí dưới giấy phép **[GNU General Public License v3.0 (GPLv3)](LICENSE)**.
+- **Quy định bắt buộc theo GPLv3:**
+  - Mọi bản fork, chỉnh sửa hoặc phân phối lại (kể cả khi đổi tên ứng dụng) **bắt buộc phải công khai toàn bộ mã nguồn** theo cùng giấy phép **GPLv3**.
+  - **Bắt buộc giữ nguyên** thông báo bản quyền tác giả gốc (`Copyright © 2026 Nguyễn Khắc Đại`), tệp `LICENSE`, thông báo pháp lý trong phần mềm/tài liệu, và **ghi chú rõ ràng mọi chỉnh sửa** kèm ngày tháng để phân biệt với bản gốc.
+  - Không được đóng nguồn (*closed-source*) hoặc áp thêm điều khoản hạn chế quyền tự do phần mềm của người dùng.
+- *Lưu ý chuyển đổi:* Giấy phép **GPLv3** có hiệu lực từ thời điểm chuyển đổi giấy phép trở về sau; các phiên bản cũ hơn (`v1.9.6` trở về trước) từng ghi nhãn MIT trên README vẫn tuân theo điều khoản tại thời điểm phát hành.
