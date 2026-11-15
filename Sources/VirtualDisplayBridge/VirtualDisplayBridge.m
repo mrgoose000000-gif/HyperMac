@@ -71,7 +71,9 @@
     desc.name = name ?: @"HyperMac Virtual Display";
     desc.maxPixelsWide = (unsigned int)MAX(3840, width);
     desc.maxPixelsHigh = (unsigned int)MAX(2160, height);
-    desc.sizeInMillimeters = CGSizeMake(531, 298);
+    // Keep the physical aspect ratio consistent with the selected pixel mode.
+    // A fixed 16:9 descriptor incorrectly describes ultrawide virtual displays.
+    desc.sizeInMillimeters = CGSizeMake(298.0 * (double)width / (double)MAX(1, height), 298.0);
     desc.vendorID = 0x1234;
     desc.productID = 0x5678;
     desc.serialNum = 0x0001;
@@ -94,9 +96,10 @@
     CGVirtualDisplayMode *mode = [[modeClass alloc] initWithWidth:width height:height refreshRate:refreshRate];
     CGVirtualDisplaySettings *settings = [setClass new];
     settings.hiDPI = hiDPI ? 1 : 0;
+    if (!mode) { return 0; }
     settings.modes = @[mode];
 
-    [display applySettings:settings];
+    if (![display applySettings:settings]) { return 0; }
 
     _display = display;
     return display.displayID;

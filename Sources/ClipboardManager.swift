@@ -179,14 +179,6 @@ public class ClipboardManager: ObservableObject {
     @Published public var ignoreConcealedTypes: Bool = true {
         didSet { UserDefaults.standard.set(ignoreConcealedTypes, forKey: "clipboard_ignore_concealed") }
     }
-    @Published public var hudShortcut: ClipboardHUDShortcut = .cmdShiftC {
-        didSet {
-            UserDefaults.standard.set(hudShortcut.rawValue, forKey: "clipboard_hud_shortcut")
-            gClipboardShortcutKeycode = hudShortcut.keyCode
-            shortcutText = hudShortcut.displayTitle
-        }
-    }
-    @Published public var shortcutText: String = "⌘ + ⇧ + C"
     @Published public var isHUDVisible: Bool = false
     @Published public var selectedIndex: Int = 0
     @Published public var searchText: String = "" {
@@ -238,14 +230,6 @@ public class ClipboardManager: ObservableObject {
         if UserDefaults.standard.object(forKey: "clipboard_ignore_concealed") != nil {
             self.ignoreConcealedTypes = UserDefaults.standard.bool(forKey: "clipboard_ignore_concealed")
         }
-        if let savedShortcut = UserDefaults.standard.string(forKey: "clipboard_hud_shortcut"),
-           let shortcut = ClipboardHUDShortcut(rawValue: savedShortcut) {
-            self.hudShortcut = shortcut
-        } else {
-            self.hudShortcut = .cmdShiftC
-        }
-        gClipboardShortcutKeycode = self.hudShortcut.keyCode
-        self.shortcutText = self.hudShortcut.displayTitle
         self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "clipboard_details_expanded")
 
         // Load stored items

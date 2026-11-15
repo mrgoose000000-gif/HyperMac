@@ -10,6 +10,7 @@ public enum SnapAction {
     case rightHalf
     case maximize
     case center
+    case restore
     case topHalf
     case bottomHalf
     case topLeft
@@ -27,6 +28,7 @@ public class WindowSnapManager: ObservableObject {
     @Published public var isSnapEnabled: Bool = true {
         didSet {
             UserDefaults.standard.set(isSnapEnabled, forKey: "window_snap_enabled")
+            gIsWindowSnapEnabled = isSnapEnabled
         }
     }
     @Published public var isDetailsExpanded: Bool = false {
@@ -34,6 +36,13 @@ public class WindowSnapManager: ObservableObject {
             UserDefaults.standard.set(isDetailsExpanded, forKey: "window_snap_details_expanded")
         }
     }
+
+    private struct WindowKey: Hashable {
+        let element: AXUIElement
+        static func == (lhs: Self, rhs: Self) -> Bool { CFEqual(lhs.element, rhs.element) }
+        func hash(into hasher: inout Hasher) { hasher.combine(CFHash(element)) }
+    }
+    private var frameHistory = WindowFrameHistory<WindowKey>()
 
     private init() {
         if UserDefaults.standard.object(forKey: "window_snap_enabled") != nil {
@@ -161,52 +170,48 @@ public class WindowSnapManager: ObservableObject {
 
         guard let win = focusedRef as! AXUIElement? else { return nil }
 
-        var posRef: CFTypeRef?
-        var sizeRef: CFTypeRef?
-        _ = AXUIElementCopyAttributeValue(win, kAXPositionAttribute as CFString, &posRef)
-        _ = AXUIElementCopyAttributeValue(win, kAXSizeAttribute as CFString, &sizeRef)
+        guard let frame = readFrame(of: win) else { return nil }
+        return (win, frame.origin, frame.size)
+    }
 
-        var pos = CGPoint.zero
-        var size = CGSize.zero
-        if let p = posRef { AXValueGetValue(p as! AXValue, .cgPoint, &pos) }
-        if let s = sizeRef { AXValueGetValue(s as! AXValue, .cgSize, &size) }
-
-        return (win, pos, size)
+    private func readFrame(of window: AXUIElement) -> CGRect? {
+        var posRef: CFTypeRef?, sizeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posRef) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeRef) == .success,
+              let p = posRef, let s = sizeRef,
+              CFGetTypeID(p) == AXValueGetTypeID(), CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
+        var position = CGPoint.zero, size = CGSize.zero
+        guard AXValueGetValue(p as! AXValue, .cgPoint, &position),
+              AXValueGetValue(s as! AXValue, .cgSize, &size), size.width > 0, size.height > 0,
+              position.x.isFinite, position.y.isFinite, size.width.isFinite, size.height.isFinite else { return nil }
+        return CGRect(origin: position, size: size)
     }
 
     // MARK: - Apply Frame to Window (Robust Display Transfer)
 
-    private func applyFrame(to window: AXUIElement, rect: CGRect) {
+    private func applyFrame(to window: AXUIElement, rect: CGRect, current: CGRect, restoring: Bool = false) {
         var newPos = rect.origin
         var newSize = rect.size
-
         guard let posVal = AXValueCreate(.cgPoint, &newPos),
               let sizeVal = AXValueCreate(.cgSize, &newSize) else { return }
-
-        // Phase 1: Move window to target display coordinate space
+        let key = WindowKey(element: window)
+        let token = frameHistory.begin(key, current: current, target: rect, restoring: restoring)
         AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posVal)
         AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
 
-        // Phase 2: After 30ms settlement, re-apply size and position.
-        // macOS WindowServer requires a brief window of time to re-bind the window backing
-        // store to the new display context before accepting sizes that exceed the previous display limits.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.030) {
+        // Retry only while this operation is still current for this particular window.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.030) { [weak self] in
+            guard let self, self.frameHistory.isCurrent(key, token: token) else { return }
             AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
             AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posVal)
         }
-
-        // Phase 3: Secondary check at 75ms for complex apps (VS Code, Electron, Chrome)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.075) {
-            var currSize = CGSize.zero
-            var sRef: CFTypeRef?
-            if AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sRef) == .success,
-               let s = sRef {
-                AXValueGetValue(s as! AXValue, .cgSize, &currSize)
-                if abs(currSize.width - newSize.width) > 2.0 || abs(currSize.height - newSize.height) > 2.0 {
-                    AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
-                    AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posVal)
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.075) { [weak self] in
+            guard let self, self.frameHistory.isCurrent(key, token: token), let actual = self.readFrame(of: window) else { return }
+            if abs(actual.width - rect.width) > 2 || abs(actual.height - rect.height) > 2 {
+                AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
+                AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posVal)
             }
+            if let settled = self.readFrame(of: window) { self.frameHistory.settle(key, token: token, actual: settled) }
         }
     }
 
@@ -234,6 +239,10 @@ public class WindowSnapManager: ObservableObject {
 
         case .maximize:
             return visible
+
+        case .restore:
+            // Restoring needs per-window history and is handled in snapActiveWindow.
+            return currentWindowRect ?? visible
 
         case .center:
             // Rectangle standard: Preserve window size, center on target display
@@ -321,11 +330,19 @@ public class WindowSnapManager: ObservableObject {
 
         let windowRect = CGRect(origin: target.currentPos, size: target.currentSize)
         let screens = orderedScreens()
+        guard !screens.isEmpty else { return }
         let screen = screenContaining(windowRect: windowRect, in: screens)
         let visible = Self.axVisibleFrame(for: screen)
 
+        if action == .restore {
+            guard let original = frameHistory.original(for: WindowKey(element: target.element)) else { return }
+            let restored = WindowFrameHistory<WindowKey>.visibleRestoreFrame(original,
+                screens: screens.map(Self.axVisibleFrame), fallback: visible)
+            applyFrame(to: target.element, rect: restored, current: windowRect, restoring: true)
+            return
+        }
         let newFrame = calculateSnapRect(action: action, visible: visible, currentWindowRect: windowRect)
-        applyFrame(to: target.element, rect: newFrame)
+        applyFrame(to: target.element, rect: newFrame, current: windowRect)
     }
 
     // MARK: - Cross-Display Window Transfer (Option + Command + Arrow keys)
@@ -361,22 +378,32 @@ public class WindowSnapManager: ObservableObject {
         let transferredRect = Self.calculateCrossDisplayRect(
             window: windowRect,
             source: curVisible,
-            destination: targetVisible
+            destination: targetVisible,
+            mode: WindowDisplayTransferSettings.shared.mode
         )
 
         appLog("🖥 Transfer: from [\(currentScreen.localizedName)] to [\(targetScreen.localizedName)]")
         appLog("   window: \(windowRect) -> transferred: \(transferredRect)")
 
-        applyFrame(to: target.element, rect: transferredRect)
+        applyFrame(to: target.element, rect: transferredRect, current: windowRect)
     }
 
-    // MARK: - Rectangle Proportional Cross-Display Calculation
+    // MARK: - Cross-Display Sizing Modes
 
-    /// Calculates destination window frame preserving exact screen proportions, snap states, and margins
-    public static func calculateCrossDisplayRect(window: CGRect, source: CGRect, destination: CGRect) -> CGRect {
-        guard source.width > 0, source.height > 0, destination.width > 0, destination.height > 0 else {
-            return window
+    public static func calculateCrossDisplayRect(window: CGRect, source: CGRect, destination: CGRect,
+                                                 mode: WindowDisplayTransferMode = .keepSize) -> CGRect {
+        guard WindowDisplayTransfer.isValid(window), WindowDisplayTransfer.isValid(source),
+              WindowDisplayTransfer.isValid(destination) else { return window }
+        switch mode {
+        case .keepSize:
+            return WindowDisplayTransfer.keepingSize(window: window, source: source, destination: destination)
+        case .proportional:
+            return calculateProportionalCrossDisplayRect(window: window, source: source, destination: destination)
         }
+    }
+
+    /// Original HyperMac behavior: preserve screen coverage and recognized half/corner layouts.
+    private static func calculateProportionalCrossDisplayRect(window: CGRect, source: CGRect, destination: CGRect) -> CGRect {
 
         let originXFrac = (window.minX - source.minX) / source.width
         let originYFrac = (window.minY - source.minY) / source.height
@@ -442,12 +469,12 @@ public class WindowSnapManager: ObservableObject {
             return CGRect(x: destination.minX, y: destination.minY + (destination.height - halfH), width: destination.width, height: halfH)
         }
 
-        // 3. Rectangle Proportional Mapping (relativePositionedRect)
+        // 3. Proportional mapping for ordinary windows
         // Retains exact proportion of screen coverage so floating windows feel natural across differing DPIs/resolutions
         var newW = round(widthFrac * destination.width)
         var newH = round(heightFrac * destination.height)
-        newW = max(350, min(newW, destination.width))
-        newH = max(250, min(newH, destination.height))
+        newW = min(destination.width, max(350, newW))
+        newH = min(destination.height, max(250, newH))
 
         var newX = destination.minX + (originXFrac * destination.width)
         var newY = destination.minY + (originYFrac * destination.height)

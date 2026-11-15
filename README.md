@@ -1,6 +1,6 @@
 # ⚡ HyperMac — Siêu Tiện Ích Tất-Cả-Trong-Một Cho Mac (Apple Silicon)
 
-[![Version](https://img.shields.io/badge/version-v1.9.7-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.9.8-blue.svg)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-black.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon%20(arm64)-brightgreen.svg)](https://github.com/mrgoose000000-gif/HyperMac)
 [![Memory Footprint](https://img.shields.io/badge/RAM-~45MB-success.svg)](https://github.com/mrgoose000000-gif/HyperMac)
@@ -18,7 +18,7 @@
 ### ⬇️ Bước 1: Tải bộ cài dựng sẵn
 Bấm vào nút bên dưới để tải về phiên bản mới nhất:
 
-[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.7)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
+[![Download HyperMac](https://img.shields.io/badge/📥_TẢI_VỀ-HyperMac.zip_(v1.9.8)-2563EB?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/mrgoose000000-gif/HyperMac/releases/latest/download/HyperMac.zip)
 
 *(Hoặc vào trang [GitHub Releases](https://github.com/mrgoose000000-gif/HyperMac/releases) để xem danh sách tất cả các bản phát hành).*
 
@@ -221,6 +221,28 @@ chmod +x build.sh
 ---
 
 ## 📝 Nhật Ký Phiên Bản (Changelog)
+
+### [v1.9.8] — 2026-11-15
+- **🖥️ Chỉnh Độ Phân Giải & Tần Số Quét Từng Màn Hình (Resolution & Refresh Rate):**
+  - Trực tiếp tùy chọn độ phân giải màn hình, chế độ HiDPI (Retina) / Low-res và tần số quét (60Hz, 120Hz ProMotion, 144Hz...) riêng biệt cho từng màn hình ngoài hoặc màn hình trong máy.
+  - Tối ưu CoreGraphics native (`CGDisplayCopyAllDisplayModes`), tự động phát hiện các chế độ hiển thị an toàn, chuyển đổi mượt mà và lưu cấu hình tối ưu.
+- **⌨️ Tùy Biến Phím Tắt Toàn Cầu (Customizable Shortcuts):**
+  - Bổ sung giao diện cài đặt phím tắt riêng biệt, cho phép tùy ý thay đổi và gán phím tắt cho tất cả tính năng trong app (AltTab, Clipboard, Chụp màn hình, Chia cửa sổ, Chống ngủ, Khóa sạc, Ẩn Menu Bar...).
+  - Tự động phát hiện xung đột phím bấm, hỗ trợ 1-click khôi phục phím tắt mặc định (`Reset to Defaults`), lưu trữ an toàn trong `UserDefaults`.
+- **📸 Bộ Công Cụ Chú Thích & Che Mờ Ảnh Chụp Màn Hình (Text & Blur Tools):**
+  - **Chèn văn bản (Text Tool):** Gõ chữ trực tiếp lên ảnh chụp màn hình, hỗ trợ mượt mà bộ gõ Tiếng Việt (Telex, VNI), tự do đổi màu sắc và cỡ chữ.
+  - **Làm mờ thông tin nhạy cảm (Blur / Pixelate Tool):** Khoanh vùng làm mờ tức thì mật khẩu, mã OTP, số thẻ, token riêng tư trước khi chia sẻ.
+  - **Hoàn tác đa tầng & Xuất Retina:** Hỗ trợ hoàn tác `⌘Z` từng thao tác; bộ render `ScreenshotAnnotationRenderer` giữ trọn độ nét Retina 2x/3x nguyên bản pixel-perfect.
+- **🌐 Màn Hình Ảo Siêu Rộng Ultrawide 21:9 & Chuẩn Hóa Tỉ Lệ:**
+  - Bổ sung các độ phân giải màn ảo Ultrawide `2560×1080` và `3440×1440` mở rộng không gian làm việc.
+  - Sửa lỗi lệch tỉ lệ khung hình (aspect ratio) vật lý trong `VirtualDisplayBridge`, hiển thị hình ảnh chuẩn xác 100% không bị méo tỉ lệ.
+- **🪟 Cải Tiến Chia Cửa Sổ: Khôi Phục Kích Thước & Chuyển Màn Hình:**
+  - **Khôi phục kích thước ban đầu (Restore Window Frame):** Tự động ghi nhớ frame cửa sổ trước khi snap, khôi phục nhanh chóng bằng phím tắt `⌥⌘0` hoặc menu.
+  - **Chế độ chuyển màn hình (Window Transfer Mode):** Lựa chọn linh hoạt giữa **Giữ nguyên kích thước pixel** (`Keep Size`) hoặc **Co giãn theo tỉ lệ màn hình** (`Proportional`) khi chuyển cửa sổ giữa các màn hình khác độ phân giải.
+- **🚨 Phím Tắt Khẩn Cấp Bật Riêng Màn Hình Chính (`⌃⌥⌘1`):**
+  - Cứu hộ Ghost Mode: Khi tắt hết màn hình thật để dùng màn ảo từ xa (AnyDesk/Moonlight), bấm `⌃⌥⌘1` (`Control + Option + Command + 1`) để bật sáng lại riêng màn hình chính ngay lập tức, không lo kẹt màn đen.
+- **🔋 Sửa Lỗi Giới Hạn Sạc Pin 90%:**
+  - Khắc phục triệt để lỗi cấu hình gây kẹt hoặc nhảy mức sạc khi chọn mức 90%, đồng bộ chuẩn xác với Apple `pmset -g battlimit` và khóa SMC `CHLT`.
 
 ### [v1.9.7] — 2026-11-11
 - **🛠️ Sửa triệt để lỗi hiện hộp thoại cài Command Line Developer Tools ("swift"):**

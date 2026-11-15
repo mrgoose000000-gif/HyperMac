@@ -79,14 +79,20 @@ public final class MenuBarHiderManager: NSObject, ObservableObject, NSPopoverDel
         item.autosaveName = "HyperMac_MenuBar_Drawer"
         item.button?.image = NSImage(systemSymbolName: "tray", accessibilityDescription: tr("Mở ngăn kéo Menu Bar", "Open Menu Bar drawer"))
         item.button?.image?.isTemplate = true
-        item.button?.toolTip = tr("Ngăn kéo Menu Bar · ⌘⌥B", "Menu Bar drawer · ⌘⌥B")
+        item.button?.toolTip = tr("Ngăn kéo Menu Bar", "Menu Bar drawer") + " · " + ShortcutManager.shared.primaryTitle(.menuBar)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshShortcutTooltip), name: .hypermacShortcutsChanged, object: nil)
         item.button?.target = self
         item.button?.action = #selector(toggleAction)
         statusItem = item
         // Read external menu items only when the drawer is opened.
     }
 
+    @objc private func refreshShortcutTooltip() {
+        statusItem?.button?.toolTip = tr("Ngăn kéo Menu Bar", "Menu Bar drawer") + " · " + ShortcutManager.shared.primaryTitle(.menuBar)
+    }
+
     public func removeStatusItem() {
+        NotificationCenter.default.removeObserver(self, name: .hypermacShortcutsChanged, object: nil)
         refreshWork?.cancel()
         popover?.performClose(nil)
         popover = nil

@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 
+// Hallmark · component: screenshot editor · genre: modern-minimal · theme: HyperMac native
+// Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V4
+// Existing FS / Rad / Tone tokens and native input states; no page macrostructure.
 // MARK: - LightShot-Style Screenshot Overlay View
 
 public struct ScreenshotOverlayView: View {
@@ -46,8 +49,7 @@ public struct ScreenshotOverlayView: View {
                                 if !manager.hasSelection || !manager.selectionRect.contains(value.startLocation) {
                                     if manager.hasSelection {
                                         manager.hasSelection = false
-                                        manager.strokes.removeAll()
-                                        manager.activeStroke = nil
+                                        manager.resetAnnotations()
                                     }
                                     let minX = max(0, min(value.startLocation.x, value.location.x))
                                     let minY = max(0, min(value.startLocation.y, value.location.y))
@@ -94,11 +96,11 @@ public struct ScreenshotOverlayView: View {
                 .font(.system(size: FS.body, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
             if NSScreen.screens.count > 1 {
-                Text(tr("Kéo chọn vùng (⌘⇧1) • Đè Space di chuyển • ⇥ Đổi màn • ⎋ Huỷ", "Drag area (⌘⇧1) • Hold Space to move • ⇥ Switch screen • ⎋ Cancel"))
+                Text(tr("Kéo chọn vùng • Đè Space di chuyển • ⇥ Đổi màn • ⎋ Huỷ", "Drag area • Hold Space to move • ⇥ Switch screen • ⎋ Cancel"))
                     .font(.system(size: FS.label, weight: .semibold))
                     .foregroundStyle(Color.white)
             } else {
-                Text(tr("Kéo chọn vùng (⌘⇧1) • Đè Space di chuyển • ⎋ Huỷ", "Click & drag area (⌘⇧1) • Hold Space to move • ⎋ Cancel"))
+                Text(tr("Kéo chọn vùng • Đè Space di chuyển • ⎋ Huỷ", "Click & drag area • Hold Space to move • ⎋ Cancel"))
                     .font(.system(size: FS.label, weight: .semibold))
                     .foregroundStyle(Color.white)
             }
@@ -122,9 +124,11 @@ public struct ScreenshotOverlayView: View {
         return ZStack(alignment: .topLeading) {
             // Drawn Annotations Layer (All completed strokes + active in-progress stroke)
             AnnotationsCanvas(
-                strokes: manager.strokes,
+                strokes: manager.previewStrokes,
                 activeStroke: manager.activeStroke,
-                clipRect: sel
+                clipRect: sel,
+                blurredImage: manager.blurredScreenImage,
+                scale: manager.scaleFactor
             )
             .frame(width: geo.size.width, height: geo.size.height)
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
@@ -149,7 +153,7 @@ public struct ScreenshotOverlayView: View {
                 .frame(width: max(0, sel.width), height: max(0, sel.height))
                 .position(x: sel.midX, y: sel.midY)
                 .gesture(
-                    DragGesture(minimumDistance: 1, coordinateSpace: .named("canvasSpace"))
+                    DragGesture(minimumDistance: 0, coordinateSpace: .named("canvasSpace"))
                         .onChanged { value in
                             handleInsideDragChange(value: value, in: geo)
                         }
@@ -163,7 +167,93 @@ public struct ScreenshotOverlayView: View {
 
             // LightShot Floating Toolbars (Side Drawing Tools & Bottom Actions)
             floatingToolbars(for: sel, in: geo)
+
+            if manager.isEditingText {
+                textEditor(in: geo)
+            }
         }
+    }
+
+    private var annotationStatus: some View {
+        HStack(spacing: 6) {
+            if manager.isPreparingBlur {
+                ProgressView().controlSize(.small)
+            }
+            Text(manager.annotationError ?? (manager.isPreparingBlur
+                ? tr("Đang chuẩn bị làm mờ…", "Preparing blur…")
+                : manager.currentTool == .text
+                    ? tr("Nhấp để thêm chữ · Nhấp vào chữ để sửa", "Click to add text · Click text to edit")
+                    : tr("Kéo khoanh vùng cần làm mờ pixel", "Drag over the area to pixelate")))
+                .font(.system(size: FS.label, weight: .medium))
+                .foregroundStyle(manager.annotationError == nil ? Color.white : Color.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.black.opacity(0.85)))
+        .allowsHitTesting(false)
+    }
+
+    private func textEditor(in geo: GeometryProxy) -> some View {
+        let width = min(320, geo.size.width - 20)
+        let anchor = manager.textAnchor ?? .zero
+        let x = min(geo.size.width - width - 10, max(10, anchor.x))
+        let y = min(geo.size.height - 200, max(10, anchor.y + manager.textFontSize + 12))
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(tr("Nội dung chữ", "Text annotation"))
+                    .font(.system(size: FS.title, weight: .semibold))
+                Spacer()
+                Picker(tr("Cỡ chữ", "Size"), selection: $manager.textFontSize) {
+                    ForEach([16, 22, 28, 36, 48], id: \.self) { size in
+                        Text("\(size) pt").tag(CGFloat(size))
+                    }
+                }
+                .frame(width: 130)
+                .controlSize(.small)
+                Button { manager.cancelTextEditing() } label: {
+                    Image(systemName: "xmark").font(.system(size: FS.label, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .help(tr("Hủy nhập chữ (Esc)", "Cancel text (Esc)"))
+                .accessibilityLabel(tr("Hủy nhập chữ", "Cancel text"))
+            }
+            ScreenshotTextInput(text: $manager.textDraft,
+                onCommit: { manager.commitTextEditing() },
+                onCancel: { manager.cancelTextEditing() },
+                onSave: { manager.saveToDownloads() })
+                .frame(height: 76)
+                .accessibilityLabel(tr("Nội dung chữ trên ảnh", "Screenshot annotation text"))
+            Text(tr("Enter: áp dụng · Shift+Enter: xuống dòng · Esc: hủy", "Enter: apply · Shift+Enter: new line · Esc: cancel"))
+                .font(.system(size: FS.caption))
+                .foregroundStyle(.primary.opacity(0.8))
+            HStack(spacing: 4) {
+                ForEach(manager.availableColors, id: \.self) { hex in
+                    Button {
+                        manager.selectedColorHex = hex
+                    } label: {
+                        Circle().fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(manager.selectedColorHex == hex ? Color.accentColor : Color.secondary,
+                                                     lineWidth: 2))
+                            .padding(2)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(hex)
+                }
+                Spacer(minLength: 0)
+                Button(tr("Áp dụng", "Apply")) { manager.commitTextEditing() }
+                    .disabled(!manager.canCommitText)
+                    .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .foregroundStyle(.primary)
+        .background(RoundedRectangle(cornerRadius: Rad.md).fill(Color(nsColor: .windowBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: Rad.md).stroke(Color.primary.opacity(0.15), lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        .frame(width: width)
+        .offset(x: x, y: max(10, y))
     }
 
     // MARK: - Live Dragging Selection Preview
@@ -282,7 +372,9 @@ public struct ScreenshotOverlayView: View {
             return
         }
 
-        let currentPt = value.location
+        guard !manager.isEditingText else { return }
+        let currentPt = CGPoint(x: min(max(value.location.x, manager.selectionRect.minX), manager.selectionRect.maxX),
+                                y: min(max(value.location.y, manager.selectionRect.minY), manager.selectionRect.maxY))
 
         switch manager.currentTool {
         case .move:
@@ -293,6 +385,14 @@ public struct ScreenshotOverlayView: View {
             let newX = max(0, min(geo.size.width - manager.dragStartRect.width, manager.dragStartRect.origin.x + value.translation.width))
             let newY = max(0, min(geo.size.height - manager.dragStartRect.height, manager.dragStartRect.origin.y + value.translation.height))
             manager.selectionRect.origin = CGPoint(x: newX, y: newY)
+
+        case .text:
+            break // A click opens the text editor when the gesture ends.
+
+        case .blur:
+            guard manager.blurredScreenImage != nil else { return }
+            manager.activeStroke = DrawnStroke(tool: .blur, points: [value.startLocation, currentPt],
+                                               colorHex: manager.selectedColorHex, lineWidth: 0)
 
         case .pen:
             if manager.activeStroke == nil {
@@ -339,9 +439,10 @@ public struct ScreenshotOverlayView: View {
     private func handleInsideDragEnd(value: DragGesture.Value, in geo: GeometryProxy) {
         if manager.isDraggingSelection || manager.currentTool == .move {
             manager.isDraggingSelection = false
-        } else if let stroke = manager.activeStroke {
-            manager.strokes.append(stroke)
-            manager.activeStroke = nil
+        } else if manager.currentTool == .text {
+            if !manager.isEditingText { manager.beginText(at: value.location) }
+        } else {
+            manager.finishActiveStroke()
         }
     }
 
@@ -432,16 +533,22 @@ public struct ScreenshotOverlayView: View {
     private func floatingToolbars(for sel: CGRect, in geo: GeometryProxy) -> some View {
         // Position Side Drawing Bar (default right side of selection, or flip to left if near screen edge)
         let sideBarW: CGFloat = 36
-        let sideBarH: CGFloat = 240
+        let sideBarH: CGFloat = 340
         let sideOnRight = (sel.maxX + sideBarW + 12) <= geo.size.width
         let sideX = sideOnRight ? (sel.maxX + 6) : max(6, sel.minX - sideBarW - 6)
-        let sideY = min(geo.size.height - sideBarH - 10, max(10, sel.minY))
+        let sideY = max(10, min(geo.size.height - sideBarH - 10, max(10, sel.minY)))
 
         // Position Bottom Action Bar (default bottom of selection, or flip to top if near screen edge)
         let bottomBarH: CGFloat = 38
         let bottomOnBelow = (sel.maxY + bottomBarH + 12) <= geo.size.height
-        let bottomY = bottomOnBelow ? (sel.maxY + 6) : max(10, sel.minY - bottomBarH - 6)
-        let bottomX = min(geo.size.width - 240, max(10, sel.maxX - 220))
+        var bottomY = bottomOnBelow ? (sel.maxY + 6) : max(10, sel.minY - bottomBarH - 6)
+        let bottomBarW: CGFloat = min(280, geo.size.width - 20)
+        let bottomX = min(geo.size.width - bottomBarW - 10, max(10, sel.maxX - bottomBarW))
+        let sideBounds = CGRect(x: sideX, y: sideY, width: sideBarW, height: sideBarH)
+        if sideBounds.intersects(CGRect(x: bottomX, y: bottomY, width: bottomBarW, height: bottomBarH)) {
+            bottomY = sideBounds.maxY + bottomBarH + 6 <= geo.size.height
+                ? sideBounds.maxY + 6 : max(10, sideY - bottomBarH - 6)
+        }
 
         return Group {
             // 1. Right Side Toolbar: Drawing Tools & Color Palette
@@ -451,12 +558,22 @@ public struct ScreenshotOverlayView: View {
 
             // 2. Bottom Toolbar: Copy (⌘C), Save (⌘S), Close (⎋)
             bottomActionBar
+                .frame(width: bottomBarW)
                 .offset(x: bottomX, y: bottomY)
+
+            if manager.currentTool == .text || manager.currentTool == .blur || manager.annotationError != nil {
+                annotationStatus
+                    .frame(maxWidth: min(360, geo.size.width - 20))
+                    .position(x: min(geo.size.width - min(360, geo.size.width - 20) / 2 - 10,
+                                     max(min(360, geo.size.width - 20) / 2 + 10, sel.midX)),
+                              y: min(geo.size.height - 18, max(18, bottomY + bottomBarH + 20)))
+            }
 
             // 3. Color Palette Popover (when expanded)
             if manager.isColorPaletteExpanded {
                 colorPalettePill
-                    .offset(x: sideOnRight ? (sideX + sideBarW + 6) : (sideX - 160), y: sideY + 120)
+                    .offset(x: min(geo.size.width - 38, max(6, sideOnRight ? sideX - 40 : sideX + sideBarW + 6)),
+                            y: min(geo.size.height - 220, max(10, sideY + 100)))
             }
         }
     }
@@ -476,6 +593,9 @@ public struct ScreenshotOverlayView: View {
 
             // Marker tool (Dạ quang)
             toolButton(tool: .marker, icon: "highlighter", tooltip: tr("Bút dạ quang", "Highlighter"))
+
+            toolButton(tool: .text, icon: "textformat", tooltip: tr("Chữ — nhấp để thêm hoặc sửa", "Text — click to add or edit"))
+            toolButton(tool: .blur, icon: "square.grid.3x3.fill", tooltip: tr("Làm mờ pixel — kéo khoanh vùng", "Pixelate — drag an area"))
 
             // Move tool (Di chuyển khung)
             toolButton(tool: .move, icon: "arrow.up.and.down.and.arrow.left.and.right", tooltip: tr("Di chuyển vùng chọn", "Move Selection"))
@@ -521,12 +641,12 @@ public struct ScreenshotOverlayView: View {
         } label: {
             Image(systemName: "arrow.uturn.backward")
                 .font(.system(size: FS.body))
-                .foregroundStyle(manager.strokes.isEmpty ? Color.white.opacity(0.3) : Color.white)
+                .foregroundStyle(!manager.canUndoAnnotations ? Color.white.opacity(0.3) : Color.white)
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .disabled(manager.strokes.isEmpty)
-        .help(tr("Hoàn tác nét vẽ (⌘Z)", "Undo stroke (⌘Z)"))
+        .disabled(!manager.canUndoAnnotations)
+        .help(tr("Hoàn tác chú thích (⌘Z)", "Undo annotation (⌘Z)"))
     }
 
     @ViewBuilder
@@ -549,10 +669,10 @@ public struct ScreenshotOverlayView: View {
         let isSelected = manager.currentTool == tool
 
         return Button {
-            manager.currentTool = tool
+            manager.selectTool(tool)
         } label: {
             Image(systemName: icon)
-                .font(.system(size: FS.body, weight: isSelected ? .bold : .medium))
+                .font(.system(size: FS.body, weight: isSelected ? .semibold : .medium))
                 .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.75))
                 .frame(width: 28, height: 28)
                 .background(
@@ -562,6 +682,8 @@ public struct ScreenshotOverlayView: View {
         }
         .buttonStyle(.plain)
         .help(tooltip)
+        .accessibilityLabel(tooltip)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Color Palette Pill
@@ -616,6 +738,7 @@ public struct ScreenshotOverlayView: View {
                 .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
+            .disabled(!manager.canExport)
             .help(tr("Sao chép ảnh chất lượng cao vào Clipboard (⌘C)", "Copy high-res image to clipboard (⌘C)"))
 
             // 2. Save Button (⌘S -> Downloads/Screenshots)
@@ -637,6 +760,7 @@ public struct ScreenshotOverlayView: View {
                 .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
+            .disabled(!manager.canExport)
             .help(tr("Lưu ảnh vào thư mục Downloads/Screenshots (⌘S)", "Save image to Downloads/Screenshots (⌘S)"))
 
             // 3. Cancel Button (⎋ Esc)
@@ -663,6 +787,122 @@ public struct ScreenshotOverlayView: View {
     }
 }
 
+// Native editing preserves Vietnamese IME, selection, paste and undo while the global tap passes keys through.
+private struct ScreenshotTextInput: NSViewRepresentable {
+    @Binding var text: String
+    var onCommit: () -> Void
+    var onCancel: () -> Void
+    var onSave: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.borderType = .bezelBorder
+        scroll.hasVerticalScroller = true
+        let editor = AnnotationTextView(frame: NSRect(x: 0, y: 0, width: 280, height: 76))
+        editor.isRichText = false
+        editor.allowsUndo = true
+        editor.font = NSFont.systemFont(ofSize: FS.subhead)
+        editor.textColor = .textColor
+        editor.backgroundColor = .textBackgroundColor
+        editor.textContainerInset = NSSize(width: 6, height: 6)
+        editor.isVerticallyResizable = true
+        editor.isHorizontallyResizable = false
+        editor.autoresizingMask = [.width]
+        editor.textContainer?.widthTracksTextView = true
+        editor.delegate = context.coordinator
+        editor.string = text
+        editor.onCommit = onCommit
+        editor.onCancel = onCancel
+        editor.onSave = onSave
+        scroll.documentView = editor
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let editor = scroll.documentView as? AnnotationTextView else { return }
+        if editor.string != text && !editor.hasMarkedText() { editor.string = text }
+        editor.onCommit = onCommit
+        editor.onCancel = onCancel
+        editor.onSave = onSave
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ScreenshotTextInput
+        init(_ parent: ScreenshotTextInput) { self.parent = parent }
+        func textDidChange(_ notification: Notification) {
+            guard let editor = notification.object as? NSTextView else { return }
+            parent.text = editor.string
+        }
+    }
+}
+
+private final class AnnotationTextView: NSTextView {
+    // Each draft owns its undo history, independent from the window and annotations.
+    private let textUndoManager = UndoManager()
+    override var undoManager: UndoManager? { textUndoManager }
+    var onCommit: (() -> Void)?
+    var onCancel: (() -> Void)?
+    var onSave: (() -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let targetWindow = window else { return }
+        DispatchQueue.main.async { [weak self, weak targetWindow] in
+            guard let self, let targetWindow, self.window === targetWindow else { return }
+            targetWindow.makeKey()
+            targetWindow.makeFirstResponder(self)
+            self.setSelectedRange(NSRange(location: (self.string as NSString).length, length: 0))
+        }
+    }
+
+    // Menu-bar apps have no standard Edit menu to route these key equivalents.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard flags == .command || flags == [.command, .shift] else {
+            return super.performKeyEquivalent(with: event)
+        }
+        switch event.keyCode {
+        case 0: selectAll(nil)
+        case 8: copy(nil)
+        case 9: paste(nil)
+        case 7: cut(nil)
+        case 6:
+            if flags.contains(.shift) { undoManager?.redo() }
+            else { undoManager?.undo() }
+            // Explicit key-equivalent routing bypasses the usual Edit-menu action.
+            // Synchronize the binding now so SwiftUI cannot restore the pre-undo draft.
+            didChangeText()
+        case 1:
+            guard !hasMarkedText() else { return true }
+            onCommit?()
+            onSave?()
+        default: return super.performKeyEquivalent(with: event)
+        }
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        // Marked text must first be committed by the input method, not exported as a half-composed word.
+        if !hasMarkedText() {
+            if event.keyCode == 53 { onCancel?(); return }
+            if (event.keyCode == 36 || event.keyCode == 76) && !event.modifierFlags.contains(.shift) {
+                onCommit?(); return
+            }
+            if event.modifierFlags.contains(.command), event.keyCode == 1 {
+                onCommit?()
+                onSave?()
+                return
+            }
+        }
+        super.keyDown(with: event)
+    }
+
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
+}
+
 // MARK: - Cutout Veil Shape (Even-Odd rule punches transparent hole for selection)
 
 private struct CutoutVeil: Shape {
@@ -684,98 +924,22 @@ private struct AnnotationsCanvas: View {
     let strokes: [DrawnStroke]
     let activeStroke: DrawnStroke?
     let clipRect: CGRect
+    let blurredImage: CGImage?
+    let scale: CGFloat
 
     var body: some View {
-        Canvas { context, size in
-            // Clip drawing strictly to the selection boundary
-            if clipRect.width > 0 && clipRect.height > 0 {
-                context.clip(to: Path(clipRect))
-            }
-
-            for stroke in strokes {
-                renderStroke(stroke, into: &context)
-            }
-
-            if let active = activeStroke {
-                renderStroke(active, into: &context)
+        Canvas { context, _ in
+            context.clip(to: Path(clipRect))
+            context.withCGContext { cg in
+                for stroke in strokes {
+                    ScreenshotAnnotationRenderer.draw(stroke, in: cg, blurredImage: blurredImage, scale: scale)
+                }
+                if let activeStroke {
+                    ScreenshotAnnotationRenderer.draw(activeStroke, in: cg, blurredImage: blurredImage, scale: scale)
+                }
             }
         }
-    }
-
-    private func renderStroke(_ stroke: DrawnStroke, into context: inout GraphicsContext) {
-        guard !stroke.points.isEmpty else { return }
-
-        var ctx = context
-        if stroke.tool == .marker {
-            ctx.opacity = 0.38
-        }
-
-        let strokeColor = Color(hex: stroke.colorHex)
-
-        switch stroke.tool {
-        case .pen, .marker:
-            var path = Path()
-            path.move(to: stroke.points[0])
-            for pt in stroke.points.dropFirst() {
-                path.addLine(to: pt)
-            }
-            ctx.stroke(
-                path,
-                with: .color(strokeColor),
-                style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
-            )
-
-        case .arrow:
-            guard stroke.points.count >= 2 else { break }
-            let start = stroke.points[0]
-            let end = stroke.points[stroke.points.count - 1]
-
-            var path = Path()
-            path.move(to: start)
-            path.addLine(to: end)
-
-            let angle = atan2(end.y - start.y, end.x - start.x)
-            let arrowLength: CGFloat = max(12, stroke.lineWidth * 3.5)
-            let arrowAngle: CGFloat = .pi / 6
-
-            let p1 = CGPoint(
-                x: end.x - arrowLength * cos(angle - arrowAngle),
-                y: end.y - arrowLength * sin(angle - arrowAngle)
-            )
-            let p2 = CGPoint(
-                x: end.x - arrowLength * cos(angle + arrowAngle),
-                y: end.y - arrowLength * sin(angle + arrowAngle)
-            )
-
-            path.move(to: p1)
-            path.addLine(to: end)
-            path.addLine(to: p2)
-
-            ctx.stroke(
-                path,
-                with: .color(strokeColor),
-                style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
-            )
-
-        case .rect:
-            guard stroke.points.count >= 2 else { break }
-            let p1 = stroke.points[0]
-            let p2 = stroke.points[stroke.points.count - 1]
-            let rect = CGRect(
-                x: min(p1.x, p2.x),
-                y: min(p1.y, p2.y),
-                width: abs(p2.x - p1.x),
-                height: abs(p2.y - p1.y)
-            )
-            ctx.stroke(
-                Path(rect),
-                with: .color(strokeColor),
-                style: StrokeStyle(lineWidth: stroke.lineWidth, lineCap: .round, lineJoin: .round)
-            )
-
-        case .move:
-            break
-        }
+        .accessibilityHidden(true)
     }
 }
 

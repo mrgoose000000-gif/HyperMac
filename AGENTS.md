@@ -23,6 +23,8 @@ swift build -c release
 ./build.sh
 ```
 
+- **Quy ước người dùng xác nhận 2026-11-14:** Sau mỗi lần sửa và build/kiểm thử thành công, **luôn cài đè `/Applications/HyperMac.app` và mở lại để người dùng test ngay**, không cần hỏi lại. Giữ nguyên dữ liệu/cài đặt và identity ký cố định; ưu tiên đóng app bình thường (`NSRunningApplication.terminate()`) để chạy cleanup pin/quạt trước khi thay binary. Quyền cài local này **không** cho phép tự push/tag/tạo GitHub Release; vẫn chờ lệnh phát hành riêng.
+
 - `xcodebuild` không bắt buộc; máy hiện tại chỉ có Command Line Tools và build bằng SwiftPM.
 - Log runtime: `/tmp/displaycontrol.log` (hàm `appLog()` trong `Sources/Logger.swift`).
 - App đang chạy: `pgrep -xl HyperMac`.

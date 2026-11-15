@@ -14,13 +14,15 @@ public struct DisplayInfo: Identifiable, Equatable, Sendable {
     public var isConnected: Bool   // true = active in WindowServer, false = soft-disconnected
     public var resolution: String
     public var externalIndex: Int?
+    public var isVirtual: Bool = false
 
     public static func == (lhs: DisplayInfo, rhs: DisplayInfo) -> Bool {
         lhs.id == rhs.id &&
         abs(lhs.brightness - rhs.brightness) < 0.001 &&
         lhs.isConnected == rhs.isConnected &&
         lhs.name == rhs.name &&
-        lhs.resolution == rhs.resolution
+        lhs.resolution == rhs.resolution &&
+        lhs.isVirtual == rhs.isVirtual
     }
 }
 
@@ -255,7 +257,8 @@ public class DisplayManager: ObservableObject {
                 brightness: currentBrightness,
                 isConnected: isActive,
                 resolution: resolution,
-                externalIndex: displayExtIndex
+                externalIndex: displayExtIndex,
+                isVirtual: isVirtualDisplay
             ))
         }
 
@@ -268,6 +271,7 @@ public class DisplayManager: ObservableObject {
         originalGamma = originalGamma.filter { knownIDs.contains($0.key) }
 
         self.monitors = updatedList
+        DisplayModeManager.shared.refresh(displays: updatedList.filter(\.isConnected).map(\.id))
         appLog("🖥 Display list refreshed. Total: \(updatedList.count) (Active: \(updatedList.filter { $0.isConnected }.count))")
 
         if selectedID == nil || !updatedList.contains(where: { $0.id == selectedID }) {
@@ -528,7 +532,7 @@ public class DisplayManager: ObservableObject {
         let currentlyActive = monitors[idx].isConnected
 
         if currentlyActive && !canDisconnect(monitor) {
-            alertMessage = tr("Không thể ngắt tất cả màn hình! macOS cần giữ lại ít nhất 1 màn hình hoạt động để bạn tiếp tục sử dụng.", "Cannot disconnect all displays! macOS requires at least 1 active display to operate.")
+            alertMessage = tr("Không thể ngắt tất cả màn hình! macOS cần giữ lại ít nhất 1 màn hình (thật hoặc ảo) để WindowServer hoạt động.", "Cannot disconnect all displays! macOS requires at least 1 active display to operate.")
             showAlert = true
             return
         }
@@ -598,5 +602,54 @@ public class DisplayManager: ObservableObject {
         for monitor in monitors where !monitor.isConnected {
             toggleConnection(for: monitor)
         }
+    }
+
+    /// Mở lại riêng màn hình chính (màn hình MacBook tích hợp) và khôi phục độ sáng
+    public func restorePrimaryDisplay() {
+        guard let primary = monitors.first(where: { $0.isBuiltIn }) else {
+            // Trường hợp máy bàn Mac mini/Studio không có built-in: mở màn hình vật lý đầu tiên
+            if let firstPhysical = monitors.first(where: { !$0.isVirtual }) {
+                if !firstPhysical.isConnected {
+                    toggleConnection(for: firstPhysical)
+                }
+                setBrightness(0.75, for: firstPhysical)
+            }
+            return
+        }
+        appLog("🖥 restorePrimaryDisplay: Restoring primary screen '\(primary.name)' (id=\(primary.id))")
+
+        // 1. Nếu màn hình chính đang bị ngắt kết nối mềm trong WindowServer -> kết nối lại
+        if !primary.isConnected {
+            toggleConnection(for: primary)
+        }
+
+        // 2. Hủy trạng thái che tối nếu màn hình ảo đang bật tính năng Blackout
+        if VirtualDisplayManager.shared.isBlackoutPrimaryActive {
+            VirtualDisplayManager.shared.restorePrimaryScreen()
+        }
+
+        // 3. Đảm bảo độ sáng >= 50%
+        let current = primary.brightness
+        if current < 0.25 {
+            let saved = brightnessCache[primary.id] ?? 0.8
+            let target = saved > 0.25 ? saved : 0.75
+            setBrightness(target, for: primary)
+        }
+
+        refreshDisplays()
+    }
+
+    /// Khôi phục hiển thị khẩn cấp (Emergency Display Rescue):
+    /// Tự động bật lại toàn bộ màn hình đã ngắt, hủy tắt màn chính và đặt lại độ sáng an toàn 75%.
+    public func emergencyRestoreAllDisplays() {
+        appLog("🚨 Emergency restore triggered: Reconnecting all displays and resetting brightness...")
+        connectAllDisplays()
+        for monitor in monitors where !monitor.isVirtual {
+            if monitor.brightness < 0.25 {
+                setBrightness(0.75, for: monitor)
+            }
+        }
+        VirtualDisplayManager.shared.restorePrimaryScreen()
+        refreshDisplays()
     }
 }

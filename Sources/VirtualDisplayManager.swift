@@ -12,6 +12,7 @@ public struct VirtualResolution: Identifiable, Equatable {
     public let height: UInt
     public let refreshRate: Double
     public let isHiDPI: Bool
+    public var isUltrawide: Bool { Double(width) / Double(max(1, height)) > 2.0 }
 }
 
 // MARK: - Virtual Display Manager Engine
@@ -49,7 +50,10 @@ public class VirtualDisplayManager: ObservableObject {
         VirtualResolution(name: "4K UHD (3840 × 2160)", width: 3840, height: 2160, refreshRate: 60.0, isHiDPI: true),
         VirtualResolution(name: "MacBook 16:10 (1800 × 1169)", width: 1800, height: 1169, refreshRate: 60.0, isHiDPI: true),
         VirtualResolution(name: "iPad Retina 4:3 (2048 × 1536)", width: 2048, height: 1536, refreshRate: 60.0, isHiDPI: true),
-        VirtualResolution(name: tr("1080p 120Hz Siêu mượt", "1080p 120Hz Ultra Smooth"), width: 1920, height: 1080, refreshRate: 120.0, isHiDPI: false)
+        VirtualResolution(name: tr("1080p 120Hz Siêu mượt", "1080p 120Hz Ultra Smooth"), width: 1920, height: 1080, refreshRate: 120.0, isHiDPI: false),
+        // Append presets: existing preferences store the selected array index.
+        VirtualResolution(name: "Ultrawide 2560 × 1080", width: 2560, height: 1080, refreshRate: 60.0, isHiDPI: true),
+        VirtualResolution(name: "Ultrawide 3440 × 1440", width: 3440, height: 1440, refreshRate: 60.0, isHiDPI: true)
     ]
 
     private var originalPrimaryBrightness: Float = 0.8
@@ -132,9 +136,17 @@ public class VirtualDisplayManager: ObservableObject {
         if id != 0 {
             self.virtualDisplayID = id
             self.statusMessage = tr("Đang hoạt động (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)", "Active (\(res.width)×\(res.height) @ \(Int(res.refreshRate))Hz)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                DisplayManager.shared.refreshDisplays()
-            }
+        } else {
+            // The bridge destroys the previous display before applying the new mode.
+            // Do not leave the switch/badge claiming the rejected mode is active.
+            if isBlackoutPrimaryActive { restorePrimaryScreen() }
+            self.virtualDisplayID = 0
+            self.isVirtualDisplayActive = false
+            self.statusMessage = tr("Không áp dụng được độ phân giải. Chọn mức khác rồi bật lại.",
+                                    "Could not apply this resolution. Choose another mode and enable again.")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            DisplayManager.shared.refreshDisplays()
         }
     }
 

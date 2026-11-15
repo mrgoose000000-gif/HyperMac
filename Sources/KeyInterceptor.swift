@@ -38,10 +38,10 @@ public var gIsAltTabVisible: Bool = false
 public var gIsClipboardEnabled: Bool = true
 public var gIsClipboardHUDVisible: Bool = false
 public var gIsClipboardSearchEmpty: Bool = true
-public var gClipboardShortcutKeycode: Int64 = 8
 public var gIsCursorBasedBrightnessEnabled: Bool = true
 public var gIsScreenshotEnabled: Bool = true
 public var gIsScreenshotActive: Bool = false
+public var gIsScreenshotEditingText: Bool = false
 public var gIsSpacePressed: Bool = false
 private var gActiveModifierMask: CGEventFlags? = nil
 private var gCurrentTap: CFMachPort? = nil
@@ -120,6 +120,25 @@ private func eventTapCallback(
         if let tap = gCurrentTap {
             CGEvent.tapEnable(tap: tap, enable: true)
         }
+        return Unmanaged.passUnretained(event)
+    }
+
+    // Recording owns keyboard events before any global shortcuts or HUD navigation.
+    if gIsRecordingShortcut {
+        if type == .keyDown {
+            let code = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+            let flags = event.flags
+            let repeated = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            DispatchQueue.main.async { ShortcutRecorder.shared.receive(code, flags: flags, repeated: repeated) }
+            return nil
+        }
+        if type == .keyUp || type == .flagsChanged { return nil }
+    }
+
+    // Let the native text editor receive typing, Space, IME, clipboard and undo keys.
+    // Escape/Return are handled by the editor; mouse events still follow the normal tap path.
+    if gIsScreenshotActive && gIsScreenshotEditingText &&
+        (type == .keyDown || type == .keyUp || type == .flagsChanged) {
         return Unmanaged.passUnretained(event)
     }
 
@@ -226,19 +245,45 @@ private func eventTapCallback(
         }
     }
 
+    // One shared, exact-match registry drives all configurable global shortcuts.
+    if type == .keyDown && !gIsScreenshotActive,
+       let match = configuredShortcutMatch(UInt16(event.getIntegerValueField(.keyboardEventKeycode)), flags: event.flags) {
+        if match.action == .switchWindows {
+            gActiveModifierMask = match.binding.holdFlags
+            gIsAltTabVisible = true
+            DispatchQueue.main.async { WindowManager.shared.handleShortcut(isShift: match.reversed) }
+        } else {
+            var action = match.action
+            let key = Int64(match.binding.keyCode)
+            if gShortcutConfiguration.usesDefaultArrowChords && (123...126).contains(key) &&
+                match.binding.flags == [.maskControl, .maskAlternate] {
+                let now = Date().timeIntervalSince1970
+                if now - gLastSnapArrowTime <= 0.65 && gLastSnapArrowKey != key {
+                    let pair = Set([gLastSnapArrowKey, key])
+                    if pair == Set([123,126]) { action = .topLeft }
+                    else if pair == Set([124,126]) { action = .topRight }
+                    else if pair == Set([123,125]) { action = .bottomLeft }
+                    else if pair == Set([124,125]) { action = .bottomRight }
+                }
+                gLastSnapArrowKey = action == match.action ? key : 0
+                gLastSnapArrowTime = now
+            } else { gLastSnapArrowKey = 0 }
+            // Holding a trigger should not repeatedly toggle a panel on/off.
+            let repeats = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            if !repeats || action.snapAction != nil {
+                let requested = action
+                DispatchQueue.main.async { ShortcutManager.shared.perform(requested) }
+            }
+        }
+        return nil
+    }
+
     // 3. AltTab Window Switching (Command + Tab or Option + Tab)
-    if gIsAltTabEnabled {
+    if gIsAltTabEnabled && !gIsScreenshotActive {
         if type == .flagsChanged {
             let flags = event.flags
             if let activeMask = gActiveModifierMask {
-                let isStillHeld: Bool
-                if activeMask == .maskCommand {
-                    isStillHeld = flags.contains(.maskCommand)
-                } else if activeMask == .maskAlternate {
-                    isStillHeld = flags.contains(.maskAlternate)
-                } else {
-                    isStillHeld = false
-                }
+                let isStillHeld = flags.intersection(activeMask) == activeMask
 
                 if !isStillHeld {
                     gActiveModifierMask = nil
@@ -254,21 +299,6 @@ private func eventTapCallback(
 
         if type == .keyDown {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            let flags = event.flags
-
-            // Check triggers: Command + Tab or Option + Tab
-            let isCmdTab = flags.contains(.maskCommand) && keyCode == 48
-            let isOptTab = flags.contains(.maskAlternate) && keyCode == 48
-
-            if isCmdTab || isOptTab {
-                gActiveModifierMask = isCmdTab ? .maskCommand : .maskAlternate
-                let isShift = flags.contains(.maskShift)
-                gIsAltTabVisible = true
-                DispatchQueue.main.async {
-                    WindowManager.shared.handleShortcut(isShift: isShift)
-                }
-                return nil // Swallow Tab key event so native switcher never triggers
-            }
 
             // Keyboard navigation when AltTab HUD is active
             if gIsAltTabVisible {
@@ -427,30 +457,6 @@ private func eventTapCallback(
             return nil
         }
 
-        // Screenshot Trigger: ⌘⇧1 (Command + Shift + 1, keycode 18) or bare F4 (keycode 118 or 131)
-        if gIsScreenshotEnabled && !gIsScreenshotActive {
-            let hasCmd = flags.contains(.maskCommand)
-            let hasCtrl = flags.contains(.maskControl)
-            let hasAlt = flags.contains(.maskAlternate)
-            let hasShift = flags.contains(.maskShift)
-
-            // Primary: ⌘⇧1 (HyperMac LightShot - Leaves ⌘⇧4 untouched for macOS default)
-            if hasCmd && hasShift && !hasCtrl && !hasAlt && keycode == 18 {
-                DispatchQueue.main.async {
-                    ScreenshotManager.shared.startCapture()
-                }
-                return nil
-            }
-
-            // Secondary: bare F4
-            if !hasCmd && !hasShift && !hasCtrl && !hasAlt && (keycode == 118 || keycode == 131) {
-                DispatchQueue.main.async {
-                    ScreenshotManager.shared.startCapture()
-                }
-                return nil
-            }
-        }
-
         // F1/F2 Brightness
         if keycode == 145 || keycode == 120 || keycode == 144 || keycode == 122 {
             // If cursor-based brightness is disabled, do NOT intercept! Pass through to macOS native.
@@ -527,15 +533,6 @@ private func eventTapCallback(
             }
         }
 
-        // Command + Shift + (C or V) -> Toggle Clipboard Manager HUD (Maccy Replacement)
-        let isCmdShift = flags.contains(.maskCommand) && flags.contains(.maskShift) && !flags.contains(.maskControl)
-        if gIsClipboardEnabled && isCmdShift && keycode == gClipboardShortcutKeycode {
-            DispatchQueue.main.async {
-                ClipboardManager.shared.toggleHUD()
-            }
-            return nil
-        }
-
         // Clipboard HUD Active Keys
         if gIsClipboardHUDVisible {
             let hasCommand = flags.contains(.maskCommand)
@@ -601,128 +598,23 @@ private func eventTapCallback(
             }
         }
 
-        // Option + Control shortcuts -> Window Snapping (Rectangle-style)
-        let isOptCtrl = flags.contains(.maskAlternate) && flags.contains(.maskControl) && !flags.contains(.maskCommand)
-        if isOptCtrl {
-            let now = Date().timeIntervalSince1970
-            let chordWindow: TimeInterval = 0.65
-
-            // 1. Return / Numpad Enter -> Maximize
-            if keycode == 36 || keycode == 76 {
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.maximize) }
-                return nil
-            }
-
-            // 2. C (Keycode 8) or Delete / Forward Delete -> Center
-            if keycode == 8 || keycode == 51 || keycode == 117 {
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.center) }
-                return nil
-            }
-
-            // 3. Direct 4-corner keys: U / I / J / K and Numpad 7 / 9 / 1 / 3
-            if keycode == 32 || keycode == 89 { // U or Num7 -> Top Left (Trái Trên)
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topLeft) }
-                return nil
-            }
-            if keycode == 34 || keycode == 92 { // I or Num9 -> Top Right (Phải Trên)
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topRight) }
-                return nil
-            }
-            if keycode == 38 || keycode == 83 { // J or Num1 -> Bottom Left (Trái Dưới)
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomLeft) }
-                return nil
-            }
-            if keycode == 40 || keycode == 85 { // K or Num3 -> Bottom Right (Phải Dưới)
-                gLastSnapArrowKey = 0
-                DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomRight) }
-                return nil
-            }
-
-            // 4. Arrow keys (123: Left, 124: Right, 125: Down, 126: Up)
-            if keycode >= 123 && keycode <= 126 {
-                // Check if this forms a 4-corner combo with the previous arrow key
-                if (now - gLastSnapArrowTime) <= chordWindow && gLastSnapArrowKey != 0 && gLastSnapArrowKey != keycode {
-                    let prev = gLastSnapArrowKey
-                    // Left (123) + Up (126) -> Top Left (Trái Trên)
-                    if (prev == 123 && keycode == 126) || (prev == 126 && keycode == 123) {
-                        gLastSnapArrowKey = 0
-                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topLeft) }
-                        return nil
-                    }
-                    // Left (123) + Down (125) -> Bottom Left (Trái Dưới)
-                    if (prev == 123 && keycode == 125) || (prev == 125 && keycode == 123) {
-                        gLastSnapArrowKey = 0
-                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomLeft) }
-                        return nil
-                    }
-                    // Right (124) + Up (126) -> Top Right (Phải Trên)
-                    if (prev == 124 && keycode == 126) || (prev == 126 && keycode == 124) {
-                        gLastSnapArrowKey = 0
-                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topRight) }
-                        return nil
-                    }
-                    // Right (124) + Down (125) -> Bottom Right (Phải Dưới)
-                    if (prev == 124 && keycode == 125) || (prev == 125 && keycode == 124) {
-                        gLastSnapArrowKey = 0
-                        DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomRight) }
-                        return nil
-                    }
-                }
-
-                // Single arrow press (or first arrow of a combination)
-                gLastSnapArrowKey = keycode
-                gLastSnapArrowTime = now
-
-                switch keycode {
-                case 123: // Left Arrow -> Left Half
-                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.leftHalf) }
-                    return nil
-                case 124: // Right Arrow -> Right Half
-                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.rightHalf) }
-                    return nil
-                case 126: // Up Arrow -> Top Half
-                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.topHalf) }
-                    return nil
-                case 125: // Down Arrow -> Bottom Half
-                    DispatchQueue.main.async { WindowSnapManager.shared.snapActiveWindow(.bottomHalf) }
-                    return nil
-                default:
-                    break
-                }
-            }
-        }
-
-        // Option + Command + Arrow keys (or Ctrl + Option + Command + Arrow keys - Rectangle standard)
-        // -> Move to Display (Next / Previous)
-        let isNextPrevDisplay = flags.contains(.maskAlternate) && flags.contains(.maskCommand)
-        if isNextPrevDisplay {
-            switch keycode {
-            case 124, 126: // Right or Up Arrow -> Next Display
-                appLog("⌨️ Shortcut: Move Window to Next Display")
-                DispatchQueue.main.async { WindowSnapManager.shared.moveActiveWindowToDisplay(isNext: true) }
-                return nil
-            case 123, 125: // Left or Down Arrow -> Previous Display
-                appLog("⌨️ Shortcut: Move Window to Previous Display")
-                DispatchQueue.main.async { WindowSnapManager.shared.moveActiveWindowToDisplay(isNext: false) }
-                return nil
-            case 11: // 'B' Key -> Toggle Menu Bar Hider (⌘⌥B)
-                if gIsMenuBarHiderEnabled {
-                    appLog("⌨️ Shortcut: Toggle Menu Bar Hider (⌘⌥B)")
-                    DispatchQueue.main.async { MenuBarHiderManager.shared.toggle() }
-                    return nil
-                }
-            default:
-                break
-            }
-        }
     }
 
     return Unmanaged.passUnretained(event)
+}
+
+// Kept separate from dispatch so matching/feature toggles can be tested without moving windows.
+func configuredShortcutMatch(_ key: UInt16, flags: CGEventFlags) -> ShortcutMatch? {
+    guard let match = gShortcutConfiguration.match(key, flags: flags) else { return nil }
+    let enabled: Bool
+    switch match.action {
+    case .screenshot: enabled = gIsScreenshotEnabled
+    case .clipboard: enabled = gIsClipboardEnabled
+    case .switchWindows: enabled = gIsAltTabEnabled
+    case .menuBar: enabled = gIsMenuBarHiderEnabled
+    default: enabled = gIsWindowSnapEnabled
+    }
+    return enabled ? match : nil
 }
 
 // MARK: - KeyInterceptor Singleton
@@ -745,8 +637,8 @@ public class KeyInterceptor {
         gIsAltTabEnabled = (UserDefaults.standard.object(forKey: "alttab_enabled") as? Bool) ?? true
         gIsClipboardEnabled = (UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") as? Bool) ?? true
         gIsFinderCutPasteEnabled = (UserDefaults.standard.object(forKey: "finder_cut_paste_enabled") as? Bool) ?? true
-        let shortcut = UserDefaults.standard.string(forKey: "clipboard_hud_shortcut") ?? "cmd_shift_c"
-        gClipboardShortcutKeycode = (shortcut == "cmd_shift_v") ? 9 : 8
+        gShortcutConfiguration = ShortcutManager.shared.configuration
+        gIsWindowSnapEnabled = (UserDefaults.standard.object(forKey: "window_snap_enabled") as? Bool) ?? true
         gIsCursorBasedBrightnessEnabled = (UserDefaults.standard.object(forKey: "cursor_based_brightness") as? Bool) ?? true
         gIsScreenshotEnabled = (UserDefaults.standard.object(forKey: "screenshot_enabled") as? Bool) ?? true
     }

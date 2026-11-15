@@ -640,6 +640,8 @@ struct DisplaysTabView: View {
 
 // Hallmark · native settings component · existing Theme tokens
 struct MenuBarHiderCardView: View {
+    @ObservedObject private var shortcuts = ShortcutManager.shared
+
     @AppStorage("menubar_drawer_details_expanded") private var showDetails = false
     @ObservedObject var manager = MenuBarHiderManager.shared
 
@@ -682,11 +684,11 @@ struct MenuBarHiderCardView: View {
                     .controlSize(.small)
                     .disabled(!manager.isEnabled)
                     Spacer()
-                    Text("⌘⌥B")
+                    Text(shortcuts.primaryTitle(.menuBar))
                         .font(.system(size: FS.caption, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
-                Text(tr("Nhấn ⌥⌘B để mở bảng ứng dụng Menu Bar. Bấm ứng dụng để mở menu thật; kéo ☰ để đổi thứ tự icon trên thanh bar.", "Press ⌥⌘B to open menu bar apps. Click an app for its real menu; drag ☰ to reorder icons on the menu bar."))
+                Text(tr("Dùng phím đã gán để mở bảng ứng dụng Menu Bar. Bấm ứng dụng để mở menu thật; kéo ☰ để đổi thứ tự icon trên thanh bar.", "Use your assigned shortcut to open menu bar apps. Click an app for its real menu; drag ☰ to reorder icons on the menu bar."))
                     .font(.system(size: FS.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -803,6 +805,9 @@ struct CaffeinateCardView: View {
     }
 }
 
+// Hallmark · component: virtual display presets · genre: modern-minimal · theme: HyperMac native
+// Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V4
+// Existing FS/Rad tokens, native controls; component scope, no page macrostructure.
 // MARK: - Virtual Display (Dummy Screen) Card View
 
 struct VirtualDisplayCardView: View {
@@ -899,6 +904,23 @@ struct VirtualDisplayCardView: View {
                     // Resolution Preset Grid (2 columns)
                     resolutionGrid
 
+                    if virtualDisplayManager.currentResolution.isUltrawide {
+                        Text(tr("Mirror: trong Cài đặt hệ thống → Màn hình, chọn Tối ưu hóa cho HyperMac Virtual Display.",
+                                "Mirroring: in System Settings → Displays, choose Optimize for HyperMac Virtual Display."))
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if !virtualDisplayManager.isVirtualDisplayActive {
+                        Text(virtualDisplayManager.statusMessage)
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     // Bottom Quick Options: HiDPI toggle & Blackout Screen (Privacy)
                     quickOptionsRow
                 }
@@ -919,7 +941,7 @@ struct VirtualDisplayCardView: View {
                             .fill(virtualDisplayManager.selectedResolutionIndex == index ? Color.accentColor : Color.secondary.opacity(0.3))
                             .frame(width: 4.5, height: 4.5)
 
-                        Text(res.name)
+                        Text(res.isUltrawide ? "\(res.width) × \(res.height) UW" : res.name)
                             .font(.system(size: FS.caption, weight: virtualDisplayManager.selectedResolutionIndex == index ? .semibold : .medium))
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -942,6 +964,9 @@ struct VirtualDisplayCardView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .help("\(res.name) · \(Int(res.refreshRate)) Hz")
+                .accessibilityLabel("\(res.name), \(Int(res.refreshRate)) Hz")
+                .accessibilityAddTraits(virtualDisplayManager.selectedResolutionIndex == index ? .isSelected : [])
             }
         }
     }
@@ -997,6 +1022,7 @@ struct VirtualDisplayCardView: View {
 // MARK: - TAB 2: Shortcuts & Window Controls View
 
 struct ShortcutsTabView: View {
+    @ObservedObject private var shortcuts = ShortcutManager.shared
     @ObservedObject var displayManager: DisplayManager
     @ObservedObject var snapManager: WindowSnapManager
     @ObservedObject var windowManager: WindowManager
@@ -1009,6 +1035,8 @@ struct ShortcutsTabView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 10) {
+                ShortcutSettingsCard()
+
                 // Accessibility Alert if not granted
                 if !displayManager.hasAccessibility {
                     HStack(spacing: 8) {
@@ -1148,7 +1176,7 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Chuyển cửa sổ (⌘ Tab)", "Window Switcher (⌘ Tab)"))
+                            Text(tr("Chuyển cửa sổ", "Window Switcher"))
                                 .font(.system(size: FS.label, weight: .semibold))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
@@ -1215,8 +1243,8 @@ struct ShortcutsTabView: View {
 
                         // AltTab Shortcuts Guide
                         ShortcutGrid {
-                            shortcutPill(key: "⌘ + Tab", desc: tr("Chuyển tiếp", "Forward"))
-                            shortcutPill(key: "⌘ + ~", desc: tr("Lùi lại", "Backward"))
+                            shortcutPill(key: shortcuts.primaryTitle(.switchWindows), desc: tr("Chuyển tiếp", "Forward"))
+                            shortcutPill(key: "Shift + " + shortcuts.primaryTitle(.switchWindows), desc: tr("Lùi lại", "Backward"))
                             shortcutPill(key: "↑↓←→", desc: tr("Duyệt lưới", "Grid nav"))
                             shortcutPill(key: "W", desc: tr("Đóng", "Close"))
                             shortcutPill(key: "Q", desc: tr("Thoát App", "Quit App"))
@@ -1277,7 +1305,7 @@ struct ShortcutsTabView: View {
                                     .background(Circle().fill(Color.primary.opacity(snapManager.isDetailsExpanded ? 0.08 : 0.04)))
                             }
                             .buttonStyle(.plain)
-                            .help(snapManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết phím tắt", "View shortcut details"))
+                            .help(snapManager.isDetailsExpanded ? tr("Thu gọn chi tiết", "Collapse details") : tr("Xem chi tiết", "View details"))
                         }
 
                         Toggle("", isOn: Binding<Bool>(
@@ -1291,22 +1319,25 @@ struct ShortcutsTabView: View {
 
                     if snapManager.isSnapEnabled && snapManager.isDetailsExpanded {
                         Divider().opacity(0.35)
+                        WindowDisplayTransferModeView(settings: .shared)
+                        Divider().opacity(0.35)
 
                         VStack(spacing: 5) {
                             ShortcutGrid {
-                                shortcutPill(key: "⌃⌥←", desc: tr("Nửa trái", "Left Half"))
-                                shortcutPill(key: "⌃⌥→", desc: tr("Nửa phải", "Right Half"))
-                                shortcutPill(key: "⌃⌥↑", desc: tr("Nửa trên", "Top Half"))
-                                shortcutPill(key: "⌃⌥↓", desc: tr("Nửa dưới", "Bottom Half"))
+                                shortcutPill(key: shortcuts.primaryTitle(.leftHalf), desc: tr("Nửa trái", "Left Half"))
+                                shortcutPill(key: shortcuts.primaryTitle(.rightHalf), desc: tr("Nửa phải", "Right Half"))
+                                shortcutPill(key: shortcuts.primaryTitle(.topHalf), desc: tr("Nửa trên", "Top Half"))
+                                shortcutPill(key: shortcuts.primaryTitle(.bottomHalf), desc: tr("Nửa dưới", "Bottom Half"))
                             }
                             ShortcutGrid {
-                                shortcutPill(key: "⌃⌥↩", desc: tr("Toàn màn hình", "Maximize"))
-                                shortcutPill(key: "⌃⌥C / ⌃⌥⌫", desc: tr("Căn giữa", "Center"))
-                                shortcutPill(key: "⌃⌥←↑/U", desc: tr("4 góc", "Quarters"))
+                                shortcutPill(key: shortcuts.primaryTitle(.maximize), desc: tr("Toàn màn hình", "Maximize"))
+                                shortcutPill(key: shortcuts.primaryTitle(.center), desc: tr("Căn giữa", "Center"))
+                                shortcutPill(key: shortcuts.primaryTitle(.restoreWindow), desc: tr("Khôi phục kích thước", "Restore size"))
+                                shortcutPill(key: shortcuts.primaryTitle(.topLeft), desc: tr("Góc trên trái", "Top left"))
                             }
                             ShortcutGrid {
-                                shortcutPill(key: "⌥⌘→", desc: tr("Sang màn hình phải", "Next Display"))
-                                shortcutPill(key: "⌥⌘←", desc: tr("Sang màn hình trái", "Previous Display"))
+                                shortcutPill(key: shortcuts.primaryTitle(.nextDisplay), desc: tr("Sang màn hình phải", "Next Display"))
+                                shortcutPill(key: shortcuts.primaryTitle(.previousDisplay), desc: tr("Sang màn hình trái", "Previous Display"))
                             }
                         }
                     }
@@ -1363,7 +1394,7 @@ struct ShortcutsTabView: View {
 
                         // Shortcuts & Quick Actions
                         ShortcutGrid {
-                            shortcutPill(key: clipboardManager.hudShortcut.displayShort, desc: tr("Mở bảng HUD", "Open HUD"))
+                            shortcutPill(key: shortcuts.primaryTitle(.clipboard), desc: tr("Mở bảng HUD", "Open HUD"))
                             shortcutPill(key: "1..9", desc: tr("Dán tức thì", "Instant Paste"))
                             shortcutPill(key: "⌥P", desc: tr("Ghim", "Pin"))
                             shortcutPill(key: "⌥⌫", desc: tr("Xóa", "Delete"))
@@ -1371,22 +1402,6 @@ struct ShortcutsTabView: View {
 
                         // Storage limit + automatic cleanup + HUD shortcut options
                         VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 4) {
-                                Text(tr("Phím mở:", "Open key:"))
-                                    .font(.system(size: FS.caption))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 80, alignment: .leading)
-
-                                optionChip("⌘⇧C", selected: clipboardManager.hudShortcut == .cmdShiftC) {
-                                    clipboardManager.hudShortcut = .cmdShiftC
-                                }
-                                optionChip("⌘⇧V", selected: clipboardManager.hudShortcut == .cmdShiftV) {
-                                    clipboardManager.hudShortcut = .cmdShiftV
-                                }
-
-                                Spacer()
-                            }
-
                             HStack(spacing: 4) {
                                 Text(tr("Giới hạn:", "Max items:"))
                                     .font(.system(size: FS.caption))
@@ -1496,7 +1511,7 @@ struct ShortcutsTabView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "macwindow")
                                     .font(.system(size: FS.caption))
-                                Text(tr("Mở bảng Clipboard HUD (\(clipboardManager.hudShortcut.displayTitle))", "Open Clipboard HUD (\(clipboardManager.hudShortcut.displayTitle))"))
+                                Text(tr("Mở bảng Clipboard HUD (\(shortcuts.primaryTitle(.clipboard)))", "Open Clipboard HUD (\(shortcuts.primaryTitle(.clipboard)))"))
                                     .font(.system(size: FS.caption, weight: .semibold))
                             }
                             .padding(.horizontal, 8)
@@ -1519,7 +1534,7 @@ struct ShortcutsTabView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(tr("Chụp ảnh màn hình (⌘⇧1)", "Screenshot Snipping (⌘⇧1)"))
+                            Text(tr("Chụp ảnh màn hình", "Screenshot Snipping"))
                                 .font(.system(size: FS.label, weight: .semibold))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
@@ -1560,7 +1575,7 @@ struct ShortcutsTabView: View {
 
                         // Shortcuts & Quick Actions Grid
                         ShortcutGrid {
-                            shortcutPill(key: "⌘⇧1", desc: tr("Mở chụp ảnh", "Start Snipping"))
+                            shortcutPill(key: shortcuts.primaryTitle(.screenshot), desc: tr("Mở chụp ảnh", "Start Snipping"))
                             shortcutPill(key: "⌘C", desc: tr("Sao chép ảnh", "Copy Image"))
                             shortcutPill(key: "⌘S", desc: tr("Lưu ảnh PNG", "Save PNG"))
                             shortcutPill(key: "⎋", desc: tr("Huỷ bỏ", "Cancel"))
@@ -1575,7 +1590,7 @@ struct ShortcutsTabView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: FS.caption))
-                                Text(tr("Chụp màn hình ngay (⌘⇧1)", "Capture Screenshot Now (⌘⇧1)"))
+                                Text(tr("Chụp màn hình ngay", "Capture Screenshot Now"))
                                     .font(.system(size: FS.caption, weight: .semibold))
                             }
                             .padding(.horizontal, 8)
@@ -1701,21 +1716,7 @@ struct DisplayCardView: View {
                 )
                 .controlSize(.small)
 
-                // Presets
-                HStack(spacing: 4) {
-                    ForEach([0.25, 0.50, 0.75, 1.0], id: \.self) { val in
-                        Button("\(Int(val * 100))%") {
-                            displayManager.setBrightness(val, for: monitor)
-                        }
-                        .font(.system(size: FS.caption, weight: .medium))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: Rad.sm).fill(Color.primary.opacity(0.05)))
-                        .buttonStyle(.plain)
-                    }
-
-                    Spacer()
-
+                DisplayModeControls(displayID: monitor.id, manager: .shared) {
                     // Disconnect toggle
                     Button {
                         displayManager.toggleConnection(for: monitor)

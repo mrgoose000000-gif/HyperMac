@@ -53,19 +53,13 @@ public final class NativePowerUIClient {
         guard client.responds(to: selSet) else { return false }
         typealias SetFn = @convention(c) (AnyObject, Selector, UInt8, UnsafeMutableRawPointer?) -> Bool
         // Pass NULL for error pointer to avoid any Swift ARC double-free issues
-        let ok = unsafeBitCast(client.method(for: selSet), to: SetFn.self)(client, selSet, UInt8(min(max(limit, 80), 100)), nil)
-
-        // Ensure MCL is also explicitly enabled in powerd (writes byte 1 = 0x01 in SMC CHLT)
-        let selEnable = NSSelectorFromString("enableMCL:")
-        if client.responds(to: selEnable) {
-            typealias EnableFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer?) -> Bool
-            _ = unsafeBitCast(client.method(for: selEnable), to: EnableFn.self)(client, selEnable, nil)
-        }
+        let targetLimit = UInt8(min(max(limit, 80), 100))
+        let ok = unsafeBitCast(client.method(for: selSet), to: SetFn.self)(client, selSet, targetLimit, nil)
 
         if ok {
-            appLog("🔋 NativePowerUIClient: setMCLLimit(\(limit)) + enableMCL succeeded")
+            appLog("🔋 NativePowerUIClient: setMCLLimit(\(targetLimit)) succeeded")
         } else {
-            appLog("⚠️ NativePowerUIClient: setMCLLimit(\(limit)) rejected by system")
+            appLog("⚠️ NativePowerUIClient: setMCLLimit(\(targetLimit)) rejected by system")
         }
         return ok
     }

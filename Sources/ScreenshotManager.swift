@@ -4,40 +4,6 @@ import CoreGraphics
 import SwiftUI
 import Combine
 
-// MARK: - Screenshot Tool & Stroke Models
-
-public enum ScreenshotTool: String, CaseIterable, Sendable {
-    case move       // Move selection box
-    case pen        // Freehand ink
-    case arrow      // Directional pointer arrow
-    case rect       // Rectangle outline
-    case marker     // Semi-transparent highlighter
-}
-
-public struct DrawnStroke: Identifiable, Sendable {
-    public let id: UUID
-    public var tool: ScreenshotTool
-    public var points: [CGPoint] // points relative to the screen frame
-    public var colorHex: String
-    public var lineWidth: CGFloat
-
-    public init(id: UUID = UUID(), tool: ScreenshotTool, points: [CGPoint], colorHex: String, lineWidth: CGFloat) {
-        self.id = id
-        self.tool = tool
-        self.points = points
-        self.colorHex = colorHex
-        self.lineWidth = lineWidth
-    }
-
-    public var color: Color {
-        Color(hex: colorHex)
-    }
-
-    public var nsColor: NSColor {
-        NSColor(hex: colorHex) ?? .systemRed
-    }
-}
-
 public enum ResizeHandle: CaseIterable, Sendable {
     case topLeft, topCenter, topRight
     case midLeft, midRight
@@ -77,7 +43,19 @@ public class ScreenshotManager: ObservableObject {
 
     // Active Capture State
     @Published public var isActive: Bool = false
-    @Published public var screenImage: CGImage? = nil
+    @Published public var screenImage: CGImage? = nil {
+        didSet {
+            blurGeneration &+= 1
+            blurredScreenImage = nil
+            isPreparingBlur = false
+            annotationError = nil
+        }
+    }
+    @Published public private(set) var blurredScreenImage: CGImage?
+    @Published public private(set) var isPreparingBlur = false
+    @Published public private(set) var annotationError: String?
+    private var blurGeneration = 0
+    private let blurQueue = DispatchQueue(label: "com.opensource.hypermac.screenshot.blur", qos: .userInitiated)
     @Published public var screenNSImage: NSImage? = nil
     @Published public var screenFrame: NSRect = .zero
     @Published public var scaleFactor: CGFloat = 2.0
@@ -89,9 +67,36 @@ public class ScreenshotManager: ObservableObject {
     // Annotation Tools & Colors
     @Published public var currentTool: ScreenshotTool = .pen
     @Published public var selectedColorHex: String = "#FF3B30" // Default Red
-    @Published public var strokes: [DrawnStroke] = []
+    @Published public private(set) var strokes: [DrawnStroke] = []
+    private var annotationUndoStack: [[DrawnStroke]] = []
+    public var canUndoAnnotations: Bool {
+        activeStroke != nil || isEditingText || !annotationUndoStack.isEmpty
+    }
     @Published public var activeStroke: DrawnStroke? = nil
     @Published public var isColorPaletteExpanded: Bool = false
+
+    // A native text editor owns keyboard input while a draft is open.
+    @Published public var textDraft = ""
+    @Published public var textFontSize: CGFloat = 22
+    @Published public private(set) var textAnchor: CGPoint?
+    private var editingTextID: UUID?
+    public var isEditingText: Bool { textAnchor != nil }
+    public var canCommitText: Bool { !textDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    public var canExport: Bool {
+        !isPreparingBlur && (!strokes.contains { $0.tool == .blur } || blurredScreenImage != nil)
+    }
+
+    public var draftTextStroke: DrawnStroke? {
+        guard let anchor = textAnchor, canCommitText else { return nil }
+        return DrawnStroke(tool: .text,
+                           points: [anchor, CGPoint(x: selectionRect.maxX, y: selectionRect.maxY)],
+                           colorHex: selectedColorHex, lineWidth: 0, text: textDraft, fontSize: textFontSize)
+    }
+
+    public var previewStrokes: [DrawnStroke] {
+        let committed = strokes.filter { $0.id != editingTextID }
+        return committed + (draftTextStroke.map { [$0] } ?? [])
+    }
 
     // Drag Interaction Tracking
     @Published public var activeHandle: ResizeHandle? = nil
@@ -142,10 +147,10 @@ public class ScreenshotManager: ObservableObject {
 
         // 1. Identify screen under mouse cursor
         let mouseLoc = NSEvent.mouseLocation
-        let targetScreen = NSScreen.screens.first { $0.frame.contains(mouseLoc) }
+        guard let targetScreen = (NSScreen.screens.first { $0.frame.contains(mouseLoc) }
             ?? NSScreen.screens.first { NSMouseInRect(mouseLoc, $0.frame, false) }
             ?? NSScreen.main
-            ?? NSScreen.screens[0]
+            ?? NSScreen.screens.first) else { return }
 
         let frame = targetScreen.frame
         self.screenFrame = frame
@@ -162,10 +167,10 @@ public class ScreenshotManager: ObservableObject {
         self.screenNSImage = nsImg
 
         // Reset state
+        cancelTextEditing()
         self.selectionRect = .zero
         self.hasSelection = false
-        self.strokes = []
-        self.activeStroke = nil
+        resetAnnotations()
         self.currentTool = .pen
         self.selectedColorHex = "#FF3B30"
         self.isColorPaletteExpanded = false
@@ -182,7 +187,8 @@ public class ScreenshotManager: ObservableObject {
     // MARK: - Capture Screen CGImage
 
     private func captureScreenImage(screen: NSScreen) -> CGImage? {
-        let primaryH = NSScreen.screens[0].frame.height
+        guard let primary = NSScreen.screens.first else { return nil }
+        let primaryH = primary.frame.height
         let f = screen.frame
         let cgRect = CGRect(
             x: f.origin.x,
@@ -215,18 +221,19 @@ public class ScreenshotManager: ObservableObject {
         let nextIndex = (currentIndex + 1) % screens.count
         let nextScreen = screens[nextIndex]
 
-        self.screenFrame = nextScreen.frame
         guard let capturedImage = captureScreenImage(screen: nextScreen) else { return }
+        cancelTextEditing()
+        self.screenFrame = nextScreen.frame
         self.screenImage = capturedImage
         self.scaleFactor = CGFloat(capturedImage.width) / nextScreen.frame.width
         self.screenNSImage = NSImage(cgImage: capturedImage, size: nextScreen.frame.size)
 
         self.selectionRect = .zero
         self.hasSelection = false
-        self.strokes = []
-        self.activeStroke = nil
+        resetAnnotations()
 
         createOrUpdateOverlayPanel(on: nextScreen)
+        if currentTool == .blur { prepareBlur() }
     }
 
     // MARK: - Overlay Window Presentation
@@ -238,12 +245,7 @@ public class ScreenshotManager: ObservableObject {
             overlayPanel = nil
         }
 
-        let panel = NSPanel(
-            contentRect: screen.frame,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
+        let panel = ScreenshotOverlayPanel(contentRect: screen.frame)
         panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.isFloatingPanel = true
@@ -266,6 +268,7 @@ public class ScreenshotManager: ObservableObject {
     // MARK: - Cancel Capture
 
     public func cancelCapture() {
+        cancelTextEditing()
         if let panel = overlayPanel {
             panel.orderOut(nil)
             panel.contentView = nil
@@ -275,8 +278,7 @@ public class ScreenshotManager: ObservableObject {
         gIsScreenshotActive = false
         self.screenImage = nil
         self.screenNSImage = nil
-        self.strokes = []
-        self.activeStroke = nil
+        resetAnnotations()
         self.selectionRect = .zero
         self.hasSelection = false
         self.isSpaceHeld = false
@@ -285,18 +287,137 @@ public class ScreenshotManager: ObservableObject {
     // MARK: - Stroke Management
 
     public func undoLastStroke() {
-        if !strokes.isEmpty {
-            strokes.removeLast()
-        }
+        // The visible draft/gesture is newer than every committed annotation.
+        // Cancel only that operation; never also remove the preceding stroke.
+        if isEditingText { cancelTextEditing(); return }
+        if activeStroke != nil { activeStroke = nil; return }
+        guard let previous = annotationUndoStack.popLast() else { return }
+        strokes = previous
+    }
+
+    public func resetAnnotations() {
+        cancelTextEditing()
+        annotationUndoStack.removeAll()
+        activeStroke = nil
+        strokes = []
     }
 
     public func clearAllStrokes() {
-        strokes.removeAll()
+        cancelTextEditing()
+        activeStroke = nil
+        replaceAnnotations(with: [])
+    }
+
+    /// Record one completed user operation before publishing the new drawing.
+    /// Avoid property-observer history and leave in-progress gestures out of the stack.
+    private func replaceAnnotations(with next: [DrawnStroke]) {
+        guard next != strokes else { return }
+        annotationUndoStack.append(strokes)
+        if annotationUndoStack.count > 100 { annotationUndoStack.removeFirst() }
+        strokes = next
+    }
+
+    func appendStroke(_ stroke: DrawnStroke) {
+        replaceAnnotations(with: strokes + [stroke])
+    }
+
+    func finishActiveStroke() {
+        guard let stroke = activeStroke else { return }
+        activeStroke = nil
+        if stroke.tool == .blur {
+            let bounds = ScreenshotAnnotationRenderer.rectangle(for: stroke)
+            guard bounds.width >= 3, bounds.height >= 3 else { return }
+        }
+        appendStroke(stroke)
+    }
+
+    // MARK: - Text and Blur Tools
+
+    public func selectTool(_ tool: ScreenshotTool) {
+        commitTextEditing()
+        activeStroke = nil
+        annotationError = nil
+        currentTool = tool
+        if tool == .blur { prepareBlur() }
+    }
+
+    public func beginText(at point: CGPoint) {
+        guard selectionRect.contains(point) else { return }
+        commitTextEditing()
+        if let existing = strokes.last(where: {
+            $0.tool == .text && ScreenshotAnnotationRenderer.textBounds(for: $0).contains(point)
+        }) {
+            editingTextID = existing.id
+            textAnchor = existing.points.first
+            textDraft = existing.text
+            textFontSize = existing.fontSize
+            selectedColorHex = existing.colorHex
+        } else {
+            editingTextID = nil
+            textAnchor = CGPoint(x: min(point.x, max(selectionRect.minX, selectionRect.maxX - 40)),
+                                 y: min(point.y, max(selectionRect.minY, selectionRect.maxY - textFontSize * 1.5)))
+            textDraft = ""
+        }
+        isSpaceHeld = false
+        gIsSpacePressed = false
+        gIsScreenshotEditingText = true
+    }
+
+    public func commitTextEditing() {
+        guard isEditingText else { return }
+        if let draft = draftTextStroke {
+            if let id = editingTextID, let index = strokes.firstIndex(where: { $0.id == id }) {
+                // Keep the original ID when editing an existing annotation.
+                var updated = strokes
+                updated[index] = DrawnStroke(id: id, tool: .text, points: draft.points,
+                    colorHex: draft.colorHex, lineWidth: 0, text: draft.text, fontSize: draft.fontSize)
+                replaceAnnotations(with: updated)
+            } else {
+                appendStroke(draft)
+            }
+        }
+        cancelTextEditing()
+    }
+
+    public func cancelTextEditing() {
+        textAnchor = nil
+        editingTextID = nil
+        textDraft = ""
+        isSpaceHeld = false
+        gIsSpacePressed = false
+        gIsScreenshotEditingText = false
+    }
+
+    /// Filter the frozen image once per capture, off the main thread. Both preview and export use it.
+    public func prepareBlur() {
+        guard blurredScreenImage == nil, !isPreparingBlur, let image = screenImage else { return }
+        annotationError = nil
+        isPreparingBlur = true
+        let generation = blurGeneration
+        let scale = scaleFactor
+        blurQueue.async { [weak self] in
+            let result = ScreenshotAnnotationRenderer.pixelated(image, scale: scale)
+            DispatchQueue.main.async {
+                guard let self, self.blurGeneration == generation else { return }
+                self.isPreparingBlur = false
+                self.blurredScreenImage = result
+                if result == nil {
+                    self.annotationError = tr("Không tạo được vùng làm mờ. Chọn Làm mờ để thử lại.",
+                                              "Could not prepare blur. Select Blur to retry.")
+                }
+            }
+        }
     }
 
     // MARK: - High-Res Composite Render Engine (Maximum Retina Quality)
 
     public func renderCompositeImage() -> CGImage? {
+        commitTextEditing()
+        guard canExport else {
+            annotationError = tr("Chưa thể xuất vùng làm mờ. Hãy thử lại công cụ Làm mờ.",
+                                 "Blur is not ready. Please try the Blur tool again.")
+            return nil
+        }
         guard let baseCG = screenImage else { return nil }
         guard selectionRect.width >= 5 && selectionRect.height >= 5 else { return nil }
 
@@ -338,9 +459,11 @@ public class ScreenshotManager: ObservableObject {
         ctx.scaleBy(x: scale, y: scale)
         ctx.translateBy(x: -selectionRect.origin.x, y: -selectionRect.origin.y)
 
+        ctx.clip(to: selectionRect)
+
         // Render each stroke
         for stroke in strokes {
-            drawStroke(stroke, in: ctx)
+            ScreenshotAnnotationRenderer.draw(stroke, in: ctx, blurredImage: blurredScreenImage, scale: scale)
         }
 
         ctx.restoreGState()
@@ -348,88 +471,10 @@ public class ScreenshotManager: ObservableObject {
         return ctx.makeImage()
     }
 
-    private func drawStroke(_ stroke: DrawnStroke, in ctx: CGContext) {
-        guard !stroke.points.isEmpty else { return }
-
-        ctx.saveGState()
-        ctx.setStrokeColor(stroke.nsColor.cgColor)
-        ctx.setFillColor(stroke.nsColor.cgColor)
-        ctx.setLineCap(.round)
-        ctx.setLineJoin(.round)
-        ctx.setLineWidth(stroke.lineWidth)
-
-        if stroke.tool == .marker {
-            ctx.setAlpha(0.38)
-        } else {
-            ctx.setAlpha(1.0)
-        }
-
-        switch stroke.tool {
-        case .pen, .marker:
-            ctx.beginPath()
-            ctx.move(to: stroke.points[0])
-            for pt in stroke.points.dropFirst() {
-                ctx.addLine(to: pt)
-            }
-            ctx.strokePath()
-
-        case .arrow:
-            guard stroke.points.count >= 2 else { break }
-            let start = stroke.points[0]
-            let end = stroke.points[stroke.points.count - 1]
-
-            // Main arrow line
-            ctx.beginPath()
-            ctx.move(to: start)
-            ctx.addLine(to: end)
-            ctx.strokePath()
-
-            // Arrow head wings
-            let angle = atan2(end.y - start.y, end.x - start.x)
-            let arrowLength: CGFloat = max(12, stroke.lineWidth * 3.5)
-            let arrowAngle: CGFloat = .pi / 6
-
-            let p1 = CGPoint(
-                x: end.x - arrowLength * cos(angle - arrowAngle),
-                y: end.y - arrowLength * sin(angle - arrowAngle)
-            )
-            let p2 = CGPoint(
-                x: end.x - arrowLength * cos(angle + arrowAngle),
-                y: end.y - arrowLength * sin(angle + arrowAngle)
-            )
-
-            ctx.beginPath()
-            ctx.move(to: p1)
-            ctx.addLine(to: end)
-            ctx.addLine(to: p2)
-            ctx.strokePath()
-
-        case .rect:
-            guard stroke.points.count >= 2 else { break }
-            let p1 = stroke.points[0]
-            let p2 = stroke.points[stroke.points.count - 1]
-            let rect = CGRect(
-                x: min(p1.x, p2.x),
-                y: min(p1.y, p2.y),
-                width: abs(p2.x - p1.x),
-                height: abs(p2.y - p1.y)
-            )
-            ctx.stroke(rect, width: stroke.lineWidth)
-
-        case .move:
-            break
-        }
-
-        ctx.restoreGState()
-    }
-
     // MARK: - Copy Action (⌘C / LightShot Style)
 
     public func copyToClipboard() {
-        guard let finalCG = renderCompositeImage() else {
-            cancelCapture()
-            return
-        }
+        guard let finalCG = renderCompositeImage() else { return }
 
         let rep = NSBitmapImageRep(cgImage: finalCG)
         rep.size = NSSize(width: selectionRect.width, height: selectionRect.height) // High DPI metadata
@@ -456,10 +501,7 @@ public class ScreenshotManager: ObservableObject {
     // MARK: - Save Action (⌘V / ⌘S -> Downloads/Screenshots)
 
     public func saveToDownloads() {
-        guard let finalCG = renderCompositeImage() else {
-            cancelCapture()
-            return
-        }
+        guard let finalCG = renderCompositeImage() else { return }
 
         let rep = NSBitmapImageRep(cgImage: finalCG)
         rep.size = NSSize(width: selectionRect.width, height: selectionRect.height)
@@ -496,37 +538,16 @@ public class ScreenshotManager: ObservableObject {
     }
 }
 
-// MARK: - Hex Color Helper for AppKit & SwiftUI
+// Borderless NSPanel does not become key by default. The screenshot overlay must
+// own keyboard focus for NSTextView/IME instead of leaving keys in the previous app.
+final class ScreenshotOverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
 
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: clean).scanHexInt64(&int)
-        let r, g, b: Double
-        if clean.count == 6 {
-            r = Double((int >> 16) & 0xFF) / 255.0
-            g = Double((int >> 8) & 0xFF) / 255.0
-            b = Double(int & 0xFF) / 255.0
-        } else {
-            r = 1.0; g = 0.23; b = 0.19
-        }
-        self.init(red: r, green: g, blue: b)
-    }
-}
-
-private extension NSColor {
-    convenience init?(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&int) else { return nil }
-        if clean.count == 6 {
-            let r = CGFloat((int >> 16) & 0xFF) / 255.0
-            let g = CGFloat((int >> 8) & 0xFF) / 255.0
-            let b = CGFloat(int & 0xFF) / 255.0
-            self.init(srgbRed: r, green: g, blue: b, alpha: 1.0)
-        } else {
-            self.init(srgbRed: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
-        }
+    init(contentRect: NSRect) {
+        super.init(contentRect: contentRect, styleMask: [.borderless], backing: .buffered, defer: false)
+        becomesKeyOnlyIfNeeded = false
+        hidesOnDeactivate = false
+        isReleasedWhenClosed = false
     }
 }

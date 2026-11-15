@@ -21,6 +21,7 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("IOKit"),
             ]
-        )
+        ),
+        .testTarget(name: "ScreenshotAnnotationTests", dependencies: ["HyperMac"], path: "Tests/ScreenshotAnnotationTests")
     ]
 )
