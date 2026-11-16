@@ -137,4 +137,28 @@ public final class AppleSMCClient: @unchecked Sendable {
         guard sz > 0 && sz <= 32, let val = call(cmd: 5, key: code, size: UInt32(sz)) else { return nil }
         return Array(val[48..<(48 + sz)])
     }
+
+    /// Khóa SMC có tồn tại không (runtime feature-detection trên cả Intel lẫn Apple Silicon).
+    /// Trả `false` nếu khóa không tồn tại hoặc rỗng ("no data") — giúp UI ẩn tính năng không hỗ trợ
+    /// (ví dụ khóa sạc Intel cần `BCLM`, nhiều máy Intel không có).
+    public func keyExists(_ keyName: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let code = Self.fourCC(keyName)
+        guard let info = call(cmd: 9, key: code) else { return false }
+        let sz = Int(Self.u32(info, 28))
+        return sz > 0 && sz <= 32
+    }
+
+    /// Đọc một khóa SMC dạng float32 (little-endian) => `Double`; `nil` nếu khóa không tồn tại.
+    /// Dùng cho cảm biến nhiệt Intel (`TC0C`, `TG0P`, `TB0T`, ... — kiểu `flt ` 4 byte).
+    /// Không tự khóa `lock` vì `readKeyBytes` đã khóa bên trong (tránh NSLock không reentrant).
+    public func readFloat(_ keyName: String) -> Double? {
+        guard let bytes = readKeyBytes(keyName), bytes.count >= 4 else { return nil }
+        let u = UInt32(bytes[0])
+            | (UInt32(bytes[1]) << 8)
+            | (UInt32(bytes[2]) << 16)
+            | (UInt32(bytes[3]) << 24)
+        return Double(Float(bitPattern: u))
+    }
 }
