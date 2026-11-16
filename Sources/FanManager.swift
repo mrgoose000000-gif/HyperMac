@@ -202,7 +202,7 @@ public final class FanManager: ObservableObject {
         guard isAvailable else { return }
         let count = max(1, min(fanCount, 4))
         for i in 0..<count {
-            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) 2>/dev/null")
+            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) \(minRPM) 2>/dev/null")
         }
         mode = .system
         targetRPM = 0
@@ -212,7 +212,7 @@ public final class FanManager: ObservableObject {
 
     private func restoreAllFansAutoAsync() {
         let count = max(1, min(fanCount, 4))
-        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0)" }.joined(separator: " && ")
+        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0) \(minRPM)" }.joined(separator: " && ")
         DispatchQueue.global(qos: .userInitiated).async {
             _ = shell(cmds + " 2>&1")
         }

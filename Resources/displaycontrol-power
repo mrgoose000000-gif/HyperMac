@@ -29,6 +29,18 @@ check_key_exists() {
     fi
 }
 
+# Gia tri so cua key `smc -r`: token so dau tien trong dong.
+# (Type 'flt ' co trailing space => gia tri o cot 4; 'fpe2'/'sp78' khong space => cot 3.
+#  Dung `int($4)` se cho 0 voi fpe2 tren Intel -> "fan range unavailable".)
+smc_num() {
+    "$SMC" -k "$1" -r 2>/dev/null | awk '{ for (i=1;i<=NF;i++) if ($i ~ /^[0-9]/) { print int($i); exit } }'
+}
+
+# RPM -> fpe2 2-byte hex (MSB-first), dung cho `smc -k FnMn -w`. Vi du 4500 -> 4650.
+fpe2hex() {
+    printf "%04x" $(( 10#$1 * 4 ))
+}
+
 case "$1" in
     status)
         BYPASSED=0
@@ -190,7 +202,7 @@ case "$1" in
         echo "MODE:" $("$SMC" -k "F${ID}Md" -r 2>/dev/null || true)
         ;;
     version)
-        echo "HELPER_VERSION:3"
+        echo "HELPER_VERSION:7"
         ;;
     fan-set)
         ID="${2:-0}"
@@ -202,52 +214,65 @@ case "$1" in
             "$SMC" -k Ftst -w 01 >/dev/null 2>&1 || true
         fi
         if [ "$ID" = "all" ]; then
-            FNUM=$("$SMC" -k FNum -r 2>/dev/null | awk '{print int($4)}')
+            FNUM=$(smc_num FNum)
             FNUM="${FNUM:-1}"
             I=0
             while [ "$I" -lt "$FNUM" ] && [ "$I" -lt 4 ]; do
-                FMIN=$("$SMC" -k "F${I}Mn" -r 2>/dev/null | awk '{print int($4)}')
-                FMAX=$("$SMC" -k "F${I}Mx" -r 2>/dev/null | awk '{print int($4)}')
-                if [ -n "$FMIN" ] && [ -n "$FMAX" ] && [ "$FMAX" -gt 0 ]; then
-                    CLAMPED="$RPM"
-                    if [ "$CLAMPED" -lt "$FMIN" ]; then CLAMPED="$FMIN"; fi
-                    if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
-                    HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
-                    "$SMC" -k "F${I}Md" -w 01 >/dev/null 2>&1 || true
-                    "$SMC" -k "F${I}Tg" -w "$HEX" >/dev/null 2>&1 || true
+                if check_key_exists "F0Ac"; then
+                    # Ghi dung RPM app gui (app da clamp sang [min,max] tu nhien tai startup).
+                    # KHONG doc F{}Mn/F{}Mx de re-clamp: F{}Mn dang noi phan da gan truoc do,
+                    # doc lai se chan khong cho HA RPM (fan ke lo o muc cu).
+                    CLAMPED=$((10#$RPM)); [ "$CLAMPED" -le 0 ] && CLAMPED=1200; [ "$CLAMPED" -gt 65000 ] && CLAMPED=65000
+                    if check_key_exists "F${I}Md"; then
+                        HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
+                        "$SMC" -k "F${I}Md" -w 01 >/dev/null 2>&1 || true
+                        "$SMC" -k "F${I}Tg" -w "$HEX" >/dev/null 2>&1 || true
+                    else
+                        # Khong co F{}Md (vd MacBook Air): clamp min speed F{}Mn = RPM (cung co che smcFanControl).
+                        "$SMC" -k "F${I}Mn" -w "$(fpe2hex "$CLAMPED")" >/dev/null 2>&1 || true
+                    fi
                 fi
                 I=$((I + 1))
             done
             echo "FAN_SET_OK"
         else
-            FMIN=$("$SMC" -k "F${ID}Mn" -r 2>/dev/null | awk '{print int($4)}')
-            FMAX=$("$SMC" -k "F${ID}Mx" -r 2>/dev/null | awk '{print int($4)}')
-            if [ -z "$FMIN" ] || [ -z "$FMAX" ] || [ "$FMAX" -le 0 ]; then
-                echo "ERROR: fan range unavailable"; exit 3
+            # Ghi dung RPM app gui; khong doc F0Mn/F0Mx de re-clamp (se chan khong ha duoc rpm).
+            CLAMPED=$((10#$RPM))
+            if [ "$CLAMPED" -le 0 ]; then CLAMPED=1200; fi
+            if [ "$CLAMPED" -gt 65000 ]; then CLAMPED=65000; fi
+            if check_key_exists "F${ID}Md"; then
+                # float32 little-endian hex (vd 3000 -> 00803b45)
+                HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
+                "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
+                "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
+            else
+                # Khong co F0Md (MacBook Air): dieu khien bang cach clamp min speed F0Mn = RPM
+                # (cung co che smcFanControl / Macs Fan Control cho may kieu nay).
+                "$SMC" -k "F${ID}Mn" -w "$(fpe2hex "$CLAMPED")" >/dev/null 2>&1 || { echo "ERROR: min speed write failed"; exit 4; }
             fi
-            CLAMPED="$RPM"
-            if [ "$CLAMPED" -lt "$FMIN" ]; then CLAMPED="$FMIN"; fi
-            if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
-            # float32 little-endian hex (vd 3000 -> 00803b45)
-            HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
-            "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
-            "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
             echo "FAN_SET_OK"
         fi
         ;;
     fan-auto)
-        ID="${2:-all}"
+        ID="${2:-all}"; MINVAL="${3:-}"
         case "$ID" in [0-3]|all) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
         if [ "$ID" = "all" ]; then
             for I in 0 1 2 3; do
                 if check_key_exists "F${I}Md"; then
                     "$SMC" -k "F${I}Md" -w 00 >/dev/null 2>&1 || true
                     "$SMC" -k "F${I}Tg" -w 00000000 >/dev/null 2>&1 || true
+                elif [ -n "$MINVAL" ]; then
+                    # Khong co F0Md (MBA): tra F0Mn ve min tu nhien -> quat ve auto
+                    "$SMC" -k "F${I}Mn" -w "$(fpe2hex "$MINVAL")" >/dev/null 2>&1 || true
                 fi
             done
         else
-            "$SMC" -k "F${ID}Md" -w 00 >/dev/null 2>&1 || true
-            "$SMC" -k "F${ID}Tg" -w 00000000 >/dev/null 2>&1 || true
+            if check_key_exists "F${ID}Md"; then
+                "$SMC" -k "F${ID}Md" -w 00 >/dev/null 2>&1 || true
+                "$SMC" -k "F${ID}Tg" -w 00000000 >/dev/null 2>&1 || true
+            elif [ -n "$MINVAL" ]; then
+                "$SMC" -k "F${ID}Mn" -w "$(fpe2hex "$MINVAL")" >/dev/null 2>&1 || true
+            fi
         fi
         if check_key_exists "Ftst"; then
             "$SMC" -k Ftst -w 00 >/dev/null 2>&1 || true
