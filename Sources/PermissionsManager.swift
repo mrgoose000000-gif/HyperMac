@@ -18,6 +18,26 @@ public struct PermissionDetailItem: Identifiable, Sendable {
     public let settingsURLString: String
 }
 
+// MARK: - Bluetooth Primer Delegate (trigger TCC registration cho Privacy → Bluetooth)
+
+/// Delegate nhỏ chỉ để kích hoạt quyền Bluetooth: khi `.poweredOn` thì scan một
+/// nhịp ngắn (0.3s) rồi stop — đủ để macOS đăng ký app vào System Settings →
+/// Privacy → Bluetooth và hiện prompt, không giữ scan để tiết kiệm pin.
+private final class BluetoothPrimerDelegate: NSObject, CBCentralManagerDelegate {
+    private var started = false
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard !started else { return }
+        started = true
+        if central.state == .poweredOn {
+            central.scanForPeripherals(withServices: nil, options: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak central] in
+                central?.stopScan()
+            }
+        }
+    }
+}
+
 // MARK: - Permissions Manager (Centralized TCC & System Permissions Hub)
 
 @MainActor
@@ -36,6 +56,11 @@ public class PermissionsManager: ObservableObject {
     private var isFirstCheck = true
     private var isPopoverVisible = false
     private var activeObserver: NSObjectProtocol?
+
+    // Giữ reference tới CBCentralManager primer để manager không bị dealloc ngay
+    // sau khi trigger (nếu không prompt/danh sách Bluetooth có thể không kích hoạt).
+    private var centralManager: CBCentralManager?
+    private let btPrimerDelegate = BluetoothPrimerDelegate()
 
     public var allGranted: Bool {
         hasAccessibility && hasScreenCapture && hasSMCHelper
@@ -164,7 +189,13 @@ public class PermissionsManager: ObservableObject {
     }
 
     public func openScreenCaptureSettings() {
-        CGRequestScreenCaptureAccess()
+        // PHẢI gọi khi app đang frontmost: macOS chỉ đăng ký row Screen Recording nếu request
+        // đến từ app active (nếu gọi lúc chạy nền -> không tạo entry trong Settings). Activate
+        // trước, rồi mới request, rồi mới mở Settings (mẫu Omi PR #9265 đã verify runtime).
+        NSApp.activate(ignoringOtherApps: true)
+        if !CGPreflightScreenCaptureAccess() {
+            _ = CGRequestScreenCaptureAccess()
+        }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
         }
@@ -181,5 +212,24 @@ public class PermissionsManager: ObservableObject {
             NSWorkspace.shared.open(url)
         }
     }
+
+    /// Xin-trước Bluetooth + cập nhật trạng thái ngay khi app khởi động.
+    ///
+    /// Screen Recording KHÔNG xin ở đây: app chạy nền (không frontmost) khiến macOS bỏ qua
+    /// việc đăng ký row Screen Recording — phải gọi khi app đang active/frontmost (điển hình
+    /// là lúc mở popover hoặc bấm "Cấp quyền", xem `openScreenCaptureSettings`). Ở launch chỉ
+    /// đọc trạng thái. Bluetooth thì kích hoạt được ngay cả khi app chưa frontmost.
+    public func primeScreenAndBluetoothOnce() {
+        refreshStatus()
+
+        if CBCentralManager.authorization != .allowedAlways {
+            if centralManager == nil {
+                centralManager = CBCentralManager(delegate: btPrimerDelegate, queue: DispatchQueue.main, options: nil)
+            }
+        }
+    }
+
+    /// Buộc macOS đăng ký Screen Recording bằng một lần capture trong ngữ cảnh Frontmost.
+    /// Giữ nguyên: không dùng — việc đăng ký đã do `openScreenCaptureSettings` (activate-then-request) xử lý.
 }
 

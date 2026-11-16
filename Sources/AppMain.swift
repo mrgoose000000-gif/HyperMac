@@ -71,6 +71,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Tự khôi phục quyền Accessibility nếu vừa update làm mất quyền
         AccessibilityRecovery.handleLaunch()
 
+        // Xin-trước Screen Recording + Bluetooth (1 lần/phiên bản) để macOS tự thêm
+        // app vào Privacy → Screen Recording / Bluetooth ngay, không phải chờ user dùng tính năng.
+        _ = PermissionsManager.shared
+        PermissionsManager.shared.primeScreenAndBluetoothOnce()
+
         // Start Global Key Interceptor (F1/F2, AltTab, Snapping, Clipboard)
         KeyInterceptor.shared.start()
 
