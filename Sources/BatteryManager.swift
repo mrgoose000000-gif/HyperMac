@@ -574,9 +574,30 @@ public class BatteryManager: ObservableObject {
             return
         }
 
-        setIfChanged(&self.currentLevel, dict["CurrentCapacity"] as? Int ?? self.currentLevel)
+        // Mức pin % — đơn vị KHÁC giữa hai dòng Mac:
+        //  - Apple Silicon: `CurrentCapacity`/`MaxCapacity` ĐÃ là phần trăm (0-100).
+        //  - Intel (x86_64): `CurrentCapacity`/`MaxCapacity` là mAh (vd 4941 / 5110) → phải quy đổi về %.
+        // Chuẩn hóa cả hai để không bị số "4941%" như trước trên Intel (tránh hỏng thanh % lẫn logic khóa sạc).
+        if let cur = dict["CurrentCapacity"] as? Int {
+            let mx = dict["MaxCapacity"] as? Int ?? 0
+            let pct: Int
+            if mx > 100 {
+                pct = mx > 0 ? min(100, Int((Double(cur) / Double(mx) * 100.0).rounded())) : cur
+            } else if cur <= 100 {
+                pct = cur
+            } else {
+                pct = min(100, cur)
+            }
+            setIfChanged(&self.currentLevel, max(0, pct))
+        }
         setIfChanged(&self.maxCapacityPercent, dict["MaxCapacity"] as? Int ?? 100)
-        setIfChanged(&self.nominalCapacity, dict["NominalChargeCapacity"] as? Int ?? self.nominalCapacity)
+        // Health: `NominalChargeCapacity` có sẵn trên Apple Silicon, nhưng KHÔNG tồn tại trên
+        // Intel (x86) → fallback sang `AppleRawMaxCapacity` (mAh). Nếu không, healthPercent giữ
+        // mặc định 100% một cách sai trên Intel.
+        let nominalRaw = dict["NominalChargeCapacity"] as? Int ?? (dict["AppleRawMaxCapacity"] as? Int ?? 0)
+        if nominalRaw > 0 {
+            setIfChanged(&self.nominalCapacity, nominalRaw)
+        }
         setIfChanged(&self.designCapacity, dict["DesignCapacity"] as? Int ?? self.designCapacity)
         setIfChanged(&self.cycleCount, dict["CycleCount"] as? Int ?? self.cycleCount)
         let rawCharging = dict["IsCharging"] as? Bool ?? false
@@ -767,6 +788,18 @@ public class BatteryManager: ObservableObject {
         }
 
         return foundKey ? bypassed : nil
+    }
+
+    /// Máy có khả năng hạn chế sạc không? Có khóa SMC (CHTE/CH0B/bfF0 Apple Silicon
+    /// hoặc BCLM Intel) hoặc PowerUI MCL hỗ trợ. Nhiều Mac Intel không có khóa nào
+    /// → UI ẩn khối khóa sạc thay vì bấm rồi mới báo lỗi helper (fix ẩn ở Views.swift).
+    /// Computed an toàn: không đổi trạng thái, không khởi tạo thêm state.
+    public var chargeLimitSupported: Bool {
+        NativePowerUIClient.shared.isSupported ||
+            smcClient.keyExists("CHTE") ||
+            smcClient.keyExists("CH0B") ||
+            smcClient.keyExists("bfF0") ||
+            smcClient.keyExists("BCLM")
     }
 
     public func checkSMCBypassStatus() {

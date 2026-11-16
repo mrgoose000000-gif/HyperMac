@@ -2061,6 +2061,7 @@ struct BatteryCardView: View {
     // SUB-TAB 0: NGUỒN SMC
     private var powerOverviewSubTab: some View {
         VStack(spacing: 7) {
+            if batteryManager.chargeLimitSupported {
             if !batteryManager.isHelperInstalled {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
@@ -2191,6 +2192,19 @@ struct BatteryCardView: View {
                 Spacer()
                 Text(tr("Khi cần mang máy ra ngoài", "When taking laptop on the go")).font(.system(size: FS.caption)).foregroundStyle(.tertiary)
                     .lineLimit(1).minimumScaleFactor(0.7).layoutPriority(-1)
+            }
+
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.slash")
+                        .font(.system(size: FS.body))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    Text(tr("Máy này không hỗ trợ khóa sạc ở mức phần cứng (thiếu SMC key BCLM/CHTE).", "This Mac doesn't support hardware charge limiting (no BCLM/CHTE SMC key)."))
+                        .font(.system(size: FS.caption))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             // Toggles

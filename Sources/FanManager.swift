@@ -18,6 +18,10 @@ private final class SMCFanReader {
 
     private static func fourCC(_ s: String) -> UInt32 { s.utf8.reduce(0) { $0 << 8 | UInt32($1) } }
 
+    private static func u32(_ b: [UInt8], _ o: Int) -> UInt32 {
+        b[o..<o + 4].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+    }
+
     private func readBytes(key: String, size: UInt32) -> [UInt8]? {
         guard conn != 0 else { return nil }
         var inp = [UInt8](repeating: 0, count: 80)
@@ -32,16 +36,54 @@ private final class SMCFanReader {
         return Array(out[48..<48 + Int(size)])
     }
 
-    func readFanCount() -> Int {
-        guard let b = readBytes(key: "FNum", size: 1), let count = b.first else { return 0 }
-        return Int(count)
+    /// Probe thông tin khóa (cmd 9): trả `(type4CC, dataSize)` hoặc nil nếu khóa không tồn tại.
+    private func keyInfo(_ key: String) -> (type: String, size: Int)? {
+        guard conn != 0 else { return nil }
+        var inp = [UInt8](repeating: 0, count: 80)
+        let code = Self.fourCC(key)
+        withUnsafeBytes(of: code) { inp.replaceSubrange(0..<4, with: $0) }
+        inp[42] = 9 // kSMCReadKeyInfo
+        var out = [UInt8](repeating: 0, count: 80)
+        var outSize = 80
+        let kr = IOConnectCallStructMethod(conn, 2, inp, 80, &out, &outSize)
+        guard kr == KERN_SUCCESS && out[40] == 0 else { return nil }
+        let sz = Int(Self.u32(out, 28))
+        guard sz > 0 && sz <= 32 else { return nil }
+        let type = String(bytes: out[32..<36], encoding: .ascii) ?? ""
+        return (type, sz)
     }
 
+    /// Đọc giá trị số của khóa, tự nhận kiểu dữ liệu thật (quan trọng cho Intel):
+    ///   - `flt ` (4-byte float32) — fan keys trên Apple Silicon
+    ///   - `fpe2` (2-byte 12.2 fixed) — fan keys trên Intel (F0Ac/F0Mn/F0Mx)
+    ///   - `sp78` (2-byte 8.8 fixed) — vài cảm biến Intel
+    /// Đọc sai kiểu (mặc định float32 cho mọi key) sẽ ra NaN/rác trên Intel → crash.
     func readFloat(key: String) -> Double {
-        guard let b = readBytes(key: key, size: 4), b.count == 4 else { return 0 }
-        let bits = b.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
-        let val = Double(Float(bitPattern: bits))
-        return val.isFinite && val >= 0 ? val : 0
+        guard conn != 0, let info = keyInfo(key),
+              let b = readBytes(key: key, size: UInt32(info.size)), b.count >= info.size else { return 0 }
+        let value: Double
+        if info.type == "flt " && info.size == 4 {
+            let bits = b.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+            value = Double(Float(bitPattern: bits))
+        } else if info.type == "sp78" && info.size == 2 {
+            value = Double(Int8(bitPattern: b[0])) + Double(b[1]) / 256.0
+        } else if info.size == 2 {
+            // fpe2 (và fixed-point 2 byte khác) SMC là MSB-first: byte0 = phần cao.
+            // F0Ac "12 bc" = 0x12bc/4 = 1199; decode little-endian sẽ đảo -> rác.
+            let u = (UInt16(b[0]) << 8) | UInt16(b[1])
+            value = Double(u) / 4.0
+        } else if info.size == 4 {
+            let bits = b.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+            value = Double(Float(bitPattern: bits))
+        } else {
+            value = 0
+        }
+        return value.isFinite && value >= 0 ? value : 0
+    }
+
+    func readFanCount() -> Int {
+        guard conn != 0, let b = readBytes(key: "FNum", size: 1), let count = b.first else { return 0 }
+        return Int(count)
     }
 }
 
@@ -107,11 +149,12 @@ public final class FanManager: ObservableObject {
     // MARK: - Percent <-> RPM
 
     public func percent(forRPM rpm: Double) -> Int {
-        guard maxRPM > 0 else { return 0 }
+        // Guard NaN/Inf: `Int(Double.nan)` trap (SIGILL) khi mở thẻ quạt nếu RPM đọc ra rác.
+        guard maxRPM > 0, rpm.isFinite, rpm >= 0 else { return 0 }
         return Int((rpm / maxRPM * 100).rounded())
     }
 
-    public var minPercent: Int { percent(forRPM: minRPM) }
+    public var minPercent: Int { min(percent(forRPM: minRPM), 100) }
 
     public func rpm(forPercent pct: Double) -> Double {
         let raw = maxRPM * pct / 100
@@ -279,6 +322,9 @@ public final class FanManager: ObservableObject {
                 mx = FanManager.parseFloat(shell("'\(smc)' -k F\(i)Mx -r 2>/dev/null").0)
             }
             if mx > 0 {
+                // Phòng dữ liệu lỗi: minRPM không được > maxRPM (nếu không minPercent>100
+                // làm SwiftUI Slider range lower>upper → trap SIGILL khi mở thẻ quạt).
+                if mn > mx { swap(&mn, &mx) }
                 ranges.append((min: mn, max: mx))
             }
         }

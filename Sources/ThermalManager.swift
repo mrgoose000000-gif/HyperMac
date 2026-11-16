@@ -151,6 +151,9 @@ private struct SMCSensorKey {
     let name: String
     let label: String
     let group: Group
+    /// Bốn ký tự loại dữ liệu SMC (fourCC): `flt ` (float32, key nhân Apple Silicon)
+    /// hoặc `sp78` (8.8 fixed-point 2 byte, key nhiệt Intel).
+    let type: UInt32
 }
 
 /// Đọc nhiệt độ nhân CPU/GPU thật từ AppleSMC (kiểu `flt `) — cùng nguồn với Macs Fan Control / Stats.
@@ -241,15 +244,45 @@ private final class SMCTempReader {
 
     private func discover() -> [SMCSensorKey] {
         let flt = Self.fourCC("flt ")
+        let sp78 = Self.fourCC("sp78")
+        // Nhận key SMC thuộc một trong hai loại dữ liệu ta hiểu: float32 (AS core) hoặc sp78 (Intel).
         func probe(_ name: String, _ label: String, _ group: SMCSensorKey.Group) -> SMCSensorKey? {
             let code = Self.fourCC(name)
-            guard let info = call(cmd: 9, key: code),
-                  Self.u32(info, 28) == 4, Self.u32(info, 32) == flt else { return nil }
-            return SMCSensorKey(code: code, name: name, label: label, group: group)
+            guard let info = call(cmd: 9, key: code) else { return nil }
+            let sz = Self.u32(info, 28)
+            let type = Self.u32(info, 32)
+            guard (sz == 4 && type == flt) || (sz == 2 && type == sp78) else { return nil }
+            return SMCSensorKey(code: code, name: name, label: label, group: group, type: type)
         }
 
+        // ── Intel: cảm biến nhiệt SMC kiểu `sp78` (2 byte 8.8). Đã xác minh trên MacBookAir7,2
+        // (i5-5350U): TC0P/TC0E/TC1C trả nhiệt thật; GPU/battery/mem có thể vắng trên model cụ thể
+        // → probe bỏ qua key "no data". Không hardcode một tổ hợp duy nhất, probe đủ candidate.
+        if HardwareInfo.isIntel {
+            var found: [SMCSensorKey] = []
+            for (i, key) in ["TC0C", "TC1C", "TC2C", "TC3C"].enumerated() {
+                if let k = probe(key, "CPU Core \(i + 1)", .cpu) { found.append(k) }
+            }
+            if let k = probe("TC0P", "CPU Package", .cpu) { found.append(k) }
+            if let k = probe("TC0E", "CPU Die", .cpu) { found.append(k) }
+            var gpuIndex = 0
+            for key in ["TG0P", "Tg0P", "TG0D"] {
+                if let k = probe(key, "GPU \(gpuIndex + 1)", .gpu) { found.append(k); gpuIndex += 1 }
+            }
+            if let k = probe("TB0T", "Battery", .battery) ?? probe("TB0C", "Battery", .battery) {
+                found.append(k)
+            }
+            if let k = probe("TH0x", "SSD", .nand) { found.append(k) }
+            if let k = probe("Th0P", "Logic Board", .hotspot) ?? probe("Tp0P", "Logic Board", .hotspot) {
+                found.append(k)
+            }
+            return found
+        }
+
+        // ── Apple Silicon: danh sách khóa nhân đã xác minh theo đời chip (biến thể vắng key sẽ bỏ qua).
+        var found: [SMCSensorKey] = []
         let cat = Self.catalog(for: Self.chipGeneration())
-        var found: [SMCSensorKey] = cat.cpu.compactMap { probe($0.key, $0.label, .cpu) }
+        found = cat.cpu.compactMap { probe($0.key, $0.label, .cpu) }
         var gpuIndex = 0
         for key in cat.gpu {
             if let k = probe(key, "GPU \(gpuIndex + 1)", .gpu) {
@@ -272,9 +305,18 @@ private final class SMCTempReader {
 
         for k in keys ?? [] {
             var sample: Double?
-            if let v = call(cmd: 5, key: k.code, size: 4) {
-                let raw = Double(Float(bitPattern: Self.u32(v, 48)))
-                if raw >= 10.0 && raw < 120.0 { sample = raw }
+            // Intel cảm biến nhiệt kiểu `sp78` (2 byte 8.8); Apple Silicon core key kiểu `flt ` (4 byte float32).
+            let isSP78 = (k.type == Self.fourCC("sp78"))
+            let n = isSP78 ? 2 : 4
+            if let v = call(cmd: 5, key: k.code, size: UInt32(n)), v.count >= 48 + n {
+                let raw: Double?
+                if isSP78 {
+                    let intPart = Int8(bitPattern: v[48])
+                    raw = Double(intPart) + Double(v[49]) / 256.0
+                } else {
+                    raw = Double(Float(bitPattern: Self.u32(v, 48)))
+                }
+                if let raw, raw >= 10.0 && raw < 120.0 { sample = raw }
             }
             // Cảm biến M2 thỉnh thoảng trả 0 / giá trị rác → giữ giá trị hợp lệ gần nhất (giống Stats).
             if let sample { lastGood[k.code] = sample }
