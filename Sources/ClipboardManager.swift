@@ -201,17 +201,16 @@ public class ClipboardManager: ObservableObject {
     private let imageProcessingQueue = DispatchQueue(label: "com.opensource.hypermac.clipboard.image", qos: .utility)
     private var previousApp: NSRunningApplication?
     private var hudPanel: NSPanel?
-    private let storageURL: URL
-    public let imagesDirURL: URL
+    private let storageDirectory: URL
+    private var store: ClipboardStore?
+    @Published public private(set) var storageError: String?
+    @Published public private(set) var isStorageReady = false
 
     private init() {
         // Resolve storage paths: ~/Library/Application Support/HyperMac/
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let hypermacDir = appSupport.appendingPathComponent("HyperMac", isDirectory: true)
-        try? FileManager.default.createDirectory(at: hypermacDir, withIntermediateDirectories: true)
-        self.storageURL = hypermacDir.appendingPathComponent("clipboard.json")
-        self.imagesDirURL = hypermacDir.appendingPathComponent("ClipboardImages", isDirectory: true)
-        try? FileManager.default.createDirectory(at: self.imagesDirURL, withIntermediateDirectories: true)
+        self.storageDirectory = hypermacDir
 
         // Load Settings
         if UserDefaults.standard.object(forKey: "clipboard_monitoring_enabled") != nil {
@@ -232,16 +231,11 @@ public class ClipboardManager: ObservableObject {
         }
         self.isDetailsExpanded = UserDefaults.standard.bool(forKey: "clipboard_details_expanded")
 
-        // Load stored items
-        loadItemsFromDisk()
-        applyRetentionPolicy()
-        trimItems()
-
         // Init pasteboard state
         self.lastChangeCount = NSPasteboard.general.changeCount
 
-        // Start background polling
-        startMonitoring()
+        // Keychain và chuyển đổi dữ liệu chạy nền trước khi bắt đầu nhận clip mới.
+        loadItemsFromDisk()
         gIsClipboardEnabled = isMonitoringEnabled
     }
 
@@ -311,7 +305,7 @@ public class ClipboardManager: ObservableObject {
     }
 
     private func checkPasteboard() {
-        guard isMonitoringEnabled else { return }
+        guard isMonitoringEnabled, isStorageReady else { return }
 
         let currentCount = NSPasteboard.general.changeCount
         guard currentCount != lastChangeCount else { return }
@@ -380,7 +374,7 @@ public class ClipboardManager: ObservableObject {
             if size.width > 2 && size.height > 2 {
                 let clipID = UUID()
                 let fileName = "\(clipID.uuidString).png"
-                let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
+                let store = self.store
                 let title = "Ảnh (\(Int(size.width)) × \(Int(size.height))px)"
                 let detail = "Định dạng ảnh clipboard"
                 let capturedResetGen = self.historyResetGeneration
@@ -400,20 +394,29 @@ public class ClipboardManager: ObservableObject {
                         originalData = rawTIFF
                     }
 
-                    if let origData = originalData {
-                        try? origData.write(to: fileURL, options: .atomic)
+                    var persisted = false
+                    if let origData = originalData, let store {
+                        do {
+                            try store.saveImage(origData, named: fileName)
+                            persisted = true
+                        } catch {
+                            Task { @MainActor [weak self] in self?.reportStorageFailure() }
+                        }
                     }
 
                     // Thumbnail tối đa 800 px (400 pt Retina) qua ImageIO (an toàn ngoài main thread).
                     let thumbData = originalData.flatMap { ClipboardManager.thumbnailPNG(from: $0, maxPixelSize: 800) }
+                    // Lỗi ghi ảnh vẫn giữ bản gốc trong RAM cho phiên hiện tại.
+                    let retainedImageData = persisted ? thumbData : originalData
+                    let storedImageName = persisted ? fileName : nil
 
                     Task { @MainActor [weak self] in
                         guard let self else {
-                            queue.async { try? FileManager.default.removeItem(at: fileURL) }
+                            queue.async { try? store?.deleteImage(named: fileName) }
                             return
                         }
                         guard self.isMonitoringEnabled, self.historyResetGeneration == capturedResetGen else {
-                            queue.async { try? FileManager.default.removeItem(at: fileURL) }
+                            queue.async { try? store?.deleteImage(named: fileName) }
                             return
                         }
                         self.appendClip(ClipItem(
@@ -421,8 +424,8 @@ public class ClipboardManager: ObservableObject {
                             type: .image,
                             title: title,
                             detail: detail,
-                            imageData: thumbData,
-                            imageFileName: fileName,
+                            imageData: retainedImageData,
+                            imageFileName: storedImageName,
                             sourceAppName: appName,
                             sourceBundleID: bundleID,
                             timestamp: Date(),
@@ -800,13 +803,9 @@ public class ClipboardManager: ObservableObject {
         }
         if item.type == .image {
             var fullImage: NSImage?
-            if let fileName = item.imageFileName {
-                let fileURL = imagesDirURL.appendingPathComponent(fileName)
-                if FileManager.default.fileExists(atPath: fileURL.path),
-                   let data = try? Data(contentsOf: fileURL) {
-                    fullImage = NSImage(data: data)
-                    pb.setData(data, forType: .png)
-                }
+            if let data = imageData(for: item) {
+                fullImage = NSImage(data: data)
+                pb.setData(data, forType: .png)
             }
             if fullImage == nil, let imgData = item.imageData, let img = NSImage(data: imgData) {
                 fullImage = img
@@ -855,29 +854,28 @@ public class ClipboardManager: ObservableObject {
 
     // MARK: - Image File Management
 
-    public func imageURL(for item: ClipItem) -> URL? {
-        guard item.type == .image else { return nil }
-        if let fileName = item.imageFileName {
-            let url = imagesDirURL.appendingPathComponent(fileName)
-            if FileManager.default.fileExists(atPath: url.path) { return url }
+    /// Giải mã trong bộ nhớ, không xuất ảnh bản rõ ra thư mục tạm.
+    public func imageData(for item: ClipItem) -> Data? {
+        guard item.type == .image, let store, let name = item.imageFileName else { return item.imageData }
+        do {
+            return try imageProcessingQueue.sync { try store.readImage(named: name) }
+        } catch {
+            // Có thể được gọi trong lúc SwiftUI đang dựng preview.
+            Task { @MainActor [weak self] in self?.reportStorageFailure() }
+            return nil
         }
-        let fallback = imagesDirURL.appendingPathComponent("\(item.id.uuidString).png")
-        if FileManager.default.fileExists(atPath: fallback.path) { return fallback }
-        return nil
     }
 
     public func deleteAssociatedImage(for item: ClipItem) {
-        guard item.type == .image else { return }
-        if let fileName = item.imageFileName {
-            deleteFileNamed(fileName)
-        }
-        deleteFileNamed("\(item.id.uuidString).png")
+        guard item.type == .image, let name = item.imageFileName else { return }
+        deleteFileNamed(name)
     }
 
     private func deleteFileNamed(_ fileName: String) {
-        let fileURL = imagesDirURL.appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            try? FileManager.default.removeItem(at: fileURL)
+        guard let store else { return }
+        imageProcessingQueue.async { [weak self] in
+            do { try store.deleteImage(named: fileName) }
+            catch { Task { @MainActor [weak self] in self?.reportStorageFailure() } }
         }
     }
 
@@ -962,65 +960,55 @@ public class ClipboardManager: ObservableObject {
     // MARK: - Disk Persistence
 
     private func saveItemsToDisk() {
+        guard let store else { return }
         let itemsToSave = self.items
-        let url = self.storageURL
-        DispatchQueue.global(qos: .utility).async {
-            do {
-                let data = try JSONEncoder().encode(itemsToSave)
-                try data.write(to: url, options: .atomic)
-            } catch {
-                appLog("Failed to save clipboard items: \(error.localizedDescription)")
-            }
+        // Cùng hàng đợi với ảnh: giữ thứ tự ghi, không cho bản cũ ghi đè bản mới.
+        imageProcessingQueue.async { [weak self] in
+            do { try store.save(itemsToSave) }
+            catch { Task { @MainActor [weak self] in self?.reportStorageFailure() } }
         }
     }
 
     private func loadItemsFromDisk() {
-        guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: storageURL)
-            var loaded = try JSONDecoder().decode([ClipItem].self, from: data)
-
-            // Migrate legacy image items to disk storage
-            var modified = false
-            for i in 0..<loaded.count {
-                if loaded[i].type == .image {
-                    let fileName = loaded[i].imageFileName ?? "\(loaded[i].id.uuidString).png"
-                    let fileURL = self.imagesDirURL.appendingPathComponent(fileName)
-
-                    if !FileManager.default.fileExists(atPath: fileURL.path), let imgData = loaded[i].imageData {
-                        try? imgData.write(to: fileURL, options: .atomic)
-                    }
-                    if loaded[i].imageFileName == nil {
-                        loaded[i].imageFileName = fileName
-                        modified = true
-                    }
+        let directory = storageDirectory
+        imageProcessingQueue.async { [weak self] in
+            do {
+                let store = try ClipboardStore(directory: directory)
+                let loaded = try store.load()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.store = store
+                    self.items = loaded
+                    self.isStorageReady = true
+                    self.applyRetentionPolicy()
+                    self.trimItems()
+                    self.clampSelection()
+                    self.startMonitoring()
+                }
+            } catch {
+                // Không ghi đè lịch sử cũ khi mất khóa, Keychain bị khóa hoặc tệp hỏng.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.reportStorageFailure()
+                    self.isStorageReady = true
+                    self.startMonitoring()
                 }
             }
-            self.items = loaded
-            if modified {
-                saveItemsToDisk()
-            }
-            cleanupOrphanImages(validItems: loaded)
-        } catch {
-            appLog("Failed to load clipboard items: \(error.localizedDescription)")
         }
     }
 
-    private func cleanupOrphanImages(validItems: [ClipItem]) {
-        DispatchQueue.global(qos: .utility).async {
-            guard let files = try? FileManager.default.contentsOfDirectory(atPath: self.imagesDirURL.path) else { return }
-            var validFileNames = Set<String>()
-            for item in validItems where item.type == .image {
-                if let f = item.imageFileName { validFileNames.insert(f) }
-                validFileNames.insert("\(item.id.uuidString).png")
-            }
-            for file in files {
-                if !validFileNames.contains(file) && (file.hasSuffix(".png") || file.hasSuffix(".jpg") || file.hasSuffix(".tiff")) {
-                    let fileURL = self.imagesDirURL.appendingPathComponent(file)
-                    try? FileManager.default.removeItem(at: fileURL)
-                }
-            }
-        }
+    private func reportStorageFailure() {
+        storageError = tr(
+            "Không truy cập được kho Clipboard mã hóa. Các mục mới chỉ dùng trong phiên này; hãy kiểm tra Keychain và mở lại app.",
+            "Encrypted clipboard storage is unavailable. New items are kept only for this session; check Keychain and restart the app."
+        )
+        // Không ghi nội dung clipboard, đường dẫn ảnh hay khóa vào log.
+        appLog("⚠️ Clipboard: không truy cập được kho mã hóa.")
+        store = nil
+    }
+
+    func flushStorage() {
+        imageProcessingQueue.sync {}
     }
 
     // Helper: Parse Hex Color

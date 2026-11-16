@@ -271,7 +271,7 @@ public struct ClipboardOverlayView: View {
                             if let data = item.imageData, let img = NSImage(data: data) {
                                 return img
                             }
-                            if let url = manager.imageURL(for: item), let data = try? Data(contentsOf: url) {
+                            if let data = manager.imageData(for: item) {
                                 return NSImage(data: data)
                             }
                             return nil

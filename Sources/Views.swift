@@ -1389,6 +1389,20 @@ struct ShortcutsTabView: View {
                         .labelsHidden()
                     }
 
+                    if let error = clipboardManager.storageError {
+                        Label(error, systemImage: "exclamationmark.lock.fill")
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Label(clipboardManager.isStorageReady
+                              ? tr("Lịch sử và ảnh được mã hóa trên máy", "History and images are encrypted on this Mac")
+                              : tr("Đang mở kho Clipboard mã hóa…", "Opening encrypted clipboard storage…"),
+                              systemImage: "lock.shield")
+                            .font(.system(size: FS.caption))
+                            .foregroundStyle(.secondary)
+                    }
+
                     if clipboardManager.isMonitoringEnabled && clipboardManager.isDetailsExpanded {
                         Divider().opacity(0.35)
 

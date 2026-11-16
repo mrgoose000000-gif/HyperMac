@@ -116,7 +116,12 @@ Lưu trữ lịch sử văn bản, hình ảnh, liên kết, mã màu đã sao c
   * Bấm **`⌥ Option + P`**: Ghim / Bỏ ghim mục quan trọng lên đầu.
   * Bấm **`⌥ Option + ⌫ Delete`**: Xóa mục khỏi lịch sử.
   * Gõ chữ để tìm kiếm nhanh nội dung trong lịch sử.
-* **Bảo mật:** Tự động phát hiện và bỏ qua mật khẩu từ Keychain, 1Password, Bitwarden...
+* **Bỏ qua nội dung nhạy cảm:** Mặc định bỏ qua clipboard có cờ ẩn của các trình quản lý mật khẩu. Nội dung nhạy cảm không có cờ này vẫn có thể được lưu.
+* **Mã hóa trên ổ đĩa:** Lịch sử (gồm nội dung, metadata, ảnh thu nhỏ) và ảnh gốc dùng AES-256-GCM của CryptoKit. Khóa ngẫu nhiên 256-bit lưu trong Login Keychain, không ghi vào tệp/UserDefaults và không đồng bộ iCloud. Xem [CryptoKit của Apple](https://developer.apple.com/documentation/cryptokit/aes/gcm).
+  * Tệp lịch sử: `~/Library/Application Support/HyperMac/clipboard.encrypted`; các tệp trong `ClipboardImages` cũng được mã hóa dù vẫn giữ đuôi ảnh cũ. Thư mục có quyền `0700`, tệp mã hóa có quyền `0600`.
+  * Khi mở bản mới, app chuyển lịch sử và ảnh cũ sang dạng mã hóa rồi xóa `clipboard.json` sau khi xác minh thành công. Quá trình này không xóa được bản rõ trong backup hoặc snapshot cũ.
+  * Khi thiếu khóa, không mở được Keychain hoặc dữ liệu bị sửa/hỏng, app giữ dữ liệu đã lưu và chỉ nhận clipboard mới trong bộ nhớ cho phiên hiện tại; giao diện hiển thị lỗi. Không tự tạo khóa thay thế cho kho đã mã hóa. Mất khóa thì không thể phục hồi chỉ từ các tệp mã hóa.
+  * Ảnh được giải mã trong bộ nhớ khi xem/dán, không tạo tệp ảnh bản rõ tạm thời. Mã hóa bảo vệ dữ liệu lưu trên ổ đĩa; dữ liệu app đang sử dụng và clipboard hệ thống vẫn ở dạng rõ trong bộ nhớ.
 
 ---
 
