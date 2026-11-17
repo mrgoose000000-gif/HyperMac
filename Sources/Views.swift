@@ -1970,7 +1970,7 @@ struct BatteryCardView: View {
                     iconColor: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? .secondary : .secondary,
                     title: tr("Củ sạc", "Adapter"),
                     val: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? "\(batteryManager.adapterWatts)W" : tr("Dùng Pin", "On Battery"),
-                    sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? "USB-C PD" : batteryManager.adapterDescription) : tr("Không cắm sạc", "Unplugged")
+                    sub: (batteryManager.isPluggedIn && batteryManager.adapterWatts > 0) ? (batteryManager.adapterDescription.isEmpty ? (HardwareInfo.isAppleSilicon ? "USB-C PD" : "AC Power Adapter") : batteryManager.adapterDescription) : tr("Không cắm sạc", "Unplugged")
                 )
             }
 

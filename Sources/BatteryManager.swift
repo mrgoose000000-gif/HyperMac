@@ -645,13 +645,13 @@ public class BatteryManager: ObservableObject {
         if self.isPluggedIn {
             if let adapter = dict["AdapterDetails"] as? [String: Any], let w = adapter["Watts"] as? Int, w > 0 {
                 setIfChanged(&self.adapterWatts, w)
-                setIfChanged(&self.adapterDescription, adapter["Description"] as? String ?? "USB-C PD")
+                setIfChanged(&self.adapterDescription, adapter["Description"] as? String ?? (HardwareInfo.isAppleSilicon ? "USB-C PD" : "AC Power Adapter"))
                 setIfChanged(&self.adapterSerial, adapter["SerialString"] as? String ?? "")
             } else if let adapterList = dict["AppleRawAdapterDetails"] as? [[String: Any]],
                       let first = adapterList.first,
                       let w = first["Watts"] as? Int, w > 0 {
                 setIfChanged(&self.adapterWatts, w)
-                setIfChanged(&self.adapterDescription, first["Description"] as? String ?? "USB-C PD")
+                setIfChanged(&self.adapterDescription, first["Description"] as? String ?? (HardwareInfo.isAppleSilicon ? "USB-C PD" : "AC Power Adapter"))
                 setIfChanged(&self.adapterSerial, first["SerialString"] as? String ?? "")
             }
         } else {
