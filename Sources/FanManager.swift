@@ -126,6 +126,7 @@ public final class FanManager: ObservableObject {
 
     private let smcReader = SMCFanReader()
     private var fanRanges: [(min: Double, max: Double)] = []
+    private var verifyKey = "F0Tg"
     private var pollTimer: Timer?
     private var smcPath: String?
     private var pendingApply: DispatchWorkItem?
@@ -202,7 +203,7 @@ public final class FanManager: ObservableObject {
         guard isAvailable else { return }
         let count = max(1, min(fanCount, 4))
         for i in 0..<count {
-            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) \(minRPM) 2>/dev/null")
+            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) \(Int(minRPM)) 2>/dev/null")
         }
         mode = .system
         targetRPM = 0
@@ -212,7 +213,7 @@ public final class FanManager: ObservableObject {
 
     private func restoreAllFansAutoAsync() {
         let count = max(1, min(fanCount, 4))
-        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0) \(minRPM)" }.joined(separator: " && ")
+        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0) \(Int(minRPM))" }.joined(separator: " && ")
         DispatchQueue.global(qos: .userInitiated).async {
             _ = shell(cmds + " 2>&1")
         }
@@ -225,12 +226,10 @@ public final class FanManager: ObservableObject {
                               "Mac is too hot; fan stays under system control.")
             return
         }
-        guard isHelperReady else {
-            errorMessage = tr("Cần cài helper (hỏi mật khẩu quản trị một lần).",
-                              "Helper install needed (one admin password prompt).")
-            mode = .system
-            return
-        }
+        // Không gate cứng theo isHelperReady (flag CÓ THỂ stale sau khi helper tự cập nhật):
+        // để `sudo -n fan-set` là nguồn quyết định — chạy được thì chạy (đúng như cục gọi trực
+        // tiếp đã verify), không chạy được thì rơi vào xử lý lỗi phía dưới (mode=.system + error).
+        if !isHelperReady { checkHelper() }
         pendingApply?.cancel()
         mode = newMode
         targetRPM = rpm
@@ -274,9 +273,10 @@ public final class FanManager: ObservableObject {
 
     private func verifyTarget(expected: Double) {
         guard mode != .system else { return }
-        var tg = smcReader.readFloat(key: "F0Tg")
+        // MBA/Intel (no F0Md) ghi F0Mn; máy có F0Md ghi F0Tg — verify đúng key đã ghi.
+        var tg = smcReader.readFloat(key: verifyKey)
         if tg <= 0, let smc = smcPath {
-            let (out, _) = shell("'\(smc)' -k F0Tg -r 2>/dev/null")
+            let (out, _) = shell("'\(smc)' -k \(verifyKey) -r 2>/dev/null")
             tg = FanManager.parseFloat(out)
         }
         if abs(tg - expected) > 5 {
@@ -329,6 +329,8 @@ public final class FanManager: ObservableObject {
             }
         }
         fanRanges = ranges
+        // MB Air/Intel khong co F0Md -> helper ghi F0Mn (min) chu khong F0Tg: verify theo F0Mn.
+        if smcReader.readFloat(key: "F0Md") <= 0 { verifyKey = "F0Mn" }
         if let first = ranges.first {
             minRPM = first.min
             maxRPM = first.max
