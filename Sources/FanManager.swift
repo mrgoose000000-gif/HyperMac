@@ -313,6 +313,12 @@ public final class FanManager: ObservableObject {
         fanCount = count
         guard fanCount > 0 else { return }
 
+        // F0Mn bi clamp TANG len khi fan-set -> doc song cho "min" sai (minRPM bi day len theo
+        // lan clamp truoc, vi du crash giua chung). Persist min tu nhien NHO NHAT tung thay:
+        // clamp chi tang F0Mn nen min(quan sat) = min thiet ke. Uu tien persisted thay vi doc song,
+        // de thanh truot / manual-clamp / dich khoi phuc khong troi len theo lan clamp truoc.
+        let naturalKey = "hypermac.naturalFanMinRPM"
+        var naturalMin = UserDefaults.standard.double(forKey: naturalKey)
         var ranges: [(min: Double, max: Double)] = []
         for i in 0..<min(fanCount, 4) {
             var mn = smcReader.readFloat(key: "F\(i)Mn")
@@ -322,12 +328,15 @@ public final class FanManager: ObservableObject {
                 mx = FanManager.parseFloat(shell("'\(smc)' -k F\(i)Mx -r 2>/dev/null").0)
             }
             if mx > 0 {
-                // Phòng dữ liệu lỗi: minRPM không được > maxRPM (nếu không minPercent>100
-                // làm SwiftUI Slider range lower>upper → trap SIGILL khi mở thẻ quạt).
-                if mn > mx { swap(&mn, &mx) }
-                ranges.append((min: mn, max: mx))
+                if naturalMin <= 0 {
+                    naturalMin = mn
+                } else if mn > 0 && mn < naturalMin {
+                    naturalMin = mn   // clamp chi tang F0Mn -> gia tri nho hon = min tu nhien
+                }
+                ranges.append((min: min(naturalMin, mx), max: mx))
             }
         }
+        if naturalMin > 0 { UserDefaults.standard.set(naturalMin, forKey: naturalKey) }
         fanRanges = ranges
         // MB Air/Intel khong co F0Md -> helper ghi F0Mn (min) chu khong F0Tg: verify theo F0Mn.
         if smcReader.readFloat(key: "F0Md") <= 0 { verifyKey = "F0Mn" }
@@ -335,6 +344,7 @@ public final class FanManager: ObservableObject {
             minRPM = first.min
             maxRPM = first.max
         }
+
     }
 
     private func refreshRPM() {
