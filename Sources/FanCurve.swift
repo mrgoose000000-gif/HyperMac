@@ -33,6 +33,15 @@ public enum FanCurveTempSource: Int, CaseIterable, Codable {
         case .hotspot:    return tr("Hotspot", "Hotspot")
         }
     }
+
+    /// SF Symbol cho tab nguồn nhiệt (gọn hơn chữ, không tràn trên thẻ hẹp).
+    var icon: String {
+        switch self {
+        case .cpuAverage: return "cpu"
+        case .cpuPeak:    return "flame"
+        case .hotspot:    return "sun.max"
+        }
+    }
 }
 
 /// Nhiệt độ hiện tại → % quạt theo bảng ngưỡng (nội suy tuyến tính từng đoạn).

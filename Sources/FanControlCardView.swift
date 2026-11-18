@@ -114,13 +114,21 @@ struct FanControlCardView: View {
             HStack(spacing: 6) {
                 Text(tr("Đường cong nhiệt → quạt", "Temp → fan curve"))
                     .font(.system(size: FS.caption, weight: .semibold))
-                Spacer()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 6)
+                // Segmented icon (gọn, không tràn) — rê chuột để xem tên từng nguồn.
                 Picker("", selection: $fan.curveTempSource) {
-                    ForEach(FanCurveTempSource.allCases, id: \.self) { s in Text(s.label).tag(s) }
+                    ForEach(FanCurveTempSource.allCases, id: \.self) { s in
+                        Image(systemName: s.icon)
+                            .help(s.label)
+                            .tag(s)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(maxWidth: 165)
+                .frame(maxWidth: 108)
+                .help(tr("Nguồn nhiệt cho đường cong", "Curve temperature source"))
                 .onChange(of: fan.curveTempSource) { fan.saveCurveConfig() }
             }
             ForEach($fan.curvePoints) { $p in
