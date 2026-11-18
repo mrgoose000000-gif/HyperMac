@@ -2621,7 +2621,9 @@ struct ThermalAndFanCardView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text(tr("Cảm biến nhiệt Apple Silicon • Cập nhật mỗi 2.5s", "Apple Silicon Thermal Sensors • Updates every 2.5s"))
+                    Text(HardwareInfo.isAppleSilicon
+                        ? tr("Cảm biến nhiệt Apple Silicon • Cập nhật mỗi 2.5s", "Apple Silicon Thermal Sensors • Updates every 2.5s")
+                        : tr("Cảm biến nhiệt Intel SMC • Cập nhật mỗi 2.5s", "Intel SMC Thermal Sensors • Updates every 2.5s"))
                         .font(.system(size: FS.caption))
                         .foregroundStyle(.secondary)
                 }
