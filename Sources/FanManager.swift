@@ -85,6 +85,13 @@ private final class SMCFanReader {
         guard conn != 0, let b = readBytes(key: "FNum", size: 1), let count = b.first else { return 0 }
         return Int(count)
     }
+
+    /// Khoa co ton tai (kể ca khi gia tri = 0)? Phan biet "F0Md khong co" (MBA Intel)
+    /// voi "F0Md ton tai = 0/1" (may co manual switch) — readFloat() tra 0 cho kieu ui8
+    /// nen KHONG duoc suy su ton tai tu gia tri dem duoc (P1 review).
+    func keyExists(_ key: String) -> Bool {
+        keyInfo(key) != nil
+    }
 }
 
 /// Điều khiển tốc độ quạt (Apple Silicon M1–M5 Air/Pro/Max/Ultra) theo kiểu iStat Menus:
@@ -203,7 +210,7 @@ public final class FanManager: ObservableObject {
         guard isAvailable else { return }
         let count = max(1, min(fanCount, 4))
         for i in 0..<count {
-            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) \(Int(minRPM)) 2>/dev/null")
+            _ = shell("sudo -n \(FanManager.helperPath) fan-auto \(i) \(naturalMinFor(i)) 2>/dev/null")
         }
         mode = .system
         targetRPM = 0
@@ -213,11 +220,14 @@ public final class FanManager: ObservableObject {
 
     private func restoreAllFansAutoAsync() {
         let count = max(1, min(fanCount, 4))
-        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0) \(Int(minRPM))" }.joined(separator: " && ")
+        let cmds = (0..<count).map { "sudo -n \(FanManager.helperPath) fan-auto \($0) \(naturalMinFor($0))" }.joined(separator: " && ")
         DispatchQueue.global(qos: .userInitiated).async {
             _ = shell(cmds + " 2>&1")
         }
     }
+
+    /// Min tu nhien cua quat i (P2: moi quat mot min rieng) — dung cho fan-auto restore.
+    private func naturalMinFor(_ i: Int) -> Int { Int(i < fanRanges.count ? fanRanges[i].min : minRPM) }
 
     private func apply(rpm: Double, as newMode: Mode) {
         guard isAvailable else { return }
@@ -313,12 +323,10 @@ public final class FanManager: ObservableObject {
         fanCount = count
         guard fanCount > 0 else { return }
 
-        // F0Mn bi clamp TANG len khi fan-set -> doc song cho "min" sai (minRPM bi day len theo
-        // lan clamp truoc, vi du crash giua chung). Persist min tu nhien NHO NHAT tung thay:
-        // clamp chi tang F0Mn nen min(quan sat) = min thiet ke. Uu tien persisted thay vi doc song,
-        // de thanh truot / manual-clamp / dich khoi phuc khong troi len theo lan clamp truoc.
-        let naturalKey = "hypermac.naturalFanMinRPM"
-        var naturalMin = UserDefaults.standard.double(forKey: naturalKey)
+        // F0Mn bi clamp TANG len khi fan-set -> doc song cho "min" sai (minRPM bi day len
+        // theo lan clamp truoc, vi du crash giua chung). Persist min tu nhien NHO NHAT tung
+        // thay cho TUNG QUAT (P2 review): moi fan mot key rieng. Clamp chi tang F0Mn nen
+        // min(quan sat) = min thiet ke. Uu tien persisted thay vi doc song.
         var ranges: [(min: Double, max: Double)] = []
         for i in 0..<min(fanCount, 4) {
             var mn = smcReader.readFloat(key: "F\(i)Mn")
@@ -328,22 +336,22 @@ public final class FanManager: ObservableObject {
                 mx = FanManager.parseFloat(shell("'\(smc)' -k F\(i)Mx -r 2>/dev/null").0)
             }
             if mx > 0 {
-                if naturalMin <= 0 {
-                    naturalMin = mn
-                } else if mn > 0 && mn < naturalMin {
-                    naturalMin = mn   // clamp chi tang F0Mn -> gia tri nho hon = min tu nhien
-                }
-                ranges.append((min: min(naturalMin, mx), max: mx))
+                let k = "hypermac.naturalFanMinRPM.\(i)"
+                var nm = UserDefaults.standard.double(forKey: k)
+                if nm <= 0 { nm = mn } else if mn > 0 && mn < nm { nm = mn }
+                if nm > 0 { UserDefaults.standard.set(nm, forKey: k) }
+                ranges.append((min: min(nm, mx), max: mx))
             }
         }
-        if naturalMin > 0 { UserDefaults.standard.set(naturalMin, forKey: naturalKey) }
         fanRanges = ranges
-        // MB Air/Intel khong co F0Md -> helper ghi F0Mn (min) chu khong F0Tg: verify theo F0Mn.
-        if smcReader.readFloat(key: "F0Md") <= 0 { verifyKey = "F0Mn" }
+        // P1 review: readFloat() khong doc duoc ui8 nen khong phan biet duoc F0Md=0 vs khong
+        // co. Dung keyExists() phan loai: co F0Md -> verify F0Tg; khong co (MBA Intel) -> F0Mn.
+        verifyKey = smcReader.keyExists("F0Md") ? "F0Tg" : "F0Mn"
         if let first = ranges.first {
             minRPM = first.min
             maxRPM = first.max
         }
+
 
     }
 

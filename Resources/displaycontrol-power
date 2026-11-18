@@ -38,7 +38,11 @@ smc_num() {
 
 # RPM -> fpe2 2-byte hex (MSB-first), dung cho `smc -k FnMn -w`. Vi du 4500 -> 4650.
 fpe2hex() {
-    printf "%04x" $(( 10#$1 * 4 ))
+    # P1 review: helper chay bang root - validate input la so nguyen khong am
+    # truoc khi dua vao phep tinh Bash (chuoi khong tin cay co the lam crash/mo nham).
+    local v="${1:-}"
+    case "$v" in ''|*[!0-9]*) echo "ERROR: invalid rpm"; return 1 ;; esac
+    printf "%04x" $(( 10#$v * 4 ))
 }
 
 case "$1" in
@@ -256,6 +260,8 @@ case "$1" in
     fan-auto)
         ID="${2:-all}"; MINVAL="${3:-}"
         case "$ID" in [0-3]|all) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
+        # P1 review: MINVAL dua vao fpe2hex -> bat buoc la so nguyen (hoac rong).
+        case "$MINVAL" in ''|0|[1-9][0-9]*) ;; *) echo "ERROR: invalid min value"; exit 2 ;; esac
         if [ "$ID" = "all" ]; then
             for I in 0 1 2 3; do
                 if check_key_exists "F${I}Md"; then
