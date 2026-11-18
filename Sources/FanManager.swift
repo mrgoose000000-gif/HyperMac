@@ -166,7 +166,12 @@ public final class FanManager: ObservableObject {
         // Fan curve: khôi phục cấu hình; nếu người dùng đang bật curve thì vào chế độ curve
         // (tick đầu tiên trong ~2.5s sẽ áp target theo nhiệt độ hiện tại).
         loadCurveConfig()
-        if curveEnabled && isAvailable { mode = .curve }
+        if curveEnabled && isAvailable {
+            mode = .curve
+            // startPolling() ở trên chạy khi mode còn .system nên timer chưa bắt đầu;
+            // bắt buộc chạy lại để applyCurve() hoạt động ngay cả khi popover đóng.
+            startPolling()
+        }
     }
 
     // MARK: - Percent <-> RPM
