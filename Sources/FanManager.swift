@@ -106,6 +106,7 @@ public final class FanManager: ObservableObject {
         case medium
         case high
         case manual
+        case curve
     }
 
     nonisolated private static let requiredHelperVersion = PrivilegedHelper.requiredVersion
@@ -124,6 +125,16 @@ public final class FanManager: ObservableObject {
     @Published public private(set) var isBusy: Bool = false
     @Published public private(set) var errorMessage: String? = nil
     @Published public private(set) var safetyTripped: Bool = false
+
+    // ═ Fan Curve (nhiệt độ → % quạt, kiểu smcFanControl) ═
+    @Published public private(set) var curveEnabled: Bool = false
+    @Published public var curvePoints: [FanCurvePoint] = FanCurveMapper.defaults
+    @Published public var curveTempSource: FanCurveTempSource = .cpuAverage
+    private var lastCurveRpm: Double = -1
+    nonisolated private static let curveEnabledKey = "hypermac.fanCurveEnabled"
+    nonisolated private static let curvePointsKey = "hypermac.fanCurvePoints"
+    nonisolated private static let curveSourceKey = "hypermac.fanCurveSource"
+
 
     // UI View State (Stored here to prevent CommandLineTools SwiftUIMacros @State crash)
     @Published public var sliderPercent: Double = 50
@@ -152,6 +163,10 @@ public final class FanManager: ObservableObject {
         startPolling()
         // Khởi động luôn ở System: nếu bản trước crash giữa chừng, trả toàn bộ quạt về auto.
         if isAvailable { restoreAllFansAutoAsync() }
+        // Fan curve: khôi phục cấu hình; nếu người dùng đang bật curve thì vào chế độ curve
+        // (tick đầu tiên trong ~2.5s sẽ áp target theo nhiệt độ hiện tại).
+        loadCurveConfig()
+        if curveEnabled && isAvailable { mode = .curve }
     }
 
     // MARK: - Percent <-> RPM
@@ -414,9 +429,78 @@ public final class FanManager: ObservableObject {
         pollTimer = t
     }
 
+    // MARK: - Fan curve (nhiệt độ → % quạt)
+
+    public var curveLiveTemp: Double { curveTemperature() }
+    public var curveLivePct: Double { FanCurveMapper.percent(for: curveTemperature(), curvePoints) }
+
+    public func enableCurve() {
+        guard isAvailable else { return }
+        curveEnabled = true
+        mode = .curve
+        errorMessage = nil
+        lastCurveRpm = -1
+        applyCurve()
+        startPolling()
+        saveCurveConfig()
+    }
+
+    public func disableCurve() {
+        curveEnabled = false
+        lastCurveRpm = -1
+        saveCurveConfig()
+        selectSystem()
+    }
+
+    /// Ghi lại cấu hình curve (điểm + nguồn nhiệt + trạng thái bật) — gọi từ UI khi người dùng chỉnh.
+    public func saveCurveConfig() {
+        UserDefaults.standard.set(curveEnabled, forKey: Self.curveEnabledKey)
+        UserDefaults.standard.set(curveTempSource.rawValue, forKey: Self.curveSourceKey)
+        if let data = try? JSONEncoder().encode(curvePoints.sorted { $0.temp < $1.temp }) {
+            UserDefaults.standard.set(data, forKey: Self.curvePointsKey)
+        }
+    }
+
+    private func loadCurveConfig() {
+        if let data = UserDefaults.standard.data(forKey: Self.curvePointsKey),
+           let pts = try? JSONDecoder().decode([FanCurvePoint].self, from: data), !pts.isEmpty {
+            curvePoints = pts
+        } else {
+            curvePoints = FanCurveMapper.defaults
+        }
+        curveTempSource = FanCurveTempSource(rawValue: UserDefaults.standard.integer(forKey: Self.curveSourceKey)) ?? .cpuAverage
+        curveEnabled = UserDefaults.standard.bool(forKey: Self.curveEnabledKey)
+        if curvePoints.isEmpty { curvePoints = FanCurveMapper.defaults }
+    }
+
+    private func curveTemperature() -> Double {
+        let t = ThermalManager.shared
+        switch curveTempSource {
+        case .cpuAverage: return max(t.cpuAvgTemp, 0)
+        case .cpuPeak:    return max(t.cpuPeakTemp, 0)
+        case .hotspot:    return max(t.hotspotTemp, 0)
+        }
+    }
+
+    /// Áp dụng target theo nhiệt độ hiện tại (kiểu smcFanControl). Gọi từ tick() khi đang bật curve.
+    private func applyCurve() {
+        guard isAvailable, curveEnabled, mode == .curve, !safetyTripped else { return }
+        let pct = FanCurveMapper.percent(for: curveTemperature(), curvePoints)
+        let rpmVal = rpm(forPercent: pct)
+        // Throttle: chỉ ghi khi nhiệt thay đổi đủ lớn (tránh sudo mỗi 2.5s).
+        let delta = abs(rpmVal - lastCurveRpm)
+        if lastCurveRpm < 0 || delta > 40 {
+            lastCurveRpm = rpmVal
+            apply(rpm: rpmVal, as: .curve)
+        }
+    }
+
     private func tick() {
         refreshRPM()
         enforceSafety()
+        if curveEnabled && mode == .curve && isAvailable && !safetyTripped {
+            applyCurve()
+        }
         ThermalManager.shared.setFanThermalMonitorNeeded(needsSafetyMonitoring)
     }
 

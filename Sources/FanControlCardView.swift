@@ -9,6 +9,7 @@ struct FanControlCardView: View {
             VStack(alignment: .leading, spacing: 7) {
                 header
                 modeRow
+                if fan.mode == .curve { curveEditor }
                 sliderRow
                 statusRow
             }
@@ -76,6 +77,9 @@ struct FanControlCardView: View {
             modeButton(tr("Hệ thống", "System"), active: fan.mode == .system) { fan.selectSystem() }
             modeButton("Medium", active: fan.mode == .medium) { fan.selectMedium() }
             modeButton("High", active: fan.mode == .high) { fan.selectHigh() }
+            modeButton(tr("Đường cong", "Curve"), active: fan.mode == .curve) {
+                fan.mode == .curve ? fan.disableCurve() : fan.enableCurve()
+            }
         }
     }
 
@@ -102,6 +106,47 @@ struct FanControlCardView: View {
                 action()
             }
         }
+    }
+
+    /// Bảng chỉnh "nhiệt độ → % quạt" (kiểu smcFanControl): chỉnh mốc, chọn nguồn nhiệt, xem live.
+    private var curveEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(tr("Đường cong nhiệt → quạt", "Temp → fan curve"))
+                    .font(.system(size: FS.caption, weight: .semibold))
+                Spacer()
+                Picker("", selection: $fan.curveTempSource) {
+                    ForEach(FanCurveTempSource.allCases, id: \.self) { s in Text(s.label).tag(s) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 165)
+                .onChange(of: fan.curveTempSource) { fan.saveCurveConfig() }
+            }
+            ForEach($fan.curvePoints) { $p in
+                HStack(spacing: 8) {
+                    Text("≥")
+                        .foregroundStyle(.secondary)
+                    Stepper("\(Int(p.temp))°C", value: $p.temp, in: 30...105, step: 1)
+                        .font(.system(size: FS.caption))
+                    Spacer()
+                    Stepper("\(Int(p.pct))%", value: $p.pct, in: 0...100, step: 5)
+                        .font(.system(size: FS.caption))
+                }
+            }
+            .onChange(of: fan.curvePoints) { fan.saveCurveConfig() }
+            HStack {
+                Text(tr("Hiện tại:", "Now:"))
+                Spacer()
+                Text("\(Int(fan.curveLiveTemp))°C → \(Int(fan.curveLivePct))%")
+                    .font(.system(size: FS.label, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+            }
+            .font(.system(size: FS.caption))
+            .foregroundStyle(.secondary)
+            Divider()
+        }
+        .padding(.top, 2)
     }
 
     private var sliderRow: some View {
