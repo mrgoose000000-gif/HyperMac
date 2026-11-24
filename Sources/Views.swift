@@ -611,6 +611,34 @@ struct DisplaysTabView: View {
                     .padding(.vertical, 8)
                     .cardBackground()
 
+                    // DDC/CI hardware brightness
+                    HStack(spacing: 8) {
+                        Image(systemName: "sun.max")
+                            .font(.system(size: FS.body))
+                            .foregroundStyle(Color.accentColor)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(tr("Chỉnh đèn nền phần cứng (DDC/CI)", "Hardware backlight (DDC/CI)"))
+                                .font(.system(size: FS.label, weight: .medium))
+                            Text(tr("Chỉnh sáng thật của màn ngoài; tự dùng gamma nếu màn không hỗ trợ", "Real external backlight; falls back to gamma if unsupported"))
+                                .font(.system(size: FS.caption))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding<Bool>(
+                            get: { displayManager.isDDCEnabled },
+                            set: { displayManager.isDDCEnabled = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .cardBackground()
+
                     // Display List
                     VStack(spacing: 8) {
                         if displayManager.monitors.isEmpty {
@@ -1699,6 +1727,10 @@ struct DisplayCardView: View {
                 }
 
                 Spacer()
+
+                if monitor.isConnected && !monitor.isBuiltIn && !monitor.isVirtual {
+                    BrightnessBackendBadge(backend: displayManager.brightnessBackend(for: monitor))
+                }
 
                 Text("\(Int(round(monitor.brightness * 100)))%")
                     .font(.system(size: FS.body, weight: .semibold, design: .rounded))
@@ -3694,5 +3726,36 @@ struct ActivationModalView: View {
             )
             .padding(.horizontal, 14)
         }
+    }
+}
+
+
+// MARK: - Brightness Backend Badge
+
+/// Nhãn nhỏ cho biết màn ngoài đang được chỉnh sáng bằng DDC (phần cứng) hay gamma (phần mềm).
+struct BrightnessBackendBadge: View {
+    let backend: BrightnessBackend
+
+    var body: some View {
+        switch backend {
+        case .ddc:
+            label("DDC", color: .green, help: tr("Đang chỉnh đèn nền phần cứng qua DDC/CI", "Controlling hardware backlight via DDC/CI"))
+        case .gamma:
+            label("Gamma", color: .orange, help: tr("Màn không phản hồi DDC/CI — làm tối bằng gamma (phần mềm)", "Display does not answer DDC/CI — dimming via software gamma"))
+        case .probing:
+            ProgressView().controlSize(.mini)
+        case .native:
+            EmptyView()
+        }
+    }
+
+    private func label(_ text: String, color: Color, help: String) -> some View {
+        Text(text)
+            .font(.system(size: FS.caption - 1, weight: .semibold, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.15), in: Capsule())
+            .help(help)
     }
 }
