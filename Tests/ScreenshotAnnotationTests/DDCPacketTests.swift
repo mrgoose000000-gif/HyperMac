@@ -75,4 +75,35 @@ import CoreGraphics
         let mapping = DDCPacket.match(displays: [(10, a), (11, b)], services: [nil, nil])
         #expect(mapping.isEmpty)
     }
+
+    // MARK: - DDCFailureTracker
+
+    @Test func singleWriteFailureDoesNotFallBack() {
+        var tracker = DDCFailureTracker(threshold: 3)
+        #expect(tracker.record(success: false, for: 1) == false)
+        #expect(tracker.record(success: false, for: 1) == false)
+    }
+
+    @Test func fallsBackAfterConsecutiveFailures() {
+        var tracker = DDCFailureTracker(threshold: 3)
+        _ = tracker.record(success: false, for: 1)
+        _ = tracker.record(success: false, for: 1)
+        #expect(tracker.record(success: false, for: 1) == true)
+    }
+
+    @Test func successResetsFailureCount() {
+        var tracker = DDCFailureTracker(threshold: 3)
+        _ = tracker.record(success: false, for: 1)
+        _ = tracker.record(success: false, for: 1)
+        _ = tracker.record(success: true, for: 1)
+        #expect(tracker.record(success: false, for: 1) == false)
+        #expect(tracker.record(success: false, for: 1) == false)
+    }
+
+    @Test func failuresAreCountedPerDisplay() {
+        var tracker = DDCFailureTracker(threshold: 2)
+        _ = tracker.record(success: false, for: 1)
+        #expect(tracker.record(success: false, for: 2) == false)
+        #expect(tracker.record(success: false, for: 1) == true)
+    }
 }

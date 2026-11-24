@@ -86,6 +86,8 @@ public class DisplayManager: ObservableObject {
     private var wakeObserver: NSObjectProtocol?
     /// Tập màn ngoài đã dò DDC gần nhất; chỉ dò lại khi tập này đổi (cắm/rút) hoặc sau khi máy thức dậy.
     private var lastDDCProbeSet: Set<CGDirectDisplayID>?
+    /// Độ sáng người dùng chỉnh trong lúc đang dò DDC; áp dụng ngay khi có kết quả dò.
+    private var pendingProbeBrightness: [CGDirectDisplayID: Double] = [:]
 
     private init() {
         appLog("🚀 DisplayManager: Initializing...")
@@ -349,7 +351,10 @@ public class DisplayManager: ObservableObject {
         lastDDCProbeSet = ids
         guard !ids.isEmpty else { return }
 
-        for id in ids { brightnessBackends[id] = .probing }
+        for id in ids {
+            brightnessBackends[id] = .probing
+            pendingProbeBrightness.removeValue(forKey: id)
+        }
         let targets = externals.map {
             DDCService.Target(
                 id: $0.id,
@@ -370,17 +375,26 @@ public class DisplayManager: ObservableObject {
     private func applyDDCProbeResults(_ results: [CGDirectDisplayID: Double?]) {
         for (id, reading) in results {
             // Màn có thể đã bị rút trong lúc dò.
+            let pending = pendingProbeBrightness.removeValue(forKey: id)
             guard let idx = monitors.firstIndex(where: { $0.id == id && $0.isConnected }) else { continue }
             if let value = reading, isDDCEnabled {
                 brightnessBackends[id] = .ddc
                 // Bỏ lớp làm tối gamma cũ: giờ đèn nền phần cứng gánh độ sáng.
                 resetGammaIfDimmed(id)
-                monitors[idx].brightness = value
-                brightnessCache[id] = value
-                UserDefaults.standard.set(value, forKey: "brightness_\(id)")
+                if let pending {
+                    // Người dùng vừa chỉnh trong lúc dò: ưu tiên giá trị đó thay vì giá trị đọc từ màn.
+                    applyExternalBrightness(displayID: id, brightness: pending)
+                } else {
+                    monitors[idx].brightness = value
+                    brightnessCache[id] = value
+                    UserDefaults.standard.set(value, forKey: "brightness_\(id)")
+                }
             } else {
-                // Giữ nguyên hành vi cũ: gamma chỉ được áp khi người dùng chỉnh độ sáng.
                 brightnessBackends[id] = .gamma
+                // Gamma chỉ được áp khi người dùng đã chỉnh độ sáng (giữ hành vi cũ).
+                if let pending {
+                    setHardwareGamma(displayID: id, brightness: pending)
+                }
             }
         }
     }
@@ -398,8 +412,8 @@ public class DisplayManager: ObservableObject {
                 }
             }
         case .probing:
-            // Chưa biết kết quả dò: chỉ lưu giá trị, áp dụng khi dò xong (tránh chồng gamma lên DDC).
-            break
+            // Chưa biết kết quả dò: giữ giá trị, áp dụng khi dò xong (tránh chồng gamma lên DDC).
+            pendingProbeBrightness[displayID] = brightness
         default:
             setHardwareGamma(displayID: displayID, brightness: brightness)
         }

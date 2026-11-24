@@ -104,6 +104,38 @@ enum DDCPacket {
     }
 }
 
+// MARK: - Failure Tracking (pure logic, unit-tested)
+
+/// Đếm số lần ghi DDC thất bại LIÊN TIẾP của từng màn.
+/// Màn cắm qua dock/hub thỉnh thoảng rớt một lệnh I2C; chỉ lùi về gamma khi lỗi lặp lại.
+struct DDCFailureTracker {
+    let threshold: Int
+    private var consecutiveFailures: [CGDirectDisplayID: Int] = [:]
+
+    init(threshold: Int) {
+        self.threshold = max(1, threshold)
+    }
+
+    /// Ghi nhận kết quả một lần ghi. Trả về `true` khi đã đủ số lỗi liên tiếp để lùi về gamma.
+    mutating func record(success: Bool, for id: CGDirectDisplayID) -> Bool {
+        if success {
+            consecutiveFailures.removeValue(forKey: id)
+            return false
+        }
+        let count = (consecutiveFailures[id] ?? 0) + 1
+        if count >= threshold {
+            consecutiveFailures.removeValue(forKey: id)
+            return true
+        }
+        consecutiveFailures[id] = count
+        return false
+    }
+
+    mutating func reset() {
+        consecutiveFailures.removeAll()
+    }
+}
+
 // MARK: - Private IOAVService symbols (Apple Silicon)
 
 private typealias IOAVServiceCreateWithServiceFn = @convention(c) (CFAllocator?, io_service_t) -> Unmanaged<CFTypeRef>?
@@ -162,6 +194,8 @@ final class DDCService: @unchecked Sendable {
     /// Giá trị đang chờ ghi (gộp lệnh), bảo vệ bởi `lock`.
     private var pendingWrites: [CGDirectDisplayID: Double] = [:]
     private var scheduledWrites: Set<CGDirectDisplayID> = []
+    /// Số lần ghi lỗi liên tiếp (chỉ truy cập trên `queue`). 3 lần liên tiếp mới lùi về gamma.
+    private var writeFailures = DDCFailureTracker(threshold: 3)
 
     private init() {}
 
@@ -187,6 +221,7 @@ final class DDCService: @unchecked Sendable {
 
             services = [:]
             maxLuminance = [:]
+            writeFailures.reset()
             for target in targets {
                 guard let idx = mapping[target.id] else {
                     results[target.id] = .some(nil)
@@ -227,10 +262,14 @@ final class DDCService: @unchecked Sendable {
                   let service = services[id], let maxValue = maxLuminance[id] else { return }
 
             let raw = UInt16((latest * Double(maxValue)).rounded())
-            if !writeVCP(service, symbols, code: DDCPacket.luminanceCode, value: raw) {
+            let ok = writeVCP(service, symbols, code: DDCPacket.luminanceCode, value: raw)
+            if writeFailures.record(success: ok, for: id) {
                 services.removeValue(forKey: id)
-                appLog("⚠️ DDC: write failed for display \(id) — switching to gamma.")
+                maxLuminance.removeValue(forKey: id)
+                appLog("⚠️ DDC: display \(id) failed \(writeFailures.threshold) writes in a row — switching to gamma.")
                 DispatchQueue.main.async { onFailure() }
+            } else if !ok {
+                appLog("⚠️ DDC: write failed for display \(id) — will retry on next change.")
             }
             // Màn hình cần nghỉ giữa các lệnh DDC liên tiếp.
             usleep(20_000)
