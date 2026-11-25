@@ -130,6 +130,7 @@ Bảo vệ phần cứng tối đa, đặc biệt phù hợp cho các dòng MacB
 
 ### 🖥️ 6. Màn Hình Ngoài & Chỉnh Độ Sáng (Thay thế BetterDisplay)
 * **Chỉnh sáng màn hình ngoài bằng `F1 / F2`:** Bấm phím F1/F2 trên bàn phím Mac để tăng/giảm độ sáng màn hình rời thông qua chuẩn phần cứng DDC/CI.
+* **Đèn nền phần cứng (DDC/CI):** HyperMac tự dò từng màn ngoài; màn hỗ trợ DDC/CI được chỉnh đèn nền thật (nhãn `DDC`), màn không hỗ trợ tự lùi về làm tối bằng gamma (nhãn `Gamma`). Có thể tắt trong tab Màn hình.
 * **Ngắt mềm màn ngoài (Software Sleep):** Tắt tạm thời tín hiệu màn ngoài khi không dùng mà không cần rút dây cáp Type-C/HDMI.
 
 ---

@@ -26,6 +26,16 @@ public struct DisplayInfo: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: - Brightness Backend
+
+/// Cách HyperMac đang điều khiển độ sáng của từng màn.
+public enum BrightnessBackend: Equatable, Sendable {
+    case native    // Màn MacBook / Apple qua DisplayServices
+    case probing   // Đang dò DDC
+    case ddc       // Đèn nền phần cứng qua DDC/CI
+    case gamma     // Làm tối bằng bảng gamma (phần mềm)
+}
+
 // MARK: - Private DisplayServices Function Signatures (Apple Silicon Native)
 
 private typealias GetBrightnessFunc = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
@@ -55,6 +65,16 @@ public class DisplayManager: ObservableObject {
     @Published public var selectedMainTab: Int = 0
     @Published public var alertMessage: String? = nil
     @Published public var showAlert: Bool = false
+    @Published public private(set) var brightnessBackends: [CGDirectDisplayID: BrightnessBackend] = [:]
+    /// Bật: ưu tiên chỉnh đèn nền phần cứng qua DDC/CI, tự lùi về gamma nếu màn không hỗ trợ.
+    @Published public var isDDCEnabled: Bool = true {
+        didSet {
+            guard oldValue != isDDCEnabled else { return }
+            UserDefaults.standard.set(isDDCEnabled, forKey: "ddc_enabled")
+            lastDDCProbeSet = nil
+            probeDDCIfNeeded(force: true)
+        }
+    }
 
     private var brightnessCache: [CGDirectDisplayID: Double] = [:]
     private var cachedDisplayNames: [CGDirectDisplayID: String] = [:]
@@ -63,6 +83,11 @@ public class DisplayManager: ObservableObject {
     private var dsSetBrightness: SetBrightnessFunc?
     private var permCheckTimer: Timer?
     private var accessibilityObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+    /// Tập màn ngoài đã dò DDC gần nhất; chỉ dò lại khi tập này đổi (cắm/rút) hoặc sau khi máy thức dậy.
+    private var lastDDCProbeSet: Set<CGDirectDisplayID>?
+    /// Độ sáng người dùng chỉnh trong lúc đang dò DDC; áp dụng ngay khi có kết quả dò.
+    private var pendingProbeBrightness: [CGDirectDisplayID: Double] = [:]
 
     private init() {
         appLog("🚀 DisplayManager: Initializing...")
@@ -87,7 +112,24 @@ public class DisplayManager: ObservableObject {
         }
         gIsCursorBasedBrightnessEnabled = self.isCursorBased
 
+        if let savedDDC = UserDefaults.standard.object(forKey: "ddc_enabled") as? Bool {
+            self.isDDCEnabled = savedDDC
+        }
+
         refreshDisplays()
+
+        // Sau khi ngủ dậy, IOAVService của màn ngoài được tạo lại: dò DDC lại.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                Task { @MainActor [weak self] in
+                    self?.probeDDCIfNeeded(force: true)
+                }
+            }
+        }
 
         if let first = monitors.first {
             self.selectedID = first.id
@@ -120,6 +162,9 @@ public class DisplayManager: ObservableObject {
         permCheckTimer?.invalidate()
         if let observer = accessibilityObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
+        }
+        if let observer = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
     }
 
@@ -276,6 +321,101 @@ public class DisplayManager: ObservableObject {
 
         if selectedID == nil || !updatedList.contains(where: { $0.id == selectedID }) {
             selectedID = updatedList.first?.id
+        }
+
+        probeDDCIfNeeded()
+    }
+
+    // MARK: - DDC/CI Hardware Brightness
+
+    public func brightnessBackend(for monitor: DisplayInfo) -> BrightnessBackend {
+        if monitor.isBuiltIn { return .native }
+        return brightnessBackends[monitor.id] ?? .gamma
+    }
+
+    /// Dò DDC cho các màn ngoài đang bật. Không chặn main thread; kết quả cập nhật slider theo độ sáng thật của màn.
+    private func probeDDCIfNeeded(force: Bool = false) {
+        let externals = monitors.filter { !$0.isBuiltIn && !$0.isVirtual && $0.isConnected }
+        let ids = Set(externals.map(\.id))
+
+        // Dọn trạng thái của màn đã rút / tắt.
+        let kept = brightnessBackends.filter { ids.contains($0.key) }
+        if kept.count != brightnessBackends.count { brightnessBackends = kept }
+
+        guard isDDCEnabled, DDCService.shared.isAvailable else {
+            for id in ids where brightnessBackends[id] != .gamma { brightnessBackends[id] = .gamma }
+            lastDDCProbeSet = ids
+            return
+        }
+        guard force || ids != lastDDCProbeSet else { return }
+        lastDDCProbeSet = ids
+        guard !ids.isEmpty else { return }
+
+        for id in ids {
+            brightnessBackends[id] = .probing
+            pendingProbeBrightness.removeValue(forKey: id)
+        }
+        let targets = externals.map {
+            DDCService.Target(
+                id: $0.id,
+                vendor: CGDisplayVendorNumber($0.id),
+                product: CGDisplayModelNumber($0.id),
+                serial: CGDisplaySerialNumber($0.id)
+            )
+        }
+        appLog("🔎 DDC: probing \(targets.count) external display(s)...")
+
+        DDCService.shared.probe(targets) { [weak self] results in
+            MainActor.assumeIsolated {
+                self?.applyDDCProbeResults(results)
+            }
+        }
+    }
+
+    private func applyDDCProbeResults(_ results: [CGDirectDisplayID: Double?]) {
+        for (id, reading) in results {
+            // Màn có thể đã bị rút trong lúc dò.
+            let pending = pendingProbeBrightness.removeValue(forKey: id)
+            guard let idx = monitors.firstIndex(where: { $0.id == id && $0.isConnected }) else { continue }
+            if let value = reading, isDDCEnabled {
+                brightnessBackends[id] = .ddc
+                // Bỏ lớp làm tối gamma cũ: giờ đèn nền phần cứng gánh độ sáng.
+                resetGammaIfDimmed(id)
+                if let pending {
+                    // Người dùng vừa chỉnh trong lúc dò: ưu tiên giá trị đó thay vì giá trị đọc từ màn.
+                    applyExternalBrightness(displayID: id, brightness: pending)
+                } else {
+                    monitors[idx].brightness = value
+                    brightnessCache[id] = value
+                    UserDefaults.standard.set(value, forKey: "brightness_\(id)")
+                }
+            } else {
+                brightnessBackends[id] = .gamma
+                // Gamma chỉ được áp khi người dùng đã chỉnh độ sáng (giữ hành vi cũ).
+                if let pending {
+                    setHardwareGamma(displayID: id, brightness: pending)
+                }
+            }
+        }
+    }
+
+    /// Chỉnh độ sáng màn ngoài: DDC nếu được, ngược lại gamma.
+    private func applyExternalBrightness(displayID: CGDirectDisplayID, brightness: Double) {
+        switch brightnessBackends[displayID] {
+        case .ddc:
+            DDCService.shared.setBrightness(brightness, for: displayID) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.brightnessBackends[displayID] = .gamma
+                    let current = self.brightnessCache[displayID] ?? brightness
+                    self.setHardwareGamma(displayID: displayID, brightness: current)
+                }
+            }
+        case .probing:
+            // Chưa biết kết quả dò: giữ giá trị, áp dụng khi dò xong (tránh chồng gamma lên DDC).
+            pendingProbeBrightness[displayID] = brightness
+        default:
+            setHardwareGamma(displayID: displayID, brightness: brightness)
         }
     }
 
@@ -440,6 +580,13 @@ public class DisplayManager: ObservableObject {
         _ = CGSetDisplayTransferByTable(displayID, UInt32(red.count), &red, &green, &blue)
     }
 
+    /// Trả bảng gamma của một màn về bản gốc ColorSync nếu HyperMac từng làm tối nó.
+    private func resetGammaIfDimmed(_ displayID: CGDirectDisplayID) {
+        guard let original = originalGamma.removeValue(forKey: displayID) else { return }
+        var red = original.red, green = original.green, blue = original.blue
+        _ = CGSetDisplayTransferByTable(displayID, UInt32(red.count), &red, &green, &blue)
+    }
+
     private func captureGamma(_ displayID: CGDirectDisplayID) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
         let capacity = max(Int(CGDisplayGammaTableCapacity(displayID)), 2)
         var red = [CGGammaValue](repeating: 0, count: capacity)
@@ -471,7 +618,7 @@ public class DisplayManager: ObservableObject {
         if monitor.isBuiltIn {
             setBuiltInBrightness(displayID: monitor.id, value: Float(clamped))
         } else {
-            setHardwareGamma(displayID: monitor.id, brightness: clamped)
+            applyExternalBrightness(displayID: monitor.id, brightness: clamped)
         }
     }
 
@@ -582,7 +729,7 @@ public class DisplayManager: ObservableObject {
             if monitor.isBuiltIn {
                 setBuiltInBrightness(displayID: targetID, value: Float(saved))
             } else {
-                setHardwareGamma(displayID: targetID, brightness: saved)
+                applyExternalBrightness(displayID: targetID, brightness: saved)
             }
         }
 
