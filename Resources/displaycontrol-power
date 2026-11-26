@@ -198,8 +198,12 @@ case "$1" in
         # Chỉ nhận số nguyên hợp lệ; chặn mọi đối số lạ (helper chạy bằng root).
         case "$ID" in [0-3]|all) ;; *) echo "ERROR: invalid fan id"; exit 2 ;; esac
         case "$RPM" in ''|*[!0-9]*) echo "ERROR: invalid rpm"; exit 2 ;; esac
+        # Unlock M3/M4+: thermalmonitord giu quat o mode 3, firmware tu choi
+        # F0Md bang loi SMC 0x82. Dung chuoi unlock theo agoodkind/macos-smc-fan:
+        # Ftst=1 -> cho thermalmonitord nha (~3s) -> retry F0Md (300 x 100ms).
         if check_key_exists "Ftst"; then
             "$SMC" -k Ftst -w 01 >/dev/null 2>&1 || true
+            sleep 3
         fi
         if [ "$ID" = "all" ]; then
             FNUM=$("$SMC" -k FNum -r 2>/dev/null | awk '{print int($4)}')
@@ -213,11 +217,19 @@ case "$1" in
                     if [ "$CLAMPED" -lt "$FMIN" ]; then CLAMPED="$FMIN"; fi
                     if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
                     HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
-                    "$SMC" -k "F${I}Md" -w 01 >/dev/null 2>&1 || true
-                    "$SMC" -k "F${I}Tg" -w "$HEX" >/dev/null 2>&1 || true
+                    MODE_OK=0
+                    TRY=0
+                    while [ "$TRY" -lt 300 ]; do
+                        if "$SMC" -k "F${I}Md" -w 01 >/dev/null 2>&1; then MODE_OK=1; break; fi
+                        TRY=$((TRY + 1)); sleep 0.1
+                    done
+                    if [ "$MODE_OK" -eq 1 ]; then
+                        "$SMC" -k "F${I}Tg" -w "$HEX" >/dev/null 2>&1 || true
+                    fi
                 fi
                 I=$((I + 1))
             done
+            [ "$MODE_OK" -eq 1 ] || { echo "ERROR: mode write failed (thermal manager khong nha)"; exit 4; }
             echo "FAN_SET_OK"
         else
             FMIN=$("$SMC" -k "F${ID}Mn" -r 2>/dev/null | awk '{print int($4)}')
@@ -230,7 +242,16 @@ case "$1" in
             if [ "$CLAMPED" -gt "$FMAX" ]; then CLAMPED="$FMAX"; fi
             # float32 little-endian hex (vd 3000 -> 00803b45)
             HEX=$(/usr/bin/perl -e 'print unpack("H*", pack("f<", $ARGV[0]))' "$CLAMPED")
-            "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1 || { echo "ERROR: mode write failed"; exit 4; }
+            # Retry F0Md toi 300 lan x 100ms (unlock M3/M4+: cho thermal manager nha)
+            MODE_OK=0
+            TRY=0
+            while [ "$TRY" -lt 300 ]; do
+                if "$SMC" -k "F${ID}Md" -w 01 >/dev/null 2>&1; then MODE_OK=1; break; fi
+                TRY=$((TRY + 1)); sleep 0.1
+            done
+            if [ "$MODE_OK" -ne 1 ]; then
+                echo "ERROR: mode write failed (thermal manager khong nha, SMC 0x82)"; exit 4
+            fi
             "$SMC" -k "F${ID}Tg" -w "$HEX" >/dev/null 2>&1 || { echo "ERROR: target write failed"; exit 4; }
             echo "FAN_SET_OK"
         fi
